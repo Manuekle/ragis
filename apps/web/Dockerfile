@@ -15,6 +15,8 @@ WORKDIR /app
 COPY --from=build /repo/apps/web/.next/standalone ./
 COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /repo/apps/web/public ./apps/web/public
+# The runtime user is non-root; source assets can carry restrictive local modes.
+RUN chmod -R a+rX /app/apps/web/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
