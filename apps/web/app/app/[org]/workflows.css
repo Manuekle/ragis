@@ -1,0 +1,131 @@
+/* Workflows, Inbox y Activity (hito E). Solo tokens de globals.css: claro/oscuro sin trabajo extra. */
+
+.nav a .nav-count {
+  margin-left: auto; min-width: 20px; height: 18px; padding: 0 6px;
+  display: inline-grid; place-items: center; border-radius: var(--r-pill);
+  background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums;
+}
+
+/* ───────────── state badges ───────────── */
+.state { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: var(--r-pill); font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--surface-2); color: var(--text-2); }
+.state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.state[data-s="COMPLETED"], .state[data-s="APPROVED"], .state[data-s="SUCCEEDED"], .state[data-s="active"] { background: var(--ok-soft); color: var(--ok); }
+/* Blue = the system is working; amber = a person has to act. They must not look alike. */
+.state[data-s="RUNNING"], .state[data-s="QUEUED"] { background: var(--accent-soft); color: var(--accent-text); }
+.state[data-s="WAITING_HUMAN"], .state[data-s="WAITING_EXTERNAL"], .state[data-s="PENDING"], .state[data-s="WAITING"] { background: var(--warn-soft); color: var(--warn); }
+.state[data-s="FAILED"], .state[data-s="REJECTED"], .state[data-s="REVOKED"], .state[data-s="EXPIRED"], .state[data-s="DECLINED"], .state[data-s="VOIDED"], .state[data-s="revoked"] { background: var(--err-soft); color: var(--err); }
+.state[data-s="CANCELLED"], .state[data-s="SKIPPED"], .state[data-s="DRAFT"], .state[data-s="expired"] { background: var(--surface-3); color: var(--muted); }
+.state[data-s="RUNNING"]::before, .state[data-s="WAITING_HUMAN"]::before, .state[data-s="PENDING"]::before { animation: dot-pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .state::before { animation: none !important; } }
+
+/* ───────────── builder: vertical flow ───────────── */
+.flow { display: flex; flex-direction: column; align-items: stretch; }
+.flow-node {
+  position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: start;
+  padding: 14px 16px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.flow-node[data-invalid] { box-shadow: 0 0 0 1px var(--err), var(--shadow-sm); }
+.flow-node .kind { width: 36px; height: 36px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+.flow-node[data-type="AGENT_TASK"] .kind { background: var(--accent-soft); color: var(--accent-text); }
+.flow-node[data-type="HUMAN_REVIEW"] .kind, .flow-node[data-type="APPROVAL_GATE"] .kind { background: var(--warn-soft); color: var(--warn); }
+.flow-node[data-type="APPROVAL_GATE"] .kind { background: var(--ok-soft); color: var(--ok); }
+.flow-node[data-type="CONDITION"] .kind { background: color-mix(in srgb, #8b5cf6 16%, transparent); color: #8b5cf6; }
+.flow-node[data-type="START"], .flow-node[data-type="END"] { background: var(--surface-2); box-shadow: none; padding: 10px 16px; }
+.flow-node .body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.flow-node .body > strong { font-size: 14px; font-weight: 400; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.flow-node .body small { color: var(--muted); font-size: 12.5px; }
+.flow-node .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.flow-node .tools { display: flex; gap: 2px; }
+.flow-link { align-self: center; width: 2px; height: 18px; background: var(--border-strong); position: relative; }
+.flow-link .branch { position: absolute; left: 10px; top: 0; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.flow-insert { align-self: center; margin: 2px 0; }
+.flow-insert .menu { min-width: 200px; }
+
+/* ───────────── runs list / activity ───────────── */
+.run-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--border); text-decoration: none; color: inherit; }
+.run-row:first-child { border-top: 0; }
+.run-row { transition: background-color 160ms ease; }
+@media (hover: hover) { a.run-row:hover { background: var(--surface-2); text-decoration: none; } }
+a.run-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.run-row .meta { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.run-row .meta strong { font-weight: 500; font-size: 14px; }
+.run-row .meta small { color: var(--muted); font-size: 12.5px; }
+.run-row .side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ───────────── run timeline ───────────── */
+.tl { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
+.tl > li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 18px; }
+.tl > li::before { content: ""; position: absolute; left: 13.5px; top: 30px; bottom: 2px; width: 1px; background: var(--border-strong); }
+.tl > li:last-child::before { display: none; }
+.tl .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--muted); }
+.tl li[data-s="SUCCEEDED"] .dot { background: var(--ok-soft); color: var(--ok); }
+.tl li[data-s="RUNNING"] .dot { background: var(--accent-soft); color: var(--accent-text); }
+.tl li[data-s="WAITING"] .dot { background: var(--warn-soft); color: var(--warn); }
+.tl li[data-s="FAILED"] .dot, .tl li[data-s="REJECTED"] .dot { background: var(--err-soft); color: var(--err); }
+.tl .content { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 3px; }
+.tl .content > header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tl .content > header strong { font-weight: 400; font-size: 14px; }
+.tl .content > header small { color: var(--faint); font-size: 12px; }
+
+.kv-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; font-size: 13px; }
+.kv-list dt { color: var(--muted); }
+.kv-list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.hash { font-family: var(--mono); font-size: 11.5px; letter-spacing: var(--tracking-mono); color: var(--faint); overflow-wrap: anywhere; }
+
+.events { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.events li { display: flex; gap: 10px; align-items: baseline; }
+.events code { font-size: 11.5px; color: var(--text-2); }
+.events time { color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ───────────── inbox ───────────── */
+.inbox-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
+.approval { display: flex; flex-direction: column; gap: 14px; }
+.approval > header { display: flex; gap: 12px; align-items: flex-start; }
+.approval > header .kind { width: 36px; height: 36px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--warn-soft); color: var(--warn); flex: none; }
+.approval > header .meta { flex: 1; min-width: 0; }
+.approval > header .meta strong { font-weight: 400; display: block; }
+.approval > header .meta small { color: var(--muted); font-size: 12.5px; }
+.approval .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.approval textarea { min-height: 60px; }
+
+.role-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 1000px) {
+  .inbox-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .run-row { grid-template-columns: minmax(0, 1fr); }
+  .run-row .side { justify-content: flex-start; }
+  .flow-node { grid-template-columns: 30px minmax(0, 1fr); }
+  .flow-node .tools { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+.btn-link { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-md); background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 500; text-decoration: none; transition: transform var(--duration-quick, 150ms) ease-out, background-color var(--duration-quick, 150ms) ease, color var(--duration-quick, 150ms) ease; }
+.btn-link .svg-icon { transition: transform var(--duration-fast, 200ms) var(--ease-smooth-out, ease-out); }
+@media (hover: hover) { .btn-link:hover { background: var(--accent-hover); color: var(--on-accent); text-decoration: none; } .btn-link:hover .svg-icon { transform: translateX(2px); } }
+.btn-link:active { transform: scale(0.96); }
+/* Blocked by separation of duties: the run is viewable, not decidable, so it is not the primary action.
+   .btn-link.ghost takes the neutral raised surface and the plain one the blue filled surface (globals.css). */
+
+/* ───────────── template step chips: one hue per step kind ───────────── */
+.step-chip { --tone: var(--muted); display: inline-grid; place-items: center; width: 26px; height: 22px; border-radius: var(--r-pill); color: var(--tone); background: color-mix(in srgb, var(--tone) 15%, transparent); }
+.step-chip[data-type="AGENT_TASK"] { --tone: #3b82f6; }
+.step-chip[data-type="HUMAN_REVIEW"] { --tone: #f59e0b; }
+.step-chip[data-type="APPROVAL_GATE"] { --tone: #22c55e; }
+.step-chip[data-type="CONDITION"] { --tone: #8b5cf6; }
+
+/* Firma y compartición (hito F) */
+.state[data-s="SENT"], .state[data-s="DELIVERED"] { background: var(--warn-soft); color: var(--warn); }
+.state[data-s="DECLINED"], .state[data-s="VOIDED"], .state[data-s="revoked"] { background: var(--err-soft); color: var(--err); }
+.state[data-s="DRAFT"], .state[data-s="expired"] { background: var(--surface-3); color: var(--muted); }
+.state[data-s="active"] { background: var(--ok-soft); color: var(--ok); }
+.flow-node[data-type="EXTERNAL_ACTION"] .kind { background: var(--err-soft); color: var(--err); }
+.flow-node[data-type="WAIT_EVENT"] .kind { background: var(--surface-3); }
+.ceremony { display: flex; flex-direction: column; gap: 14px; }
+.ceremony .doc-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); font-size: 13.5px; }
+.ceremony .doc-row .hash { margin-left: auto; }
+.signer-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.signer-list li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.signer-list li .meta { flex: 1; min-width: 0; }
+.signer-list li small { color: var(--muted); display: block; font-size: 12.5px; }
+.domain-chips { display: flex; flex-wrap: wrap; gap: 6px; }

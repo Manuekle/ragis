@@ -1,0 +1,143 @@
+name: ragsis-pilot
+
+x-runtime: &runtime
+  RAGSIS_ENV: production
+  AWS_REGION: ${AWS_REGION:?set AWS_REGION}
+  S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+  SQS_INGEST_QUEUE_URL: ${SQS_INGEST_QUEUE_URL:?set SQS_INGEST_QUEUE_URL}
+  INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set INTERNAL_SERVICE_SECRET}
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    <<: *service
+    image: pgvector/pgvector:pg17@sha256:7d0a41464797aeb9862dfdc0bbf1526b82cfd324cdd8036df19e3545f4a9ccb8
+    environment:
+      POSTGRES_USER: ragsis_owner
+      POSTGRES_DB: ragsis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      RAGSIS_APP_DB_PASSWORD: ${RAGSIS_APP_DB_PASSWORD:?set RAGSIS_APP_DB_PASSWORD}
+      RAGSIS_WORKER_DB_PASSWORD: ${RAGSIS_WORKER_DB_PASSWORD:?set RAGSIS_WORKER_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "ragsis_owner", "-d", "ragsis"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: ${API_IMAGE:?set API_IMAGE}
+    command: ["node", "dist/db/migrate.js"]
+    environment:
+      DATABASE_URL: postgres://ragsis_owner:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/ragsis
+      MIGRATIONS_DIR: /app/db/migrations
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *service
+    image: ${API_IMAGE:?set API_IMAGE}
+    environment:
+      <<: *runtime
+      PORT: "4000"
+      DATABASE_URL: postgres://ragsis_app:${RAGSIS_APP_DB_PASSWORD:?set RAGSIS_APP_DB_PASSWORD}@postgres:5432/ragsis
+      RAG_ENGINE_URL: http://rag-engine:8080
+      AUTH_MODE: oidc
+      OIDC_ISSUER: ${OIDC_ISSUER:?set OIDC_ISSUER}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?set OIDC_AUDIENCE}
+      CORS_ORIGINS: https://${PILOT_HOSTNAME:?set PILOT_HOSTNAME}
+      PUBLIC_BASE_URL: https://${PILOT_HOSTNAME:?set PILOT_HOSTNAME}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      rag-engine: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rag-engine:
+    <<: *service
+    image: ${RAG_ENGINE_IMAGE:?set RAG_ENGINE_IMAGE}
+    environment:
+      <<: *runtime
+      DATABASE_URL: postgresql://ragsis_app:${RAGSIS_APP_DB_PASSWORD:?set RAGSIS_APP_DB_PASSWORD}@postgres:5432/ragsis
+      AI_GENERATION_MODEL: local-extractive@v1
+      AI_EMBEDDING_MODEL: local-hash-1024@v1
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/healthz', timeout=2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  clamav:
+    <<: *service
+    image: clamav/clamav:stable@sha256:45fe5149fbee5a46509c9848ef20d0c354b7b2323c9369f285939a37cf33422a
+    platform: linux/amd64
+    environment:
+      CLAMD_CONF_StreamMaxLength: 100M
+      CLAMD_CONF_MaxThreads: "2"
+    volumes:
+      - clamdata:/var/lib/clamav
+
+  ingest-worker:
+    <<: *service
+    image: ${INGEST_WORKER_IMAGE:?set INGEST_WORKER_IMAGE}
+    environment:
+      <<: *runtime
+      DATABASE_URL: postgresql://ragsis_worker:${RAGSIS_WORKER_DB_PASSWORD:?set RAGSIS_WORKER_DB_PASSWORD}@postgres:5432/ragsis
+      AI_EMBEDDING_MODEL: local-hash-1024@v1
+      MALWARE_SCANNER: clamav
+      CLAMAV_HOST: clamav
+      OCR_PROVIDER: none
+    tmpfs: ["/tmp:size=512m"]
+    stop_grace_period: 30s
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+
+  web:
+    <<: *service
+    image: ${WEB_IMAGE:?set WEB_IMAGE}
+    environment:
+      API_URL: http://api:4000
+      AUTH_MODE: oidc
+      SESSION_COOKIE_SECURE: "true"
+      PUBLIC_BASE_URL: https://${PILOT_HOSTNAME:?set PILOT_HOSTNAME}
+      OIDC_ISSUER: ${OIDC_ISSUER:?set OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_AUDIENCE:?set OIDC_AUDIENCE}
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/login"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  caddy:
+    <<: *service
+    image: caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
+    environment:
+      PILOT_HOSTNAME: ${PILOT_HOSTNAME:?set PILOT_HOSTNAME}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile.pilot:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  clamdata:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/contracts
+
+# Scripts de instalación: denegados por defecto (supply chain). esbuild/sharp traen binarios
+# precompilados vía optionalDependencies y no necesitan postinstall.
+allowBuilds:
+  esbuild: false
+  sharp: false
+  unrs-resolver: false
+
+minimumReleaseAgeExclude:
+  - kubai-icons-react@0.2.1
+  - kubai-icons@0.2.1

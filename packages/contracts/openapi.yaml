@@ -1,0 +1,592 @@
+openapi: 3.1.0
+info:
+  title: ragsis API
+  version: 1.0.0
+  description: |
+    API pública v1 de ragsis. Toda ruta bajo `/v1/organizations/{org}` resuelve el tenant
+    exclusivamente por membresía verificada en servidor; si el usuario no es miembro se responde 404.
+    Autenticación:
+    - Usuarios: `Authorization: Bearer <id_token OIDC>` (Cognito u otro IdP; el BFF web lo gestiona).
+      En entornos locales, `POST /v1/auth/dev-login` emite un token de prueba (prohibido en producción).
+    - Integraciones: `Authorization: Bearer rsk_<prefijo>_<secreto>` (clave de servicio). Solo las rutas
+      marcadas con `x-api-key-scopes` aceptan claves; el resto responde 403.
+servers:
+  - url: http://localhost:4000
+security:
+  - bearer: []
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    signatureInvite: { type: apiKey, in: header, name: Authorization, description: 'Signature <token>' }
+  parameters:
+    org: { name: org, in: path, required: true, schema: { type: string, format: uuid } }
+    id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    ver: { name: ver, in: path, required: true, schema: { type: string, format: uuid } }
+    ws: { name: ws, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    SignatureImage:
+      type: string
+      contentEncoding: base64
+      description: Imagen PNG o JPEG de hasta 448 KiB antes de codificar.
+    SignatureAppearance:
+      oneOf:
+        - { type: object, required: [type, image], properties: { type: { const: image }, image: { $ref: '#/components/schemas/SignatureImage' } } }
+        - { type: object, required: [type, id], properties: { type: { const: saved }, id: { type: string, format: uuid } } }
+    SignatureDecision:
+      oneOf:
+        - { type: object, required: [decision, typed_name, consent], properties: { decision: { const: sign }, typed_name: { type: string, minLength: 2, maxLength: 120 }, consent: { const: true }, appearance: { $ref: '#/components/schemas/SignatureAppearance' } } }
+        - { type: object, required: [decision], properties: { decision: { const: decline }, reason: { type: string, maxLength: 500 } } }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, examples: [not_found, forbidden, quota_exceeded, rate_limited, validation_error] }
+            message: { type: string }
+            details: {}
+    Principal:
+      type: string
+      pattern: '^(workspace|group|user):[0-9a-f-]{36}$'
+    FileSpec:
+      type: object
+      required: [filename, content_type, size_bytes]
+      properties:
+        filename: { type: string, maxLength: 200 }
+        content_type:
+          type: string
+          enum: [application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document,
+                 application/vnd.openxmlformats-officedocument.presentationml.presentation,
+                 application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, image/png, image/jpeg,
+                 text/plain, text/markdown, text/html, text/csv]
+        size_bytes: { type: integer, minimum: 1 }
+        effective_from: { type: string, format: date }
+        effective_to: { type: string, format: date }
+    UploadTicket:
+      type: object
+      properties:
+        document_id: { type: string, format: uuid }
+        version_id: { type: string, format: uuid }
+        upload:
+          type: object
+          properties:
+            method: { const: PUT }
+            url: { type: string, description: URL prefirmada S3 de vida corta }
+            headers: { type: object, additionalProperties: { type: string } }
+            expires_in: { type: integer }
+    Citation:
+      type: object
+      properties:
+        n: { type: integer, description: "Índice citado en la respuesta como [n]" }
+        document_id: { type: string, format: uuid }
+        version_id: { type: string, format: uuid }
+        version_no: { type: integer }
+        chunk_id: { type: string, format: uuid }
+        title: { type: string }
+        filename: { type: string }
+        section: { type: string }
+        page: { type: [integer, "null"] }
+        effective_from: { type: [string, "null"], format: date }
+        snippet: { type: string }
+        display_url: { const: signed-on-demand, description: Pedir URL firmada a /download }
+        kind: { type: string, enum: [text, table, figure, equation] }
+        bbox:
+          type: [array, "null"]
+          items: { type: number, minimum: 0, maximum: 1 }
+          minItems: 4
+          maxItems: 4
+          description: "[x0, y0, x1, y1] normalizado a la página `page`, origen arriba-izquierda"
+        caption: { type: [string, "null"] }
+        has_asset: { type: boolean, description: "Hay imagen de la figura: pedir URL a /chunks/{chunk}/asset" }
+        ai_generated: { type: boolean, description: "La evidencia incluye texto generado por IA (descripción de figura o resumen de tabla)" }
+    QueryResponse:
+      type: object
+      properties:
+        trace_id: { type: string, pattern: '^qry_[0-9a-f]{24}$' }
+        answer: { type: string }
+        abstained: { type: boolean }
+        abstain_reason: { type: [string, "null"], enum: [insufficient_evidence, no_verified_citations, model_abstained, null] }
+        citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
+        retrieval_strategy: { type: string, enum: [hybrid, hybrid_rerank] }
+        question_class: { type: string, enum: [factual, numeric, comparative, exact_lookup] }
+        generation_model: { type: [string, "null"] }
+        embedding_model: { type: string }
+        latency_ms: { type: integer }
+        timings: { type: object }
+        usage: { type: object }
+paths:
+  /v1/auth/dev-login:
+    post:
+      summary: Token de desarrollo (solo AUTH_MODE=dev)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email }, name: { type: string } } }
+      responses:
+        "200": { description: Token, content: { application/json: { schema: { type: object, properties: { token: { type: string } } } } } }
+  /v1/me:
+    get:
+      summary: Usuario actual y organizaciones donde es miembro
+      responses: { "200": { description: OK } }
+  /v1/me/signatures:
+    get: { summary: Firmas privadas de la cuenta, responses: { "200": { description: Firmas guardadas con imagen PNG en base64 } } }
+    post:
+      summary: Guarda una imagen de firma en la cuenta verificada
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [label, image], properties: { label: { type: string, minLength: 1, maxLength: 60 }, image: { $ref: '#/components/schemas/SignatureImage' } } } } } }
+      responses: { "201": { description: Firma guardada }, "409": { description: Límite de seis firmas guardadas } }
+  /v1/me/signatures/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    delete: { summary: Elimina una firma guardada de la cuenta, responses: { "204": { description: Firma eliminada }, "404": { description: Firma no disponible } } }
+  /v1/organizations:
+    post:
+      summary: Crea organización (el creador queda como owner con workspace General)
+      requestBody:
+        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string }, slug: { type: string } } } } }
+      responses: { "201": { description: Creada } }
+  /v1/organizations/{org}:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Detalle, rol y límites del plan, responses: { "200": { description: OK }, "404": { description: No miembro } } }
+  /v1/organizations/{org}/workspaces:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Workspaces visibles, responses: { "200": { description: OK } } }
+    post: { summary: Crear workspace (admin), responses: { "201": { description: Creado } } }
+  /v1/organizations/{org}/workspaces/{ws}/members:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/ws' }]
+    post: { summary: Asignar miembro a workspace (editor|reader), responses: { "204": { description: OK } } }
+  /v1/organizations/{org}/members:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Miembros (admin), responses: { "200": { description: OK } } }
+    post: { summary: Agregar miembro existente por email (admin), responses: { "201": { description: OK } } }
+  /v1/organizations/{org}/groups:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Grupos (principals ACL), responses: { "200": { description: OK } } }
+    post: { summary: Crear grupo (admin), responses: { "201": { description: OK } } }
+  /v1/organizations/{org}/groups/{group}/members:
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: group, in: path, required: true, schema: { type: string, format: uuid } }]
+    post: { summary: Agregar miembro al grupo (admin), responses: { "204": { description: OK } } }
+  /v1/organizations/{org}/documents/uploads:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    post:
+      summary: Inicia upload (documento + versión 1) y devuelve URL prefirmada
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/FileSpec'
+                - type: object
+                  required: [workspace_id]
+                  properties:
+                    workspace_id: { type: string, format: uuid }
+                    title: { type: string }
+                    source_id: { type: string }
+                    classification: { type: string, enum: [public, internal, confidential, restricted] }
+                    acl: { type: array, items: { $ref: '#/components/schemas/Principal' }, description: 'Por defecto workspace:<id>' }
+      responses:
+        "201": { description: Ticket, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicket' } } } }
+        "429": { description: Cuota del plan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /v1/organizations/{org}/documents/{id}/versions:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Nueva versión de un documento existente
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/FileSpec' } } } }
+      responses: { "201": { description: Ticket, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicket' } } } } }
+  /v1/organizations/{org}/documents/{id}/versions/{ver}/complete:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { $ref: '#/components/parameters/ver' }]
+    post:
+      summary: Confirma upload, verifica tamaño en S3 y encola ingesta (idempotente)
+      responses: { "202": { description: Job encolado } }
+  /v1/organizations/{org}/documents:
+    x-api-key-scopes: [documents:read]
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get:
+      summary: Lista documentos visibles del workspace
+      parameters:
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+      responses: { "200": { description: OK } }
+  /v1/organizations/{org}/documents/{id}/status:
+    x-api-key-scopes: [documents:read]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: Estado de versiones e ingesta, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/documents/{id}/versions/{ver}/download:
+    x-api-key-scopes: [documents:read]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { $ref: '#/components/parameters/ver' }]
+    get: { summary: URL firmada corta (auditada), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/chunks/{chunk}/asset:
+    x-api-key-scopes: [documents:read]
+    parameters:
+      - { $ref: '#/components/parameters/org' }
+      - { name: chunk, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: URL firmada corta (inline, auditada) de la imagen de una figura citada; 404 si no es visible por ACL
+      responses: { "200": { description: "{ url, expires_in }" }, "404": { description: No existe o no autorizado } }
+  /v1/organizations/{org}/documents/{id}:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    delete: { summary: Borrado (invisible inmediato + purga asíncrona), responses: { "202": { description: Job de purga } } }
+  /v1/organizations/{org}/workspaces/{ws}/query:
+    x-api-key-scopes: [query]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/ws' }]
+    post:
+      summary: Consulta con evidencia, citas verificadas y abstención
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, maxLength: 2000 }
+                as_of: { type: string, format: date, description: Filtrar por vigencia }
+                top_k: { type: integer, minimum: 1, maximum: 8 }
+      responses:
+        "200": { description: Respuesta, content: { application/json: { schema: { $ref: '#/components/schemas/QueryResponse' } } } }
+        "403": { description: Política de modelos del tenant no permite ningún modelo }
+        "429": { description: Rate limit / cuota mensual }
+  /v1/organizations/{org}/query-runs/{trace}:
+    x-api-key-scopes: [query]
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: trace, in: path, required: true, schema: { type: string } }]
+    get: { summary: Traza de una consulta propia, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/query-runs/{trace}/feedback:
+    x-api-key-scopes: [query]
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: trace, in: path, required: true, schema: { type: string } }]
+    post: { summary: Feedback +1/-1, responses: { "204": { description: OK } } }
+  /v1/organizations/{org}/api-keys:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Lista claves de servicio (admin; nunca devuelve secretos), responses: { "200": { description: OK } } }
+    post:
+      summary: Crea clave de servicio (admin). El token se devuelve una sola vez
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes, workspace_ids]
+              properties:
+                name: { type: string }
+                scopes: { type: array, items: { type: string, enum: [query, documents:read, documents:write] } }
+                workspace_ids: { type: array, items: { type: string, format: uuid }, maxItems: 50 }
+                expires_in_days: { type: integer, minimum: 1, maximum: 365, default: 90 }
+      responses:
+        "201":
+          description: Creada
+          content: { application/json: { schema: { type: object, properties: { id: { type: string }, token: { type: string, pattern: '^rsk_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$' }, expires_at: { type: string, format: date-time } } } } }
+  /v1/organizations/{org}/api-keys/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    delete: { summary: Revoca la clave de inmediato (admin), responses: { "204": { description: Revocada } } }
+  /v1/organizations/{org}/usage:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Uso del mes y límites del plan (admin), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/audit:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Últimos eventos de auditoría con hash encadenado (admin), responses: { "200": { description: OK } } }
+  # ---------------------------------------------------------------- Conectores CON-01 (ADR-025)
+  /v1/organizations/{org}/connectors:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: "Proveedores (disponibles/permitidos) y conexiones visibles: las de empresa y las personales propias", responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/connectors/policy:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    put: { summary: "Apps que la organización permite conectar (admin). Quitar una pausa sus conexiones", responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/connectors/{provider}/authorize:
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: provider, in: path, required: true, schema: { type: string, enum: [gmail, slack, clickup] } }]
+    post: { summary: "Inicia OAuth (PKCE + state de un solo uso, 10 min). Gmail = personal; Slack/ClickUp = admin", responses: { "200": { description: "{ authorize_url }" } } }
+  /v1/connectors/oauth/complete:
+    post: { summary: "Completa OAuth con {state, code} desde /connect/callback; solo la persona que lo inició", responses: { "200": { description: "{ organization_id, connector_id, provider, status }" }, "400": { description: connect_expired | connect_failed } } }
+  /v1/organizations/{org}/connectors/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    put: { summary: "Ajustes (canales, espacios, etiquetas, alcance temporal) y pausa/reanudación", responses: { "200": { description: OK } } }
+    delete: { summary: "Desconecta: revoca el token y retira del corpus todo lo sincronizado", responses: { "202": { description: "{ removed_items }" } } }
+  /v1/organizations/{org}/connectors/{id}/options:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: "Opciones en vivo del proveedor (canales, espacios, etiquetas)", responses: { "200": { description: OK }, "409": { description: reconnect_needed } } }
+  /v1/organizations/{org}/connectors/{id}/sync:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: "Sincronizar ahora (scope documents:write para claves de servicio)", responses: { "202": { description: Encolado }, "409": { description: setup_needed | paused | reconnect_needed } } }
+  # ---------------------------------------------------------------- Onboarding sectorial (ADR-020)
+  /v1/organizations/{org}/onboarding:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get:
+      summary: Estado del onboarding (máquina de estados), perfil, recomendación vigente, catálogo sectorial y checklist piloto
+      responses: { "200": { description: OK } }
+  /v1/organizations/{org}/onboarding/steps/{step}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: step, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 9 } }]
+    put:
+      summary: Completa u omite un paso (admin). 1 guarda comprador y canal de origen; 2 usuarios iniciales; 4 fuentes, señales y volumen (calificación interna, ADR-021). 6 aprovisiona espacios; 7 crea agentes draft; 9 activa sin publicar agentes
+      description: |
+        Pasos obligatorios (no omitibles): 2 sector, 3 objetivos, 5 privacidad, 9 activar. El paso 9 exige 2, 3 y 5.
+        Nunca sobrescribe espacios ni agentes existentes. El paso 5 solo endurece `organizations.data_class`, nunca la relaja;
+        `restricted` + `cloud_allowed` se rechaza.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [complete, skip] }
+                data: { type: object, description: "Campos del paso (ver apps/api/src/routes/onboarding.ts)" }
+      responses: { "200": { description: Estado actualizado + result }, "400": { description: Validación / paso no omitible }, "403": { description: Requiere admin } }
+  /v1/organizations/{org}/onboarding/profile:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    put: { summary: Edita el perfil después del alta (admin). Cambio de sector/objetivos tras completar ⇒ NEEDS_REVIEW, sin borrar nada, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/onboarding/recommendations:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    post: { summary: Recalcula presets deterministas (sector + objetivos + sensibilidad + tipos + plan), responses: { "200": { description: Recomendación versionada (template_version) } } }
+  /v1/organizations/{org}/onboarding/complete:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    post: { summary: Alias del paso 9. No habilita herramientas críticas ni publica agentes, responses: { "200": { description: COMPLETED } } }
+  /v1/organizations/{org}/onboarding/pause:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    post: { summary: Pausa el onboarding (PAUSED); se reanuda en cualquier paso, responses: { "200": { description: OK } } }
+  # ---------------------------------------------------------------- Agent Studio (ADR-020)
+  /v1/organizations/{org}/agents/catalog:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Catálogo de herramientas (riesgo, disponibilidad, sandbox), plantillas, autonomías, perfiles de modelo y límites del tenant, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/agents:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Agentes visibles (publicados + drafts propios; admin ve todos), responses: { "200": { description: OK } } }
+    post:
+      summary: Crea un agente draft desde plantilla o en blanco (member+; viewer 403)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                template: { type: string }
+                slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,60}$' }
+                name: { type: string }
+                space_ids: { type: array, items: { type: string, format: uuid } }
+      responses: { "201": { description: Creado + validación de política } }
+  /v1/organizations/{org}/agents/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: Draft, versión activa, diff de permisos, validación, versiones, último test y condiciones de publicación, responses: { "200": { description: OK }, "404": { description: No existe o draft ajeno } } }
+  /v1/organizations/{org}/agents/{id}/draft:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    put: { summary: Guarda la definición declarativa (owner del agente o admin). Devuelve validación y diff, responses: { "200": { description: OK }, "403": { description: Sin permiso de edición } } }
+  /v1/organizations/{org}/agents/{id}/test:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Ejecuta el draft en sandbox (search_documents real con ACL del usuario; escrituras simuladas)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { input: { type: string, minLength: 2, maxLength: 2000 } } } } } }
+      responses: { "201": { description: Traza por paso, citas y checks; persistido como agent_test_run (pregunta solo como hash) } }
+  /v1/organizations/{org}/agents/{id}/test-runs:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: Últimas pruebas (propias; admin ve todas), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/agents/{id}/publish:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Publica versión semántica inmutable. Exige validación OK y test pasado sobre el hash exacto del draft
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [changelog], properties: { bump: { type: string, enum: [major, minor, patch], default: minor }, changelog: { type: string } } }
+      responses: { "201": { description: Versión creada }, "400": { description: Sin test/errores de política (auditado como deny) }, "403": { description: Sin permiso }, "409": { description: Sin cambios / archivado } }
+  /v1/organizations/{org}/agents/{id}/rollback:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: Activa una versión anterior (revalidada contra la política vigente), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/agents/{id}/status:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: "published | paused | archived. Nunca borra versiones ni pruebas", responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/agents/{id}/versions/{vid}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: vid, in: path, required: true, schema: { type: string, format: uuid } }]
+    get: { summary: Configuración inmutable de una versión publicada, responses: { "200": { description: OK } } }
+  # ---------------------------------------------------------------- Workflows + human-in-the-loop (ADR-022)
+  /v1/organizations/{org}/workflows/catalog:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Tipos de nodo (y disponibilidad por fase), roles humanos, plantillas y agentes publicables, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/workflows:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Workflows visibles (publicados + drafts propios; admin ve todos), responses: { "200": { description: OK } } }
+    post: { summary: Crea workflow draft desde plantilla o vacío (member+), responses: { "201": { description: Creado + validación del grafo } } }
+  /v1/organizations/{org}/workflows/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: Grafo draft, validación (DAG, hops, gates, agentes publicados), versiones y condiciones de publicación, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/workflows/{id}/draft:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    put:
+      summary: Guarda el grafo declarativo (nodes, edges, policies). deny_on_reject y no_external_action_without_approval son literales true
+      responses: { "200": { description: Hash + validación } }
+  /v1/organizations/{org}/workflows/{id}/publish:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: Publica versión inmutable fijando cada agente a su versión publicada vigente, responses: { "201": { description: OK }, "400": { description: Grafo inválido (auditado como deny) } } }
+  /v1/organizations/{org}/workflows/{id}/status:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: "published | paused | archived", responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/workflows/{id}/runs:
+    parameters:
+      - { $ref: '#/components/parameters/org' }
+      - { $ref: '#/components/parameters/id' }
+      - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 200 } }
+    post:
+      summary: Inicia un run (asíncrono). Reintentar con la misma clave devuelve el mismo run (200); otra clave reutilizada en otro workflow → 409
+      requestBody: { content: { application/json: { schema: { type: object, required: [task], properties: { task: { type: string, minLength: 2, maxLength: 2000 } } } } } }
+      responses: { "202": { description: QUEUED }, "200": { description: Replay idempotente } }
+  /v1/organizations/{org}/runs:
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: state, in: query, schema: { type: string } }, { name: workflow_id, in: query, schema: { type: string, format: uuid } }]
+    get: { summary: Runs visibles (iniciador, admin, auditor o rol con aprobación asignada), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/runs/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: Timeline (pasos, salidas redactadas según la ACL de quien mira, aprobaciones con binding y hash, eventos outbox), responses: { "200": { description: OK }, "404": { description: Sin relación con el run } } }
+  /v1/organizations/{org}/runs/{id}/cancel:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: Cancela (iniciador o admin); revoca aprobaciones pendientes, responses: { "200": { description: CANCELLED } } }
+  /v1/organizations/{org}/inbox:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Aprobaciones pendientes para mis roles (con invalidated y blocked_by_sod) y mis runs que requieren atención, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/approvals/{id}/decision:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Aprobar/rechazar. Exige rol asignado, hash exacto mostrado, vigencia, versiones de documento sin cambios y separación de funciones
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [decision, action_hash], properties: { decision: { type: string, enum: [approve, reject] }, action_hash: { type: string, pattern: '^[0-9a-f]{64}$' }, comment: { type: string } } }
+      responses:
+        "200": { description: Decidida; aprobar reanuda el run, rechazar lo cancela }
+        "403": { description: Sin rol o auto-aprobación (auditado) }
+        "409": { description: "stale_action_hash | approval_invalidated | approval_expired | no pendiente" }
+  /v1/organizations/{org}/functional-roles:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Miembros con roles funcionales (admin), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/members/{user}/functional-roles:
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      summary: Reemplaza los roles funcionales del miembro (admin, auditado)
+      requestBody: { content: { application/json: { schema: { type: object, required: [roles], properties: { roles: { type: array, items: { type: string, enum: [reviewer, approver, signatory, auditor, agent_designer, knowledge_manager] } } } } } } }
+      responses: { "200": { description: OK } }
+  # ---------------------------------------------------------------- Firma y compartición (ADR-023)
+  /v1/organizations/{org}/external-policy:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Política de dominios y enlaces, vigencia de aprobaciones y MFA para aprobar envíos, responses: { "200": { description: OK } } }
+    put:
+      summary: Actualiza la política externa (admin, auditado). Lista vacía bloquea toda compartición
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [allowed_domains, share_max_days, approval_max_age_hours, require_mfa_for_signature]
+              properties:
+                allowed_domains: { type: array, items: { type: string }, maxItems: 100 }
+                share_max_days: { type: integer, minimum: 1, maximum: 30 }
+                approval_max_age_hours: { type: integer, minimum: 1, maximum: 168 }
+                require_mfa_for_signature: { type: boolean }
+      responses: { "200": { description: OK } }
+  /v1/organizations/{org}/signatures:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Sobres visibles (admin, auditor, signatory, iniciador o firmante) con awaiting_me, responses: { "200": { description: OK } } }
+    post:
+      summary: Crea un borrador nativo con copias de las versiones PDF seleccionadas
+      parameters: [{ name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, version_ids, signers]
+              properties:
+                subject: { type: string, minLength: 2, maxLength: 160 }
+                version_ids: { type: array, minItems: 1, maxItems: 10, uniqueItems: true, items: { type: string, format: uuid } }
+                signers:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items: { type: object, required: [name, email], properties: { name: { type: string }, email: { type: string, format: email } } }
+      responses: { "201": { description: Borrador creado }, "200": { description: Solicitud repetida } }
+  /v1/organizations/{org}/signatures/eligible-documents:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Versiones PDF vigentes visibles para preparar un sobre, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/signatures/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: Sobre (documentos con SHA-256, firmantes, respuestas, evidencia, eventos), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/signatures/{id}/local-sign:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Ceremonia del proveedor local de desarrollo. Solo el firmante autenticado; emite el webhook firmado al completarse
+      requestBody: { content: { application/json: { schema: { type: object, required: [decision, typed_name, consent], properties: { decision: { type: string, enum: [sign, decline] }, typed_name: { type: string }, consent: { type: boolean, enum: [true] } } } } } }
+      responses: { "200": { description: Estado resultante }, "403": { description: No es firmante }, "404": { description: Proveedor no local }, "409": { description: Ya respondió / sobre no enviado } }
+  /v1/organizations/{org}/signatures/{id}/send:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Aprueba y envía un sobre manual (otro signatory o admin)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [action_hash], properties: { action_hash: { type: string, pattern: '^[0-9a-f]{64}$' } } } } } }
+      responses: { "200": { description: SENT }, "403": { description: Aprobador o destinatario no autorizado }, "409": { description: Sobre o versiones cambiaron } }
+  /v1/organizations/{org}/signatures/{id}/documents/{version}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: version, in: path, required: true, schema: { type: string, format: uuid } }]
+    get: { summary: URL breve para revisar la copia exacta del PDF, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/signatures/{id}/respond:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Firma o rechaza como firmante autenticado
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SignatureDecision' } } } }
+      responses: { "200": { description: Respuesta registrada }, "403": { description: Firmante no autorizado }, "409": { description: Sobre cerrado o respuesta en conflicto } }
+  /v1/organizations/{org}/signatures/{id}/remind:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Invalida la invitación anterior y encola otra para el firmante externo
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } } }
+      responses: { "200": { description: Invitación regenerada }, "429": { description: Espera entre reenvíos } }
+  /v1/organizations/{org}/signatures/{id}/void:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: Anula el sobre (creador o admin); el run que lo espera falla, responses: { "200": { description: VOIDED } } }
+  /v1/organizations/{org}/signatures/{id}/evidence/{kind}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: kind, in: path, required: true, schema: { type: string, enum: [signed, certificate] } }]
+    get: { summary: URL prefirmada de la evidencia (solo COMPLETED; auditado), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/shares:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: Enlaces compartidos (estado, destinatarios, accesos), responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/shares/{id}/reveal:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: Rota el token y devuelve el enlace una sola vez (creador o admin); el enlace anterior deja de funcionar, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/shares/{id}/revoke:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post: { summary: Revoca de inmediato (creador o admin), responses: { "200": { description: OK } } }
+  /v1/webhooks/signatures/{provider}:
+    parameters: [{ name: provider, in: path, required: true, schema: { type: string, enum: [local] } }]
+    post:
+      summary: Eventos del simulador de desarrollo (HMAC sobre el cuerpo crudo, idempotente por event_id)
+      security: []
+      responses: { "200": { description: Procesado o duplicado }, "202": { description: Sobre desconocido (ignorado) }, "401": { description: Firma inválida o evento viejo } }
+  /v1/signature-guest/open:
+    post:
+      summary: Abre la ceremonia del destinatario de la invitación
+      security: [{ signatureInvite: [] }]
+      responses: { "200": { description: Sobre visible }, "404": { description: Invitación inválida }, "410": { description: Caducada o anulada } }
+  /v1/signature-guest/document:
+    post:
+      summary: URL breve para revisar un PDF de la invitación
+      security: [{ signatureInvite: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [version_id], properties: { version_id: { type: string, format: uuid } } } } } }
+      responses: { "200": { description: OK } }
+  /v1/signature-guest/respond:
+    post:
+      summary: Firma o rechaza con la identidad de la invitación
+      description: Los invitados pueden adjuntar una imagen al sobre en curso con appearance.type=image.
+      security: [{ signatureInvite: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SignatureDecision' } } } }
+      responses: { "200": { description: Respuesta registrada }, "403": { description: El invitado intentó usar una firma guardada } }
+  /v1/signature-guest/signed:
+    post:
+      summary: URL breve del PDF final para el destinatario de la invitación
+      security: [{ signatureInvite: [] }]
+      responses: { "200": { description: OK }, "404": { description: PDF final no disponible } }
+  /v1/signature-proof/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get:
+      summary: Huellas del PDF y certificado de un sobre nativo completado
+      security: []
+      responses: { "200": { description: Huellas y fecha de cierre sin datos de firmantes }, "404": { description: Registro no disponible } }
+  /v1/shares/access/{token}:
+    parameters: [{ name: token, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' } }]
+    get:
+      summary: Acceso público a un enlace compartido (valida hash del token, caducidad y revocación; audita el intento)
+      security: []
+      responses: { "302": { description: URL prefirmada de 60 s }, "404": { description: No existe }, "410": { description: Caducado o revocado } }

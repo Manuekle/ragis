@@ -1,0 +1,7 @@
+{
+  "name": "@ragsis/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Contrato OpenAPI v1 de ragsis (fuente para SDKs y pruebas de contrato)",
+  "files": ["openapi.yaml"]
+}

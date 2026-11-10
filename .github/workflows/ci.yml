@@ -1,0 +1,64 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - name: Entorno local efímero (Postgres+pgvector, S3, SQS)
+        run: ./scripts/dev-env.sh && docker compose -f infra/docker/compose.yml --env-file .env up -d --wait postgres seaweedfs elasticmq
+      - name: Python lint + tests (aislamiento, ingesta, RAG)
+        run: |
+          uv sync --frozen
+          uv run ruff check packages services eval tests
+          uv run pytest tests/python
+      - name: API typecheck + tests
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @ragsis/api lint
+          pnpm --filter @ragsis/api test
+          pnpm --filter @ragsis/web lint
+      - name: Stack completo + E2E con metas del piloto
+        run: |
+          docker compose -f infra/docker/compose.yml --env-file .env up -d --build --wait
+          uv run python scripts/e2e.py
+      - if: failure()
+        run: docker compose -f infra/docker/compose.yml --env-file .env logs --tail=200
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.9.8 }
+      - run: terraform fmt -recursive -check infra/terraform
+      - run: terraform -chdir=infra/terraform/envs/dev init -backend=false && terraform -chdir=infra/terraform/envs/dev validate
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build imágenes
+        run: |
+          for s in api:apps/api rag-engine:services/rag-engine ingest-worker:services/ingest-worker web:apps/web; do
+            docker build -t ragsis-${s%%:*}:ci -f ${s#*:}/Dockerfile .
+          done
+      - name: SBOM + escaneo de vulnerabilidades
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ragsis-api:ci
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true

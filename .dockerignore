@@ -1,0 +1,16 @@
+.git
+.env*
+**/.env*
+apps/web/app/fonts
+**/node_modules
+**/.venv
+**/.next
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.terraform
+**/*.tfstate*
+**/*.tfvars*
+**/*.tfplan
+eval/reports

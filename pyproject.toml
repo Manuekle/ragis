@@ -1,0 +1,43 @@
+[project]
+name = "ragsis-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "ragsis-core",
+  "ragsis-ai",
+  "ragsis-rag",
+  "ragsis-ingest",
+  "ragsis-eval",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.7", "httpx>=0.27"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/ragsis-core", "services/ai-gateway", "services/rag-engine", "services/ingest-worker", "eval"]
+
+[tool.uv.sources]
+ragsis-core = { workspace = true }
+ragsis-ai = { workspace = true }
+ragsis-rag = { workspace = true }
+ragsis-ingest = { workspace = true }
+ragsis-eval = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-q"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101", "S608"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501", "S105", "S106", "UP031"]

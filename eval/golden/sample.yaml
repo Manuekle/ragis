@@ -1,0 +1,85 @@
+# Golden set de muestra (sintético). En producción: 100–200 preguntas por vertical con
+# 15 % sin respuesta, 10 % contradictorias, 10 % tablas/imágenes y casos con ACL (sección 13 del plan).
+version: 1
+tenants:
+  acme:
+    name: ACME Consultores (eval)
+    groups: [Socios]
+    users:
+      owner: {email: owner@acme.eval, role: owner, groups: [Socios]}
+      analyst: {email: analyst@acme.eval, role: member, workspace_role: reader}
+    documents:
+      - {file: acme/politica-viaticos.md, title: Política de viáticos}
+      - {file: acme/reglamento-trabajo.md, title: Reglamento interno de trabajo}
+      - {file: acme/procedimiento-compras.md, title: Procedimiento de compras}
+      - {file: acme/acta-socios.md, title: Acta de junta de socios, acl_groups: [Socios]}
+      # RAG-04: tablas en presentaciones y hojas de cálculo (corpus generado, sin imágenes: no requiere VLM).
+      - {file: acme/comite-operaciones.pptx, title: Comité de operaciones}
+      - {file: acme/indicadores-comerciales.xlsx, title: Indicadores comerciales}
+      # RAG-05: multi-hop entre documentos (política → área responsable → persona en el organigrama).
+      - {file: acme/politica-seguridad.md, title: Política de seguridad de la información}
+      - {file: acme/organigrama.md, title: Organigrama}
+      - {file: acme/acta-comite-inversiones.md, title: Acta del comité de inversiones, acl_groups: [Socios]}
+    # GraphRAG por override de organización (plan team: deshabilitado por defecto, ADR-005/019).
+    graph: true
+  globex:
+    name: GLOBEX (eval)
+    users:
+      owner: {email: owner@globex.eval, role: owner}
+    documents:
+      - {file: globex/politica-viaticos.md, title: Política de viáticos GLOBEX}
+
+questions:
+  # --- respondibles ---
+  - {id: q01, tenant: acme, user: owner, question: "¿Cuál es el monto máximo de viáticos nacionales por día?",
+     expect: {answerable: true, contains: ["180000"], doc: Política de viáticos, must_not_contain: ["95000"]}}
+  - {id: q02, tenant: acme, user: analyst, question: "¿En cuántos días hábiles se debe solicitar el reembolso de viáticos?",
+     expect: {answerable: true, contains: ["10 días hábiles"], doc: Política de viáticos, must_not_contain: ["3 días"]}}
+  - {id: q03, tenant: acme, user: owner, question: "¿Cuántos días de vacaciones tiene cada colaborador por año de servicio?",
+     expect: {answerable: true, contains: ["15 días hábiles"], doc: Reglamento interno de trabajo, must_not_contain: ["20 días"]}}
+  - {id: q04, tenant: acme, user: analyst, question: "¿Cuántas cotizaciones requieren las compras superiores a 5 millones?",
+     expect: {answerable: true, contains: ["tres cotizaciones"], doc: Procedimiento de compras, must_not_contain: ["ILIMITADO", "ilimitado"]}}
+  - {id: q05, tenant: acme, user: owner, question: "¿Cuál es el plazo de pago a proveedores?",
+     expect: {answerable: true, contains: ["45 días"], doc: Procedimiento de compras}}
+  - {id: q06, tenant: acme, user: analyst, question: "¿Cuántos días de licencia por luto se conceden?",
+     expect: {answerable: true, contains: ["5 días hábiles"], doc: Reglamento interno de trabajo}}
+  - {id: q07, tenant: acme, user: owner, question: "¿Con cuánta antelación se solicitan los anticipos de viaje?",
+     expect: {answerable: true, contains: ["5 días hábiles"], doc: Política de viáticos}}
+  - {id: q08, tenant: acme, user: analyst, question: "¿Qué documentos debe entregar un proveedor nuevo para su registro?",
+     expect: {answerable: true, contains: ["RUT"], doc: Procedimiento de compras}}
+  - {id: q09, tenant: acme, user: owner, question: "¿Qué distribución de utilidades aprobó la junta de socios?",
+     expect: {answerable: true, contains: ["30 por ciento"], doc: Acta de junta de socios}}
+  - {id: q10, tenant: globex, user: owner, question: "¿Cuál es el monto máximo de viáticos nacionales por día?",
+     expect: {answerable: true, contains: ["95000"], doc: Política de viáticos GLOBEX, must_not_contain: ["180000"]}}
+  - {id: q11, tenant: globex, user: owner, question: "¿Cuántos días de vacaciones tienen los colaboradores?",
+     expect: {answerable: true, contains: ["20 días"], doc: Política de viáticos GLOBEX, must_not_contain: ["15 días"]}}
+  # --- tablas en PPTX / XLSX (RAG-04) ---
+  - {id: q17, tenant: acme, user: owner, question: "¿Cuál es el margen operativo de la región Caribe?",
+     expect: {answerable: true, contains: ["12.5%"], doc: Indicadores comerciales}}
+  - {id: q18, tenant: acme, user: analyst, question: "¿Cuántas unidades produjo la planta de Cali?",
+     expect: {answerable: true, contains: ["9800"], doc: Comité de operaciones}}
+  # --- multi-hop vía grafo (RAG-05): la respuesta exige un chunk de cada documento. Sin must_not_contain de otros
+  #     responsables: comparten chunk en el organigrama y el snippet de la cita los incluye legítimamente. ---
+  - {id: q19, tenant: acme, user: analyst, question: "¿Quién está a cargo de la oficina que autoriza las suscripciones de software en la nube?",
+     expect: {answerable: true, contains: ["Camila Rojas"], docs: [Política de seguridad de la información, Organigrama]}, multi_hop: true}
+  - {id: q20, tenant: acme, user: owner, question: "¿Quién coordina el centro al que se escalan los incidentes críticos de seguridad?",
+     expect: {answerable: true, contains: ["Andrés Mejía"], docs: [Política de seguridad de la información, Organigrama]}, multi_hop: true}
+  - {id: q21, tenant: acme, user: analyst, question: "¿Quién está a cargo de la vicepresidencia que firma los contratos de outsourcing tecnológico?",
+     expect: {answerable: true, contains: ["Sofía Herrera"], docs: [Política de seguridad de la información, Organigrama]}, multi_hop: true}
+  # --- sin respuesta (abstención esperada) ---
+  - {id: q12, tenant: acme, user: owner, question: "¿Cuál es la política de teletrabajo para empleados en Japón?",
+     expect: {answerable: false}}
+  - {id: q13, tenant: acme, user: analyst, question: "¿Cuál fue el valor de las ventas del tercer trimestre de 2025?",
+     expect: {answerable: false}}
+  - {id: q14, tenant: globex, user: owner, question: "¿Cuántas cotizaciones requieren las compras superiores a 5 millones?",
+     expect: {answerable: false, must_not_contain: ["tres cotizaciones"]}}
+  # --- ACL: documento restringido al grupo Socios ---
+  - {id: q15, tenant: acme, user: analyst, question: "¿Qué distribución de utilidades aprobó la junta de socios?",
+     expect: {answerable: false, must_not_contain: ["30 por ciento", "Acta de junta"]}, acl_case: true}
+  - {id: q16, tenant: globex, user: owner, question: "¿Qué distribución de utilidades aprobó la junta de socios?",
+     expect: {answerable: false, must_not_contain: ["30 por ciento"]}, acl_case: true}
+  # --- ACL multi-hop (RAG-05): ambos saltos solo en un acta de Socios; el grafo no debe filtrarlos ---
+  - {id: q22, tenant: acme, user: analyst, question: "¿Quién representa a la firma que negocia la adquisición del Proyecto Atlas?",
+     expect: {answerable: false, must_not_contain: ["Julián Pardo", "Banca Delta", "Atlas la negocia"]}, acl_case: true, multi_hop: true}
+  - {id: q23, tenant: acme, user: owner, question: "¿Quién representa a la firma que negocia la adquisición del Proyecto Atlas?",
+     expect: {answerable: true, contains: ["Julián Pardo"], doc: Acta del comité de inversiones}, multi_hop: true}

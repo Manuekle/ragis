@@ -1,0 +1,188 @@
+/* Document viewers (Extend UI, shadcn base-nova) re-skinned with the app's own tokens.
+   - Tailwind runs WITHOUT its global preflight: the rest of the app has its own CSS. The few reset rules the
+     viewers need live in @layer base and are scoped to the viewer root (.xui) and to floating popups ([data-slot]).
+   - Every shadcn token is an alias of an app token (--vx-*), so light/dark follow the app's theme with no extra work. */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* dark: follows the app's switch (data-theme) or, with none set, the OS preference */
+@custom-variant dark {
+  &:where([data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+:root {
+  --vx-background: var(--surface);
+  --vx-foreground: var(--text);
+  --vx-card: var(--surface);
+  --vx-card-foreground: var(--text);
+  --vx-popover: var(--surface);
+  --vx-popover-foreground: var(--text);
+  --vx-primary: var(--accent);
+  --vx-primary-foreground: var(--on-accent);
+  --vx-secondary: var(--surface-2);
+  --vx-secondary-foreground: var(--text-2);
+  --vx-muted: var(--surface-2);
+  --vx-muted-foreground: var(--muted);
+  --vx-accent: var(--surface-2);
+  --vx-accent-foreground: var(--text);
+  --vx-destructive: var(--err);
+  --vx-border: var(--border);
+  --vx-input: var(--border-strong);
+  --vx-ring: var(--accent);
+  --vx-sidebar: var(--surface-2);
+  --vx-sidebar-foreground: var(--text);
+  --vx-sidebar-accent: var(--surface-3);
+  --vx-sidebar-accent-foreground: var(--text);
+  --vx-sidebar-border: var(--border);
+
+  /* buttons: same filled / raised anatomy as the app's .primary and .ghost (globals.css) */
+  --vx-primary-hover: var(--accent-hover);
+  --vx-shadow-primary: 0 1px 2px rgba(14, 18, 27, 0.24), 0 0 0 1px #288dff, inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --vx-fill-raised: var(--nb-fill);
+  --vx-shadow-raised: var(--nb-shadow);
+  --vx-hover-raised: var(--nb-hover);
+
+  --vx-radius: 12px;
+  --vx-radius-sm: 6px;
+  --vx-radius-md: 8px;
+  --vx-radius-lg: 12px;
+  --vx-radius-xl: 16px;
+}
+
+@theme inline {
+  --color-background: var(--vx-background);
+  --color-foreground: var(--vx-foreground);
+  --color-card: var(--vx-card);
+  --color-card-foreground: var(--vx-card-foreground);
+  --color-popover: var(--vx-popover);
+  --color-popover-foreground: var(--vx-popover-foreground);
+  --color-primary: var(--vx-primary);
+  --color-primary-foreground: var(--vx-primary-foreground);
+  --color-secondary: var(--vx-secondary);
+  --color-secondary-foreground: var(--vx-secondary-foreground);
+  --color-muted: var(--vx-muted);
+  --color-muted-foreground: var(--vx-muted-foreground);
+  --color-accent: var(--vx-accent);
+  --color-accent-foreground: var(--vx-accent-foreground);
+  --color-destructive: var(--vx-destructive);
+  --color-border: var(--vx-border);
+  --color-input: var(--vx-input);
+  --color-ring: var(--vx-ring);
+  --color-sidebar: var(--vx-sidebar);
+  --color-sidebar-foreground: var(--vx-sidebar-foreground);
+  --color-sidebar-accent: var(--vx-sidebar-accent);
+  --color-sidebar-accent-foreground: var(--vx-sidebar-accent-foreground);
+  --color-sidebar-border: var(--vx-sidebar-border);
+
+  --radius-xs: 4px;
+  --radius-sm: var(--vx-radius-sm);
+  --radius-md: var(--vx-radius-md);
+  --radius-lg: var(--vx-radius-lg);
+  --radius-xl: var(--vx-radius-xl);
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 999px;
+
+  --font-sans: var(--font);
+  --font-heading: var(--font);
+  --font-mono: var(--mono);
+}
+
+/* ── scoped preflight (subset of Tailwind's), only inside the viewer and its floating popups ── */
+@layer base {
+  :where(.xui, [data-slot]),
+  :where(.xui, [data-slot]) *,
+  :where(.xui, [data-slot]) ::before,
+  :where(.xui, [data-slot]) ::after {
+    box-sizing: border-box;
+    border: 0 solid var(--vx-border);
+  }
+  :where(.xui) {
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  :where(.xui, [data-slot]) :where(button, input, select, optgroup, textarea) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+    margin: 0;
+  }
+  :where(.xui, [data-slot]) :where(button, [role="button"]) {
+    cursor: pointer;
+  }
+  :where(.xui, [data-slot]) :where(:disabled) {
+    cursor: default;
+  }
+  :where(.xui, [data-slot]) :where(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+    font-family: inherit;
+    letter-spacing: inherit;
+    margin: 0;
+  }
+  :where(.xui, [data-slot]) :where(p, figure, blockquote) {
+    margin: 0;
+  }
+  :where(.xui, [data-slot]) :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  :where(.xui, [data-slot]) :where(ol, ul, menu) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  :where(.xui, [data-slot]) :where(img, svg, video, canvas, iframe) {
+    display: block;
+    vertical-align: middle;
+  }
+  :where(.xui, [data-slot]) :where(img, video) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(.xui, [data-slot]) :where(table) {
+    border-collapse: collapse;
+    text-indent: 0;
+    width: auto;
+    font-size: inherit;
+  }
+  :where(.xui, [data-slot]) :where(th, td) {
+    padding: 0;
+    text-align: inherit;
+    font-weight: inherit;
+    border-bottom: 0;
+  }
+}
+
+/* ── the app's element-level rules (button, input, h1, table…) must not leak into the viewers.
+      `revert-layer` from an unlayered rule discards every unlayered declaration (the app's) and falls back to
+      the layers above: the scoped preflight + Tailwind utilities. Triple :is() keeps it above `button:active` etc. ── */
+:is(.xui, [data-slot]):is(.xui, [data-slot]):is(.xui, [data-slot]) :is(button, input, textarea, h1, h2, h3, h4, h5, h6, p, a, table, th, td, kbd):not(.viewer-md *) {
+  all: revert-layer;
+}
+
+/* shadcn popups portal into <body>: keep them above the full-screen viewer layer */
+.z-50 {
+  z-index: 120;
+}
+
+/* a11y: focus ring in the app's accent */
+.xui :focus-visible {
+  outline-color: var(--accent);
+}

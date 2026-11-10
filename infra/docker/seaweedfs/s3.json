@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "ragsis-dev",
+      "credentials": [{ "accessKey": "ragsis-dev-access", "secretKey": "ragsis-dev-secret-change-me" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

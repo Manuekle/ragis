@@ -1,0 +1,189 @@
+# ragsis · entorno local de desarrollo.
+# Uso:  docker compose -f infra/docker/compose.yml --env-file .env up --build
+# Producción: imágenes por digest, secretos externos (Secrets Manager), redes privadas, sin bind-mounts.
+name: ragsis
+
+x-app-env: &app-env
+  RAGSIS_ENV: local
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-ragsis-dev-access}
+  AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-ragsis-dev-secret-change-me}
+  S3_ENDPOINT: http://seaweedfs:8333
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:8333}
+  S3_BUCKET: ragsis-documents
+  SQS_ENDPOINT: http://elasticmq:9324
+  SQS_INGEST_QUEUE_URL: http://elasticmq:9324/000000000000/ragsis-ingest
+  SQS_INGEST_DLQ_URL: http://elasticmq:9324/000000000000/ragsis-ingest-dlq
+  INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set INTERNAL_SERVICE_SECRET}
+  AI_DEFAULT_PROVIDER: ${AI_DEFAULT_PROVIDER:-local}
+  AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-local-hash-1024@v1}
+  AI_GENERATION_MODEL: ${AI_GENERATION_MODEL:-local-extractive@v1}
+  AI_RERANK_MODEL: ${AI_RERANK_MODEL:-local-lexical-rerank@v1}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OCR_PROVIDER: ${OCR_PROVIDER:-none}
+  # RAG-04: VLM para figuras (vacío = solo captions), parser (native | docling), VLM-enhanced en consulta.
+  AI_VISION_MODEL: ${AI_VISION_MODEL:-}
+  PARSER_PREFERENCE: ${PARSER_PREFERENCE:-native}
+  INGEST_TABLE_SUMMARIES: ${INGEST_TABLE_SUMMARIES:-false}
+  RAG_VLM_ENHANCED: ${RAG_VLM_ENHANCED:-auto}
+  # RAG-05: extracción de grafo (solo tenants con grafo habilitado por plan u organización).
+  AI_GRAPH_MODEL: ${AI_GRAPH_MODEL:-local-graph-heuristic@v1}
+  # Vacío = trazas desactivadas. Con `--profile observability`: http://jaeger:4318
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ragsis_owner
+      POSTGRES_DB: ragsis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      RAGSIS_APP_DB_PASSWORD: ${RAGSIS_APP_DB_PASSWORD:?set RAGSIS_APP_DB_PASSWORD}
+      RAGSIS_WORKER_DB_PASSWORD: ${RAGSIS_WORKER_DB_PASSWORD:?set RAGSIS_WORKER_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragsis_owner -d ragsis"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  seaweedfs:
+    # S3 compatible local (MinIO dejó de publicar imágenes comunitarias).
+    image: chrislusf/seaweedfs:3.80
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
+    volumes:
+      - s3data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    ports: ["127.0.0.1:8333:8333"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  elasticmq:
+    # SQS compatible local con DLQ (maxReceiveCount = 4).
+    image: softwaremill/elasticmq-native:1.6.11
+    volumes:
+      - ./elasticmq/elasticmq.conf:/opt/elasticmq.conf:ro
+    ports: ["127.0.0.1:9324:9324"]
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "dist/db/migrate.js"]
+    environment:
+      DATABASE_URL: postgres://ragsis_owner:${POSTGRES_PASSWORD}@postgres:5432/ragsis
+      MIGRATIONS_DIR: /app/db/migrations
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  bootstrap:
+    # Crea bucket S3 (idempotente).
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "dist/scripts/bootstrap.js"]
+    environment:
+      <<: *app-env
+    depends_on:
+      seaweedfs: { condition: service_healthy }
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *app-env
+      PORT: "4000"
+      DATABASE_URL: postgres://ragsis_app:${RAGSIS_APP_DB_PASSWORD}@postgres:5432/ragsis
+      RAG_ENGINE_URL: http://rag-engine:8080
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      JWT_DEV_SECRET: ${JWT_DEV_SECRET:?set JWT_DEV_SECRET}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      CORS_ORIGINS: http://localhost:3000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      ESIGN_PROVIDER: ${ESIGN_PROVIDER:-native}
+      SIGNATURE_SEAL_SECRET: ${SIGNATURE_SEAL_SECRET:-}
+      # CON-01 (ADR-025). Sin client_id el proveedor aparece como "no configurado". CONNECTORS_DEMO=1: datos simulados.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
+      CLICKUP_CLIENT_ID: ${CLICKUP_CLIENT_ID:-}
+      CLICKUP_CLIENT_SECRET: ${CLICKUP_CLIENT_SECRET:-}
+      CONNECTOR_ENCRYPTION_KEY: ${CONNECTOR_ENCRYPTION_KEY:-}
+      CONNECTORS_DEMO: ${CONNECTORS_DEMO:-false}
+      CONNECTOR_SYNC_INTERVAL_MINUTES: ${CONNECTOR_SYNC_INTERVAL_MINUTES:-30}
+      OTEL_SERVICE_NAME: ragsis-api
+    ports: ["127.0.0.1:4000:4000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      bootstrap: { condition: service_completed_successfully }
+      elasticmq: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rag-engine:
+    build:
+      context: ../..
+      dockerfile: services/rag-engine/Dockerfile
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://ragsis_app:${RAGSIS_APP_DB_PASSWORD}@postgres:5432/ragsis
+      OTEL_SERVICE_NAME: ragsis-rag-engine
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  ingest-worker:
+    build:
+      context: ../..
+      dockerfile: services/ingest-worker/Dockerfile
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://ragsis_worker:${RAGSIS_WORKER_DB_PASSWORD}@postgres:5432/ragsis
+      MALWARE_SCANNER: ${MALWARE_SCANNER:-none}
+      OTEL_SERVICE_NAME: ragsis-ingest-worker
+    tmpfs: ["/tmp:size=512m"]
+    # > WaitTimeSeconds (20 s): el long poll termina y los mensajes se liberan antes del SIGKILL.
+    stop_grace_period: 30s
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      bootstrap: { condition: service_completed_successfully }
+      elasticmq: { condition: service_started }
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      API_URL: http://api:4000
+      SESSION_COOKIE_SECURE: "false"
+      PUBLIC_BASE_URL: http://localhost:3000
+      DEMO_BOOKING_URL: ${DEMO_BOOKING_URL:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_AUDIENCE:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  jaeger:
+    # Backend de trazas local (OTLP/HTTP 4318, UI 16686). En AWS: ADOT collector → X-Ray/CloudWatch.
+    profiles: ["observability"]
+    image: jaegertracing/jaeger:2.5.0
+    ports: ["127.0.0.1:16686:16686", "127.0.0.1:4318:4318"]
+
+volumes:
+  pgdata:
+  s3data:

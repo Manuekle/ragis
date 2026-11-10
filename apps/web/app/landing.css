@@ -1,0 +1,240 @@
+/* ───────────── landing (app/page.tsx) ─────────────
+   Builds on the .gate shell from globals.css: same guides, crosses, beams and
+   dither horizon, widened for a hero. The hero is locked to one viewport; the sections
+   below it (.land-more) scroll. */
+
+.land {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  --horizon: clamp(120px, 22vh, 230px);
+}
+
+.land-nav { display: flex; align-items: center; gap: 10px; }
+.land-pill {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 14px;
+  border-radius: var(--r-pill);
+  font-size: 13.5px; color: var(--text); text-decoration: none;
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  transition: background-color var(--duration-quick) ease, transform 150ms ease-out;
+}
+@media (hover: hover) { .land-pill:hover { background: var(--surface-2); text-decoration: none; } }
+.land-pill:active { transform: scale(0.97); }
+
+.land-col { width: min(100% - 32px, 680px); padding-bottom: 0; }
+
+.land-title { padding: 34px 32px 36px; }
+.land-title h1 {
+  font-size: clamp(36px, 6.2vw, 62px);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.land-title h1 em {
+  font-family: var(--serif); font-style: italic; font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--accent-text);
+}
+
+.land-title h1 { animation: enter 500ms var(--ease-smooth-out) 260ms both; }
+
+.land-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--ok-dot);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok-dot) 22%, transparent);
+  animation: dot-pulse 2.4s ease-in-out infinite;
+}
+
+.land-body { gap: 22px; padding: 26px 32px 0; }
+.land-body > * { animation-delay: 380ms; }
+.land-body > *:nth-child(2) { animation-delay: 440ms; }
+.land-body > *:nth-child(n + 3) { animation-delay: 520ms; }
+
+.land-lead { margin: 0; max-width: 34em; font-size: 16.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+
+.land-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 22px; }
+.land-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.land-cta { width: auto; margin: 0; padding: 0 18px 0 20px; gap: 10px; }
+.land-cta .svg-icon { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+@media (hover: hover) { .land-cta:hover .svg-icon { transform: translateX(3px); } }
+
+/* sample cited answer */
+.land-demo {
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 0; padding: 16px 18px 14px;
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-md);
+}
+/* question: the user's message, a quiet bubble on the right */
+.land-q {
+  align-self: flex-end; max-width: 82%; margin: 0; padding: 7px 13px;
+  border-radius: 14px 14px 4px 14px;
+  font-size: 13.5px; line-height: 1.4; color: var(--text);
+  background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border);
+}
+/* answer: Ragis mark + text with inline citation numbers */
+.land-a { display: flex; align-items: flex-start; gap: 10px; }
+.land-a-mark {
+  display: inline-grid; place-items: center; flex: none;
+  width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+  color: var(--on-inverse); background: var(--inverse);
+}
+.land-a p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+.land-a sup, .land-src-n {
+  display: inline-grid; place-items: center;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 5px;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1; color: var(--accent-text); background: var(--accent-soft);
+}
+.land-a sup { vertical-align: 2px; margin-left: 3px; }
+/* sources: plain rows, no boxes; number ties back to the citation */
+.land-sources {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px;
+  margin-left: 32px; padding-top: 11px;
+  border-top: 1px solid var(--border);
+}
+.land-src { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.land-src .file-tile { width: 16px; height: 16px; }
+.land-src-loc { font-family: var(--mono); font-size: 11.5px; letter-spacing: var(--tracking-mono); color: var(--faint); }
+.land-verified {
+  display: inline-flex; align-items: center; gap: 7px; margin-left: auto;
+  font-size: 12px; color: var(--ok);
+}
+
+.land-link { font-size: 13.5px; color: var(--muted); padding: 0 4px; }
+@media (hover: hover) { .land-link:hover { color: var(--text); text-decoration: none; } }
+
+/* floating view switch: "See how it works" on the hero, "Back to start" on the content. The two
+   labels share one cell, so the pill keeps its size, and cross-blur into each other (text swap). */
+.land-scroll {
+  position: fixed; left: 0; right: 0; bottom: 22px; z-index: 5; width: fit-content; margin-inline: auto;
+  display: grid; place-items: center; height: 32px; padding: 0 15px;
+  border: 0; border-radius: var(--r-pill); cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text-2); white-space: nowrap;
+  background: color-mix(in oklab, var(--surface) 86%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--duration-quick) ease, color var(--duration-quick) ease;
+}
+.land-scroll-label {
+  grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 8px;
+  transition:
+    opacity var(--duration-quick, 150ms) ease-in-out,
+    filter var(--duration-quick, 150ms) ease-in-out,
+    transform var(--duration-fast, 250ms) var(--ease-smooth-out);
+}
+.land-scroll[data-view="hero"] [data-for="more"] { opacity: 0; filter: blur(2px); transform: translateY(4px); }
+.land-scroll[data-view="more"] [data-for="hero"] { opacity: 0; filter: blur(2px); transform: translateY(-4px); }
+.land-scroll [data-for="hero"] .land-scroll-ico { rotate: 90deg; animation: land-bob 2.2s ease-in-out infinite; }
+.land-scroll [data-for="more"] .land-scroll-ico { rotate: -90deg; animation: land-bob-up 2.2s ease-in-out infinite; }
+@media (hover: hover) { .land-scroll:hover { background: var(--surface); color: var(--text); } }
+@keyframes land-bob { 50% { translate: 0 2px; } }
+@keyframes land-bob-up { 50% { translate: 0 -2px; } }
+@media (prefers-reduced-motion: reduce) {
+  .land-scroll-label { transition: opacity var(--duration-quick, 150ms) ease; filter: none !important; transform: none !important; }
+  .land-scroll-ico { animation: none !important; }
+}
+
+/* ───────────── below the hero: what it is, what it does, why trust it ───────────── */
+.land-page { background: var(--bg); }
+/* the dashed column guides start at the very top, so they run behind the nav like on the hero */
+.land-more-wrap {
+  --guide: color-mix(in oklab, var(--text) 14%, transparent);
+  --land-edge: max(16px, calc((100% - 920px) / 2));
+  position: relative; isolation: isolate; min-height: 100dvh;
+}
+.land-more-wrap::before, .land-more-wrap::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 1px; z-index: -1; pointer-events: none;
+  background: repeating-linear-gradient(180deg, var(--guide) 0 5px, transparent 5px 10px) 0 0 / 1px 10px repeat-y;
+  animation: guide-march-y 3.2s linear infinite;
+}
+.land-more-wrap::before { left: var(--land-edge); }
+.land-more-wrap::after { right: var(--land-edge); animation-direction: reverse; }
+@media (prefers-reduced-motion: reduce) { .land-more-wrap::before, .land-more-wrap::after { animation: none; } }
+.land-more-wrap > .gate-top { position: relative; z-index: 2; }
+
+.land-more {
+  --guide: color-mix(in oklab, var(--text) 14%, transparent);
+  position: relative; z-index: 1;
+  width: min(100% - 32px, 920px); margin: 0 auto;
+}
+.land-sec { padding: clamp(56px, 9vw, 96px) clamp(20px, 5vw, 48px); border-top: 1px dashed var(--guide); }
+.land-sec:first-child { border-top: 0; }
+
+.land-sec h2 {
+  margin: 0 0 clamp(28px, 4vw, 40px); max-width: 16em;
+  font-weight: 400; font-size: clamp(28px, 4.4vw, 40px); line-height: 1.08; letter-spacing: -0.04em; text-wrap: balance;
+}
+.land-sec h2 em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.02em; color: var(--accent-text); }
+
+.land-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: center; gap: 12px clamp(16px, 4vw, 40px); margin-bottom: clamp(24px, 4vw, 36px); }
+.land-intro h2 { margin: 0; }
+.land-ill { width: 100%; aspect-ratio: 1.9 / 1; }
+.ill.land-ill img { height: 100%; object-fit: contain; }
+@media (max-width: 720px) { .land-intro { grid-template-columns: 1fr; } .land-ill { max-width: 420px; justify-self: center; } }
+
+/* Select the Ragis drawing palette by theme, as with .file-tile. */
+.ill { display: block; }
+.ill img { display: block; width: 100%; height: auto; }
+.ill .ill-dark { display: none; }
+:root[data-theme="dark"] .ill .ill-light { display: none; }
+:root[data-theme="dark"] .ill .ill-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ill .ill-light { display: none; }
+  :root:not([data-theme="light"]) .ill .ill-dark { display: block; }
+}
+
+.land-steps, .land-feats { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.land-steps { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.land-feats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); }
+
+.land-card {
+  position: relative; display: flex; flex-direction: column; gap: 8px;
+  padding: 20px 20px 22px; border-radius: var(--r-lg);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.land-card h3 { margin: 6px 0 0; font-size: 16px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); }
+.land-card p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+.land-card-ico {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+  color: var(--accent-text); background: var(--accent-soft);
+}
+.land-card-n { position: absolute; top: 18px; right: 20px; font-family: var(--mono); font-size: 11.5px; letter-spacing: var(--tracking-mono); color: var(--faint); }
+
+.land-trust { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 36px; }
+.land-trust li { display: flex; align-items: flex-start; gap: 12px; }
+.land-trust .svg-icon { flex: none; margin-top: 3px; color: var(--ok); }
+.land-trust div { display: flex; flex-direction: column; gap: 3px; }
+.land-trust strong { font-size: 15px; font-weight: 500; color: var(--text); }
+.land-trust span { font-size: 14px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+
+.land-final { text-align: left; }
+.land-final h2 { margin-bottom: 26px; }
+
+
+/* Fit one screen: shed detail as the viewport gets short or narrow. */
+@media (max-height: 820px) {
+  .land-title { padding: 24px 28px 26px; }
+  .land-title h1 { font-size: clamp(34px, 5.4vw, 52px); }
+  .land-body { gap: 18px; padding-top: 22px; }
+}
+@media (max-height: 720px), (max-width: 560px) {
+  .land-demo { display: none; }
+}
+@media (max-height: 600px) {
+  .land { --horizon: 90px; }
+  .land-title { padding: 20px 24px 22px; }
+  .land-title h1 { font-size: clamp(30px, 5vw, 42px); }
+  .land-lead { font-size: 15px; }
+}
+@media (max-width: 560px) {
+  .land-nav .theme-toggle { display: none; }
+  .land-link { display: none; }
+  .land-title h1 br { display: none; }
+  .land-title, .land-body { padding-left: 20px; padding-right: 20px; }
+  .land-lead { font-size: 15px; }
+  .land-buttons { width: 100%; gap: 8px; }
+  .land-buttons .land-cta { flex: 1 0 auto; padding-inline: 8px; gap: 8px; }
+}

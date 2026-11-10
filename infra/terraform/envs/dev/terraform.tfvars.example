@@ -1,0 +1,10 @@
+image_tag          = "git-sha"
+certificate_arn    = "arn:aws:acm:us-east-1:111111111111:certificate/xxxx"
+public_base_url    = "https://app.dev.ragsis.example"
+oidc_issuer        = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXX"
+oidc_audience      = "client-id"
+alarm_email        = "ops@ragsis.example"
+bedrock_model_arns = [
+  "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
+  "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0",
+]
