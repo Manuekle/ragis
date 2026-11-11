@@ -4,6 +4,12 @@ Cada chunk se procesa por separado para que toda entidad/relación quede atada a
 la ACL del grafo se deriva de la ACL del documento de ese chunk (ADR-019). Solo se aceptan menciones que aparecen
 literalmente en el chunk (anti-alucinación) y relaciones entre entidades aceptadas del mismo chunk.
 
+Grafo cross-modal (ADR-029): cada chunk no textual (figura, tabla, ecuación) aporta además un nodo ancla propio
+—nombre determinista a partir de su caption y del documento, nunca del modelo— y una relación `pertenece_a` desde
+cada entidad extraída de su descripción hacia ese nodo. Las tablas añaden su estructura (`table_graph.py`): filas,
+columnas, celdas y unidades. La figura queda así unida por nombre de entidad (fusión de
+grafos) a los chunks de texto que mencionan lo mismo, con la misma procedencia y ACL por chunk.
+
 Sin modelo permitido para el tenant (p. ej. restringido con AI_GRAPH_MODEL en la nube) o con el proveedor caído, la
 extracción se omite con advertencia y la ingesta continúa sin grafo (backfill posterior: `reindex --mode graph`).
 """
@@ -24,9 +30,15 @@ from ragsis_core.logging import log
 from ragsis_core.settings import Settings, get_settings
 from ragsis_core.text import fold, normalize
 
+from .table_graph import table_graph, table_rows
+
 logger = logging.getLogger("ragsis.ingest.graph")
 
-GRAPH_KINDS = ("text", "table")
+GRAPH_KINDS = ("text", "table", "figure", "equation", "audio")
+MODAL_TYPES = {"figure": ("figura", "Figura"), "table": ("tabla", "Tabla"), "equation": ("ecuacion", "Ecuación")}
+BELONGS_KEYWORDS = "pertenece_a contenido_en"
+BELONGS_WEIGHT = 3.0
+ANCHOR_DESCRIPTION = 400
 MAX_ENTITIES_PER_CHUNK = 30
 MAX_RELATIONS_PER_CHUNK = 40
 MAX_NAME = 200
@@ -34,6 +46,9 @@ MAX_DESCRIPTION = 1000
 MAX_KEYWORDS = 300
 _TYPE_RE = re.compile(r"[^a-z_]+")
 _SPACES = re.compile(r"\s+")
+# Etiqueta numerada al inicio del caption ("Figura 2", "Tabla 3.1", "Fig. 4", "Table 2", "Ecuación (5)").
+_LABEL_RE = re.compile(r"^\s*(figura|figure|fig|gr[aá]fic[oa]|tabla|table|cuadro|ecuaci[oó]n|equation|eq)\.?\s*"
+                       r"\(?(\d+(?:[.\-]\d+)*|[ivxlc]+)\)?(?=$|[\s.:,;)\-–—])", re.I)
 
 GRAPH_SYSTEM = (
     "Extraes un grafo de conocimiento de un fragmento de documento empresarial. Devuelve SOLO un objeto JSON con "
@@ -59,6 +74,10 @@ class GraphStats:
     chunks: int = 0
     entities: int = 0
     relations: int = 0
+    anchors: int = 0
+    table_cells: int = 0
+    embedded: int = 0
+    embedding_tokens: int = 0
     llm_input_tokens: int = 0
     llm_output_tokens: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -73,6 +92,49 @@ def normalize_name(name: str) -> str:
 
 def _clean(text, limit: int) -> str:
     return normalize(str(text or ""))[:limit]
+
+
+def modal_anchor(kind: str, text: str, *, caption: str = "", page: int | None = None, ordinal: int = 0,
+                 title: str = "", summary: str = "") -> dict | None:
+    """Nodo ancla de un chunk no textual: {key, name, type, description}. None si `kind` es texto.
+
+    El nombre es determinista y con alcance de documento ("Figura 2 · Informe anual"): dos documentos con una
+    "Figura 2" no se fusionan, y un reindexado produce la misma clave. Sin etiqueta numerada en el caption se usa
+    la página y la posición del chunk. `summary`: resumen de entidad escrito por el modelo que describió la unidad
+    (VLM de figuras, resumen de tabla, análisis de ecuación); sin él la descripción se deriva del caption y el texto."""
+    if kind not in MODAL_TYPES:
+        return None
+    etype, word = MODAL_TYPES[kind]
+    m = _LABEL_RE.match(caption or "")
+    if m:
+        label = f"{word} {m.group(2)}"
+    else:
+        label = f"{word} p.{page} n.{ordinal + 1}" if page else f"{word} n.{ordinal + 1}"
+    doc = _clean(title, 120)
+    name = f"{label} · {doc}" if doc else label
+    key = normalize_name(name)
+    if len(key) < 2:
+        return None
+    if summary:
+        body = summary
+    elif kind == "table" and (header := [h for h in table_rows(text)[0] if h]):
+        # Sin resumen del modelo: qué columnas tiene, no las filas en crudo (esas ya son nodos y son el chunk).
+        body = f"{caption}. Columnas: {', '.join(header)}" if caption else f"Tabla con columnas: {', '.join(header)}"
+    else:
+        body = text if not caption or text.startswith(caption) else f"{caption}. {text}"
+    return {"key": key, "name": name[:MAX_NAME], "type": etype, "description": _clean(body, ANCHOR_DESCRIPTION)}
+
+
+def attach_anchor(g: ChunkGraph, anchor: dict) -> ChunkGraph:
+    """Añade el nodo ancla y una relación `pertenece_a` desde cada entidad del chunk hacia él."""
+    members = [e for e in g.entities if e["key"] != anchor["key"]]
+    if len(members) == len(g.entities):
+        g.entities.append(anchor)
+    for e in members:
+        g.relations.append({"src_key": e["key"], "dst_key": anchor["key"], "keywords": BELONGS_KEYWORDS,
+                            "description": _clean(f"{e['name']} aparece en {anchor['name']}", MAX_DESCRIPTION),
+                            "weight": BELONGS_WEIGHT})
+    return g
 
 
 def parse_graph(raw: str, chunk_text: str) -> ChunkGraph:
@@ -121,9 +183,10 @@ class GraphExtractor:
         self.gateway = gateway
         self.settings = settings or get_settings()
 
-    def extract(self, chunks: list[tuple[str, str]], policy: TenantAIPolicy, title: str = "") -> tuple[
+    def extract(self, chunks: list[tuple], policy: TenantAIPolicy, title: str = "") -> tuple[
             dict[int, ChunkGraph], GraphStats]:
-        """`chunks`: [(kind, text)] en orden. Devuelve {índice de chunk: grafo} y estadísticas."""
+        """`chunks`: [(kind, text)] o [(kind, text, {"caption", "page", "ordinal"})] en orden.
+        Devuelve {índice de chunk: grafo} y estadísticas."""
         stats = GraphStats()
         model_id = self.settings.ai_graph_model
         if not model_id:
@@ -136,7 +199,9 @@ class GraphExtractor:
             return {}, stats
         out: dict[int, ChunkGraph] = {}
         budget = self.settings.graph_max_chunks_per_doc
-        for i, (kind, text) in enumerate(chunks):
+        for i, item in enumerate(chunks):
+            kind, text = item[0], item[1]
+            info = item[2] if len(item) > 2 and item[2] else {}
             if kind not in GRAPH_KINDS or not text.strip():
                 continue
             if stats.chunks >= budget:
@@ -163,6 +228,22 @@ class GraphExtractor:
             stats.llm_input_tokens += res.input_tokens
             stats.llm_output_tokens += res.output_tokens
             g = parse_graph(res.text, text)
+            caption = info.get("caption") or ""
+            anchor = modal_anchor(kind, text, caption=caption, page=info.get("page"),
+                                  ordinal=info.get("ordinal") if info.get("ordinal") is not None else i, title=title,
+                                  summary=info.get("summary") or "")
+            if anchor:
+                attach_anchor(g, anchor)
+                stats.anchors += 1
+                if kind == "table":
+                    # Estructura de la tabla (filas, columnas, celdas, unidades): determinista, sin modelo.
+                    known = {e["key"] for e in g.entities}
+                    ents, rels = table_graph(text, anchor, caption, normalize_name)
+                    fresh = [e for e in ents if e["key"] not in known]
+                    ok = known | {e["key"] for e in fresh}
+                    g.entities.extend(fresh)
+                    g.relations.extend(r for r in rels if r["src_key"] in ok and r["dst_key"] in ok)
+                    stats.table_cells += sum(1 for r in rels if r["keywords"].startswith("celda "))
             if g.entities:
                 out[i] = g
                 stats.entities += len(g.entities)

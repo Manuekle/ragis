@@ -17,7 +17,8 @@ Jobs soportados:
                               (backfill al habilitar el grafo en un tenant).
 
 Grafo (RAG-05): si el tenant tiene el grafo habilitado (plan u organización), tras el chunking se extraen
-entidades/relaciones por chunk con AI_GRAPH_MODEL y se guardan con procedencia por chunk (ADR-019).
+entidades/relaciones por chunk con AI_GRAPH_MODEL y se guardan con procedencia por chunk (ADR-019). Figuras, tablas
+y ecuaciones aportan además su nodo ancla y relaciones `pertenece_a` (grafo cross-modal, ADR-029).
 """
 
 from __future__ import annotations
@@ -44,7 +45,7 @@ from ragsis_core.telemetry import remote_parent, stage
 
 from .chunker import Chunk, Chunker
 from .enrich import detect_pii
-from .graph import ChunkGraph, GraphExtractor, GraphStats
+from .graph import BELONGS_KEYWORDS, ChunkGraph, GraphExtractor, GraphStats
 from .multimodal import MultimodalEnricher, MultimodalStats
 from .ocr import OcrProvider, OcrResult, OcrUnavailable, get_ocr_provider
 from .parsers.model import Block, ParsedDocument
@@ -52,6 +53,14 @@ from .parsers.pdf import PageLimitExceeded
 from .parsers.selector import parse
 from .parsers.text import parse_lines
 from .scanner import ScannerUnavailable, scan
+from .transcription import (
+    AUDIO_FORMATS,
+    Transcript,
+    TranscriptionProvider,
+    TranscriptionUnavailable,
+    get_transcription_provider,
+    transcript_document,
+)
 from .validation import FileInfo, ValidationError, validate
 
 logger = logging.getLogger("ragsis.ingest")
@@ -111,6 +120,7 @@ class Extraction:
     timings: dict = field(default_factory=dict)
     graph: dict[int, ChunkGraph] = field(default_factory=dict)
     graph_stats: GraphStats | None = None
+    audio: Transcript | None = None
 
 
 def _audit(conn: psycopg.Connection, org: uuid.UUID, action: str, resource: str, decision: str, meta: dict) -> None:
@@ -138,18 +148,23 @@ _VERSION_SQL = """
 class IngestPipeline:
     def __init__(self, gateway: AIGateway | None = None, chunker: Chunker | None = None, pool=None,
                  ocr: OcrProvider | None = None, multimodal: MultimodalEnricher | None = None,
-                 graph: GraphExtractor | None = None) -> None:
+                 graph: GraphExtractor | None = None, transcriber: TranscriptionProvider | None = None) -> None:
         self.pool = pool
         self.gateway = gateway or AIGateway()
         self.chunker = chunker or Chunker()
         self.settings = get_settings()
         self._ocr = ocr
+        self._transcriber = transcriber
         self.multimodal = multimodal or MultimodalEnricher(self.gateway, self.settings)
         self.graph = graph or GraphExtractor(self.gateway, self.settings)
 
     @property
     def ocr(self) -> OcrProvider | None:
         return self._ocr if self._ocr is not None else get_ocr_provider()
+
+    @property
+    def transcriber(self) -> TranscriptionProvider | None:
+        return self._transcriber if self._transcriber is not None else get_transcription_provider()
 
     # ------------------------------------------------------------------ entrada
     def handle(self, msg: JobMessage, receive_count: int = 1) -> str:
@@ -175,7 +190,7 @@ class IngestPipeline:
             self._fail(ctx, msg, code, str(exc)[:500], terminal_state="failed",
                        version_status="rejected" if isinstance(exc, ValidationError) else "failed")
             return f"failed:{code}"
-        except (ProviderError, ScannerUnavailable, OcrUnavailable, ClientError, BotoCoreError,
+        except (ProviderError, ScannerUnavailable, OcrUnavailable, TranscriptionUnavailable, ClientError, BotoCoreError,
                 psycopg.OperationalError, TransientError) as exc:
             if receive_count >= MAX_RECEIVES:
                 self._fail(ctx, msg, "dead_letter", f"{type(exc).__name__}: {str(exc)[:400]}",
@@ -192,7 +207,7 @@ class IngestPipeline:
                               approved_regions=(ver["region_policy"],))
 
     def _extract(self, ctx: SecurityContext, ver: dict, policy: TenantAIPolicy, on_status=None,
-                 known_descriptions: dict[str, tuple[str, str]] | None = None) -> Extraction:
+                 known_descriptions: dict[str, tuple] | None = None) -> Extraction:
         """Descarga → validación → antimalware → parsing (+OCR) → multimodal → chunking → PII."""
         status = on_status or (lambda *_a, **_k: None)
         if not ver["s3_key"].startswith(f"tenants/{ctx.organization_id}/"):
@@ -204,8 +219,14 @@ class IngestPipeline:
         scan(data)
         status("validated", size_bytes=info.size, checksum_sha256=checksum)
         status("parsing")
-        parsed = parse(data, info.kind, int(ver["max_pages_per_doc"]))
-        del data
+        audio = None
+        if info.kind == "audio":
+            del data
+            audio = self._transcribe(ctx, ver, policy, info.audio_format)
+            parsed = transcript_document(audio)
+        else:
+            parsed = parse(data, info.kind, int(ver["max_pages_per_doc"]))
+            del data
         ocr_result = None
         if info.kind in ("pdf", "image") and parsed.low_text_pages:
             ocr_result = self._apply_ocr(parsed, ver, policy, info.kind)
@@ -214,8 +235,41 @@ class IngestPipeline:
                                     title=ver.get("doc_title") or ver["filename"], known=known_descriptions)
         chunks = self.chunker.chunk(parsed.blocks)
         if not chunks:
+            if audio is not None:
+                raise PermanentError("no_speech_detected", "la grabación no tiene voz reconocible")
             raise PermanentError("no_extractable_text", "; ".join(parsed.warnings) or "documento sin texto")
-        return Extraction(info, checksum, parsed, chunks, [detect_pii(c.text) for c in chunks], ocr_result, mm)
+        return Extraction(info, checksum, parsed, chunks, [detect_pii(c.text) for c in chunks], ocr_result, mm,
+                          audio=audio)
+
+    def _transcribe(self, ctx: SecurityContext, ver: dict, policy: TenantAIPolicy, audio_format: str | None) -> Transcript:
+        """Voz → texto con tiempos (ADR-030). Reutiliza la transcripción ya pagada de esta versión si existe."""
+        bucket = self.settings.s3_bucket
+        prefix = f"tenants/{ctx.organization_id}/assets/{ver['document_id']}/{ver['id']}/"
+        saved = f"{prefix}transcript.json"
+        s3 = s3_client()
+        try:
+            tr = Transcript.from_json(s3.get_object(Bucket=bucket, Key=saved)["Body"].read())
+            tr.reused = True
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") not in ("NoSuchKey", "404"):
+                raise
+            tr = None
+        except (ValueError, KeyError, TypeError):
+            tr = None           # transcripción guardada ilegible: se vuelve a transcribir
+        if tr is None:
+            provider = self.transcriber
+            if provider is None:
+                raise PermanentError("transcription_required",
+                                     "audio y transcripción no habilitada (TRANSCRIPTION_PROVIDER)")
+            # El audio sale a un servicio cloud: la clasificación del tenant decide si puede usarse.
+            require_allowed(self.gateway.registry.get(provider.model_id), policy)
+            with stage("ingest.transcribe", None, **{"ragsis.audio_format": audio_format or ""}) as span:
+                tr = provider.transcribe(bucket, ver["s3_key"], AUDIO_FORMATS[audio_format or "mp3"], prefix)
+                span.set_attributes({"ragsis.audio_seconds": tr.duration, "ragsis.audio_segments": len(tr.segments)})
+            s3.put_object(Bucket=bucket, Key=saved, Body=tr.to_json().encode("utf-8"), ContentType="application/json")
+        if tr.duration > self.settings.audio_max_seconds:
+            raise PermanentError("audio_too_long", f"{int(tr.duration)} s > {self.settings.audio_max_seconds} s")
+        return tr
 
     def _apply_ocr(self, parsed: ParsedDocument, ver: dict, policy: TenantAIPolicy, kind: str = "pdf") -> OcrResult | None:
         heavy = any(w.startswith("ocr_required") for w in parsed.warnings)
@@ -289,8 +343,71 @@ class IngestPipeline:
                 " VALUES (%s,%s,%s,%s,%s)", emb_rows)
         return ids
 
+    @staticmethod
+    def _refresh_centroid(conn, document_id: uuid.UUID) -> None:
+        """Vector resumen del documento (ADR-031): promedio de los vectores de sus chunks activos, por modelo.
+        Lo usa la sugerencia de carpeta; se recalcula en la misma transacción que cambia los chunks."""
+        execute(conn, "DELETE FROM document_centroids WHERE document_id = %s", (document_id,))
+        execute(conn, """
+            INSERT INTO document_centroids (document_id, organization_id, model_version, embedding, chunk_count)
+            SELECT c.document_id, c.organization_id, e.model_version, avg(e.embedding), count(*)
+              FROM chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
+             WHERE c.document_id = %s AND c.index_state = 'active'
+             GROUP BY c.document_id, c.organization_id, e.model_version""", (document_id,))
+
     # ------------------------------------------------------------------ grafo (RAG-05)
-    def _extract_graph(self, ver: dict, policy: TenantAIPolicy, chunks: list[tuple[str, str]]) -> tuple[
+    @staticmethod
+    def _graph_inputs(chunks: list[Chunk]) -> list[tuple]:
+        return [(c.kind, c.text, {"caption": c.meta.get("caption"), "page": c.page_start, "ordinal": c.ordinal,
+                                  "summary": c.meta.get("entity_summary") or c.meta.get("summary")})
+                for c in chunks]
+
+    # Texto que se embebe por fila de procedencia (ADR-029). Las relaciones `pertenece_a` son estructura repetitiva
+    # sin contenido propio: se navegan, no se buscan por similitud.
+    @staticmethod
+    def _entity_text(name: str, etype: str, description: str) -> str:
+        return f"{name} ({etype})\n{description}" if description else f"{name} ({etype})"
+
+    @staticmethod
+    def _relation_text(keywords: str, description: str) -> str:
+        return f"{keywords}\n{description}" if description else keywords
+
+    def _embed_texts(self, texts: list[str], policy: TenantAIPolicy, model: ModelSpec) -> tuple[dict[str, list[float]], int]:
+        """Embebe textos únicos por lotes; devuelve {texto: vector} y tokens."""
+        unique = list(dict.fromkeys(texts))
+        out: dict[str, list[float]] = {}
+        tokens = 0
+        for i in range(0, len(unique), EMBED_BATCH):
+            batch = unique[i:i + EMBED_BATCH]
+            res = self.gateway.embed(batch, policy, input_type="document", model_id=model.model_id)
+            out.update(zip(batch, res.vectors, strict=True))
+            tokens += res.input_tokens
+        return out, tokens
+
+    def _embed_graph(self, graphs: dict[int, ChunkGraph], stats: GraphStats | None, policy: TenantAIPolicy,
+                     model: ModelSpec) -> None:
+        """Vectores de entidades y relaciones, en el mismo espacio que los chunks (tabla T del índice)."""
+        if not graphs or stats is None:
+            return
+        texts = []
+        for g in graphs.values():
+            for e in g.entities:
+                e["embed_text"] = self._entity_text(e["name"], e["type"], e["description"])
+                texts.append(e["embed_text"])
+            for r in g.relations:
+                if r["keywords"] != BELONGS_KEYWORDS:
+                    r["embed_text"] = self._relation_text(r["keywords"], r["description"])
+                    texts.append(r["embed_text"])
+        with stage("ingest.graph_embed", None, **{"ragsis.graph_texts": len(texts)}):
+            vectors, tokens = self._embed_texts(texts, policy, model)
+        for g in graphs.values():
+            for x in (*g.entities, *g.relations):
+                if "embed_text" in x:
+                    x["vec"] = vectors[x.pop("embed_text")]
+        stats.embedded = len(texts)
+        stats.embedding_tokens = tokens
+
+    def _extract_graph(self, ver: dict, policy: TenantAIPolicy, chunks: list[tuple]) -> tuple[
             dict[int, ChunkGraph], GraphStats | None]:
         if not ver.get("graph_enabled"):
             return {}, None
@@ -304,7 +421,7 @@ class IngestPipeline:
 
     @staticmethod
     def _insert_graph(conn, ctx: SecurityContext, ver: dict, chunk_ids: list[uuid.UUID],
-                      graphs: dict[int, ChunkGraph]) -> None:
+                      graphs: dict[int, ChunkGraph], model: ModelSpec | None = None) -> None:
         """Upsert de claves + procedencia por chunk. La clave no lleva datos propios (ver 0005_graphrag.sql)."""
         if not graphs:
             return
@@ -317,19 +434,26 @@ class IngestPipeline:
             ON CONFLICT (organization_id, workspace_id, normalized_name)
             DO UPDATE SET normalized_name = EXCLUDED.normalized_name
             RETURNING id, normalized_name""", (org, ws, keys))}
-        ent_rows, rel_src = [], []
+        ent_rows, rel_src, ent_emb, rel_emb = [], [], [], []
         pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
+        mv = model.model_id if model else None
         for i, g in graphs.items():
             cid = chunk_ids[i]
             for e in g.entities:
                 ent_rows.append((ent[e["key"]], cid, org, doc, e["name"], e["type"], e["description"]))
+                if mv and "vec" in e:
+                    ent_emb.append((ent[e["key"]], cid, org, doc, mv, e["vec"]))
             for r in g.relations:
                 pair = (ent[r["src_key"]], ent[r["dst_key"]])
                 pairs.add(pair)
                 rel_src.append((pair, cid, r["keywords"], r["description"], r["weight"]))
+                if mv and "vec" in r:
+                    rel_emb.append((pair, cid, mv, r["vec"]))
         with conn.cursor() as cur:
             cur.executemany("INSERT INTO entity_sources (entity_id, chunk_id, organization_id, document_id, name, type,"
                             " description) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ent_rows)
+            cur.executemany("INSERT INTO entity_source_embeddings (entity_id, chunk_id, organization_id, document_id,"
+                            " model_version, embedding) VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ent_emb)
         if not pairs:
             return
         src, dst = zip(*sorted(pairs), strict=True)
@@ -343,6 +467,9 @@ class IngestPipeline:
             cur.executemany("INSERT INTO relation_sources (relation_id, chunk_id, organization_id, document_id, keywords,"
                             " description, weight) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
                             [(rel[p], cid, org, doc, kw, desc, w) for p, cid, kw, desc, w in rel_src])
+            cur.executemany("INSERT INTO relation_source_embeddings (relation_id, chunk_id, organization_id, document_id,"
+                            " model_version, embedding) VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
+                            [(rel[p], cid, org, doc, m, vec) for p, cid, m, vec in rel_emb])
 
     @staticmethod
     def _gc_graph(conn, workspace_id) -> None:
@@ -357,19 +484,22 @@ class IngestPipeline:
         if stats:
             _usage(conn, ctx.organization_id, "llm_input_tokens", stats.llm_input_tokens, ref)
             _usage(conn, ctx.organization_id, "llm_output_tokens", stats.llm_output_tokens, ref)
+            _usage(conn, ctx.organization_id, "embedding_tokens", stats.embedding_tokens, ref)
 
     def _version_meta(self, conn, ver_id, ex: Extraction, model: ModelSpec) -> None:
         execute(conn, """
             UPDATE document_versions
                SET parser=%s, parser_version=%s, page_count=%s, chunk_count=%s, pipeline_version=%s,
                    embedding_model=%s, ocr_provider=%s, ocr_mean_confidence=%s,
-                   figure_count=%s, table_count=%s, vision_model=%s
+                   figure_count=%s, table_count=%s, vision_model=%s,
+                   duration_seconds=%s, transcription_provider=%s, transcription_language=%s
              WHERE id=%s""",
                 (ex.parsed.parser, ex.parsed.parser_version, ex.parsed.page_count, len(ex.chunks),
                  self.settings.pipeline_version, model.model_id, ex.ocr.provider if ex.ocr else None,
                  ex.ocr.mean_confidence if ex.ocr else None,
                  sum(1 for c in ex.chunks if c.kind == "figure"), sum(1 for c in ex.chunks if c.kind == "table"),
-                 ex.mm.vision_model, ver_id))
+                 ex.mm.vision_model, ex.audio.duration if ex.audio else None,
+                 ex.audio.provider if ex.audio else None, (ex.audio.language or None) if ex.audio else None, ver_id))
 
     def _claim_job(self, conn, msg: JobMessage) -> dict | None:
         job = fetch_one(conn, "SELECT * FROM ingestion_jobs WHERE id = %s FOR UPDATE", (msg.job_id,))
@@ -409,7 +539,8 @@ class IngestPipeline:
                      parser_version=ex.parsed.parser_version, page_count=ex.parsed.page_count)
         self._status(ctx, msg.version_id, "embedding")
         vectors, embed_tokens = self._embed(ex.chunks, policy, model)
-        ex.graph, ex.graph_stats = self._extract_graph(ver, policy, [(c.kind, c.text) for c in ex.chunks])
+        ex.graph, ex.graph_stats = self._extract_graph(ver, policy, self._graph_inputs(ex.chunks))
+        self._embed_graph(ex.graph, ex.graph_stats, policy, model)
 
         with tenant_tx(ctx, self.pool) as conn:
             # Verificar que el documento siga activo (pudo borrarse durante el procesamiento).
@@ -419,11 +550,12 @@ class IngestPipeline:
             # Re-entrada: limpiar restos de un intento previo de esta misma versión.
             execute(conn, "DELETE FROM chunks WHERE version_id=%s", (msg.version_id,))
             chunk_ids = self._insert_chunks(conn, ctx, ver, ex, vectors, model, "building")
-            self._insert_graph(conn, ctx, ver, chunk_ids, ex.graph)
+            self._insert_graph(conn, ctx, ver, chunk_ids, ex.graph, model)
             # Swap atómico: la nueva versión pasa a activa y la anterior queda superseded.
             execute(conn, "UPDATE chunks SET index_state='superseded' WHERE document_id=%s AND version_id<>%s "
                           "AND index_state='active'", (msg.document_id, msg.version_id))
             execute(conn, "UPDATE chunks SET index_state='active' WHERE version_id=%s", (msg.version_id,))
+            self._refresh_centroid(conn, msg.document_id)
             execute(conn, "UPDATE document_versions SET is_current=false, "
                           "status=CASE WHEN status='indexed' THEN 'superseded' ELSE status END "
                           "WHERE document_id=%s AND id<>%s AND is_current", (msg.document_id, msg.version_id))
@@ -451,6 +583,9 @@ class IngestPipeline:
                         "mean_confidence": ex.ocr.mean_confidence, "dropped_lines": ex.ocr.dropped_lines} if ex.ocr else None,
                 "multimodal": ex.mm.as_audit() or None,
                 "graph": ex.graph_stats.as_audit() if ex.graph_stats else None,
+                "audio": {"provider": ex.audio.provider, "seconds": ex.audio.duration, "language": ex.audio.language,
+                          "segments": len(ex.audio.segments), "mean_confidence": ex.audio.mean_confidence,
+                          "dropped_words": ex.audio.dropped_words} if ex.audio else None,
                 "duration_ms": int((time.perf_counter() - t0) * 1000), "warnings": ex.parsed.warnings[:5],
             })
         log(logger, logging.INFO, "document.indexed", org=str(ctx.organization_id), version=str(msg.version_id),
@@ -493,20 +628,51 @@ class IngestPipeline:
                  WHERE c.version_id = %s AND c.index_state = 'active'
                    AND NOT EXISTS (SELECT 1 FROM chunk_embeddings e WHERE e.chunk_id = c.id AND e.model_version = %s)
                  ORDER BY c.ordinal""", (msg.version_id, model.model_id))
+            ents = fetch_all(conn, """
+                SELECT s.entity_id, s.chunk_id, s.name, s.type, s.description FROM entity_sources s
+                  JOIN chunks c ON c.id = s.chunk_id
+                 WHERE c.version_id = %s AND c.index_state = 'active'
+                   AND NOT EXISTS (SELECT 1 FROM entity_source_embeddings e WHERE e.entity_id = s.entity_id
+                                      AND e.chunk_id = s.chunk_id AND e.model_version = %s)""",
+                             (msg.version_id, model.model_id))
+            rels = fetch_all(conn, """
+                SELECT s.relation_id, s.chunk_id, s.keywords, s.description FROM relation_sources s
+                  JOIN chunks c ON c.id = s.chunk_id
+                 WHERE c.version_id = %s AND c.index_state = 'active' AND s.keywords <> %s
+                   AND NOT EXISTS (SELECT 1 FROM relation_source_embeddings e WHERE e.relation_id = s.relation_id
+                                      AND e.chunk_id = s.chunk_id AND e.model_version = %s)""",
+                             (msg.version_id, BELONGS_KEYWORDS, model.model_id))
         vectors, tokens = self._embed(missing, policy, model) if missing else ([], 0)
+        ent_text = [self._entity_text(r["name"], r["type"], r["description"]) for r in ents]
+        rel_text = [self._relation_text(r["keywords"], r["description"]) for r in rels]
+        gvec, gtokens = self._embed_texts(ent_text + rel_text, policy, model) if ents or rels else ({}, 0)
+        tokens += gtokens
         with tenant_tx(ctx, self.pool) as conn:
             with conn.cursor() as cur:
+                # Vectores del grafo: la fila de procedencia puede haber desaparecido (reindex concurrente).
+                cur.executemany(
+                    "INSERT INTO entity_source_embeddings (entity_id, chunk_id, organization_id, document_id,"
+                    " model_version, embedding) SELECT s.entity_id, s.chunk_id, s.organization_id, s.document_id, %s, %s"
+                    " FROM entity_sources s WHERE s.entity_id = %s AND s.chunk_id = %s ON CONFLICT DO NOTHING",
+                    [(model.model_id, gvec[t], r["entity_id"], r["chunk_id"]) for r, t in zip(ents, ent_text, strict=True)])
+                cur.executemany(
+                    "INSERT INTO relation_source_embeddings (relation_id, chunk_id, organization_id, document_id,"
+                    " model_version, embedding) SELECT s.relation_id, s.chunk_id, s.organization_id, s.document_id, %s, %s"
+                    " FROM relation_sources s WHERE s.relation_id = %s AND s.chunk_id = %s ON CONFLICT DO NOTHING",
+                    [(model.model_id, gvec[t], r["relation_id"], r["chunk_id"]) for r, t in zip(rels, rel_text, strict=True)])
                 cur.executemany(
                     "INSERT INTO chunk_embeddings (chunk_id, organization_id, document_id, model_version, embedding)"
                     " SELECT %s, %s, %s, %s, %s WHERE EXISTS (SELECT 1 FROM chunks WHERE id = %s AND index_state='active')"
                     " ON CONFLICT (chunk_id, model_version) DO NOTHING",
                     [(c["id"], ctx.organization_id, msg.document_id, model.model_id, v, c["id"])
                      for c, v in zip(missing, vectors, strict=True)])
+            self._refresh_centroid(conn, msg.document_id)
             execute(conn, "UPDATE ingestion_jobs SET state='succeeded', last_error=NULL, updated_at=now() WHERE id=%s",
                     (msg.job_id,))
             _usage(conn, ctx.organization_id, "embedding_tokens", tokens, f"reindex:{msg.version_id}")
             _audit(conn, ctx.organization_id, "document.reindexed", f"document_version:{msg.version_id}", "allow",
-                   {"mode": "embeddings", "model": model.model_id, "chunks_embedded": len(missing)})
+                   {"mode": "embeddings", "model": model.model_id, "chunks_embedded": len(missing),
+                    "graph_embedded": len(ents) + len(rels)})
         return f"reindexed:embeddings:{len(missing)}"
 
     def _reindex_graph(self, ctx, msg, ver, policy) -> str:
@@ -516,9 +682,16 @@ class IngestPipeline:
                               "WHERE id=%s", (msg.job_id,))
             return "skipped:graph_disabled"
         with tenant_tx(ctx, self.pool) as conn:
-            rows = fetch_all(conn, "SELECT id, kind, text FROM chunks WHERE version_id=%s AND index_state='active' "
-                                   "ORDER BY ordinal", (msg.version_id,))
-        graphs, stats = self._extract_graph(ver, policy, [(r["kind"], r["text"]) for r in rows])
+            rows = fetch_all(conn, "SELECT id, kind, text, meta->>'caption' AS caption, page_start, ordinal, "
+                                   "COALESCE(meta->>'entity_summary', meta->>'summary') AS summary FROM chunks "
+                                   "WHERE version_id=%s AND index_state='active' ORDER BY ordinal", (msg.version_id,))
+        model = self.gateway.embedding_model()
+        require_allowed(model, policy)
+        graphs, stats = self._extract_graph(ver, policy, [
+            (r["kind"], r["text"], {"caption": r["caption"], "page": r["page_start"], "ordinal": r["ordinal"],
+                                    "summary": r["summary"]})
+            for r in rows])
+        self._embed_graph(graphs, stats, policy, model)
         with tenant_tx(ctx, self.pool) as conn:
             ids = [r["id"] for r in rows]
             # Solo chunks que siguen activos: un reindex full concurrente pudo reemplazarlos.
@@ -527,7 +700,7 @@ class IngestPipeline:
             graphs = {i: g for i, g in graphs.items() if ids[i] in alive}
             execute(conn, "DELETE FROM entity_sources WHERE chunk_id = ANY(%s)", (ids,))
             execute(conn, "DELETE FROM relation_sources WHERE chunk_id = ANY(%s)", (ids,))
-            self._insert_graph(conn, ctx, ver, ids, graphs)
+            self._insert_graph(conn, ctx, ver, ids, graphs, model)
             self._gc_graph(conn, ver["workspace_id"])
             execute(conn, "UPDATE ingestion_jobs SET state='succeeded', last_error=NULL, updated_at=now() WHERE id=%s",
                     (msg.job_id,))
@@ -540,12 +713,14 @@ class IngestPipeline:
     def _reindex_full(self, ctx, msg, ver, policy, model) -> str:
         # Las descripciones VLM ya pagadas se reutilizan por SHA-256 de la imagen (mismo modelo de visión).
         with tenant_tx(ctx, self.pool) as conn:
-            known = {r["sha"]: (r["description"], r["model"]) for r in fetch_all(conn, """
-                SELECT meta->>'sha256' AS sha, meta->>'description' AS description, meta->>'vision_model' AS model
+            known = {r["sha"]: (r["description"], r["model"], r["summary"]) for r in fetch_all(conn, """
+                SELECT meta->>'sha256' AS sha, meta->>'description' AS description, meta->>'vision_model' AS model,
+                       meta->>'entity_summary' AS summary
                   FROM chunks WHERE version_id=%s AND kind='figure' AND meta ? 'description'""", (msg.version_id,))}
         ex = self._extract(ctx, ver, policy, known_descriptions=known)
         vectors, tokens = self._embed(ex.chunks, policy, model)
-        ex.graph, ex.graph_stats = self._extract_graph(ver, policy, [(c.kind, c.text) for c in ex.chunks])
+        ex.graph, ex.graph_stats = self._extract_graph(ver, policy, self._graph_inputs(ex.chunks))
+        self._embed_graph(ex.graph, ex.graph_stats, policy, model)
         with tenant_tx(ctx, self.pool) as conn:
             cur_ver = fetch_one(conn, "SELECT is_current, status FROM document_versions WHERE id=%s FOR UPDATE",
                                 (msg.version_id,))
@@ -557,8 +732,9 @@ class IngestPipeline:
             # Reemplazo atómico: las consultas ven los chunks viejos hasta el COMMIT y los nuevos después.
             removed = execute(conn, "DELETE FROM chunks WHERE version_id=%s", (msg.version_id,))
             chunk_ids = self._insert_chunks(conn, ctx, ver, ex, vectors, model, "active")
-            self._insert_graph(conn, ctx, ver, chunk_ids, ex.graph)
+            self._insert_graph(conn, ctx, ver, chunk_ids, ex.graph, model)
             self._gc_graph(conn, ver["workspace_id"])
+            self._refresh_centroid(conn, msg.document_id)
             self._version_meta(conn, msg.version_id, ex, model)
             execute(conn, "UPDATE ingestion_jobs SET state='succeeded', last_error=NULL, updated_at=now() WHERE id=%s",
                     (msg.job_id,))
@@ -622,6 +798,9 @@ class IngestPipeline:
     @staticmethod
     def _mm_usage(conn, ctx: SecurityContext, ex: Extraction, ref: str) -> None:
         _usage(conn, ctx.organization_id, "vision_images", ex.mm.vision_images, ref)
+        # Solo se cobra lo transcrito de verdad: una transcripción reutilizada no vuelve a contar.
+        if ex.audio and not ex.audio.reused:
+            _usage(conn, ctx.organization_id, "audio_seconds", round(ex.audio.duration), ref)
         _usage(conn, ctx.organization_id, "llm_input_tokens", ex.mm.llm_input_tokens, ref)
         _usage(conn, ctx.organization_id, "llm_output_tokens", ex.mm.llm_output_tokens, ref)
 

@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     ocr_timeout_seconds: int = 600
     ocr_min_line_confidence: float = 60.0
 
+    # Audio (ADR-030). Transcripción de grabaciones: none | transcribe (Amazon Transcribe).
+    transcription_provider: str = "none"
+    transcription_timeout_seconds: int = 3600
+    transcription_language: str = ""                       # p. ej. es-US; vacío => detección automática
+    transcription_language_options: str = "es-US,es-ES,en-US,pt-BR"   # candidatos de la detección automática
+    transcription_max_speakers: int = 10                   # < 2 => sin separación de hablantes
+    transcription_min_word_confidence: float = 0.4
+    audio_max_seconds: int = 14400                         # 4 h por grabación
+
     # RAG-04 multimodal. Parser: native (sin dependencias nativas) | docling (layout, tablas, fórmulas).
     parser_preference: str = "native"
     docling_ocr: bool = False                     # OCR local de Docling (sin red): ruta offline para escaneados
@@ -53,6 +62,8 @@ class Settings(BaseSettings):
     vision_max_image_pixels: int = 40_000_000     # defensa ante bombas de descompresión
     # Resumen de tablas con el modelo de generación (cifras verificadas contra la tabla).
     ingest_table_summaries: bool = False
+    # Análisis de ecuaciones con el modelo de generación y contexto cercano (variables, qué calcula, dónde se usa).
+    ingest_equation_analysis: bool = False
     # Consulta: adjuntar imágenes de figuras recuperadas al generador si tiene visión. auto | on | off
     rag_vlm_enhanced: str = "auto"
     rag_vlm_max_images: int = 3
@@ -61,8 +72,10 @@ class Settings(BaseSettings):
     # política del tenant). Vacío => sin grafo aunque el tenant lo tenga habilitado (con advertencia).
     ai_graph_model: str = ""
     graph_max_chunks_per_doc: int = 200
+    # Consulta: entidades y relaciones de la evidencia seleccionada que se añaden al prompt (tokens aprox.).
+    rag_graph_context_tokens: int = 500
 
-    pipeline_version: str = "ingest-2026.11.2"
+    pipeline_version: str = "ingest-2026.11.3"
     log_level: str = "INFO"
 
 

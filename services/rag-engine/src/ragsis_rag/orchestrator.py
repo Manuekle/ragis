@@ -13,6 +13,15 @@ se fusionan por RRF con el híbrido. Un chunk que llega solo por el grafo y no s
 como "evidencia de salto" únicamente si ya hay evidencia fuerte y menciona una entidad puente: entidad de la
 evidencia fuerte cuya mención visible es la más pertinente a la pregunta sin estar nombrada en ella (máx. 2).
 Las citas siguen apuntando a chunks y el verificador no cambia.
+
+Modalidad (ADR-029): si la pregunta nombra un tipo de contenido ("según la figura…", "en la tabla…"), los chunks de
+ese tipo reciben un bono en la fusión y, si alguno supera el umbral de evidencia pero quedaría fuera del corte, ocupa
+el último puesto de la evidencia. Contrarresta el sesgo hacia el texto sin relajar umbrales ni filtros.
+
+Contexto de grafo (ADR-029): con el grafo activo, las entidades y relaciones cuya procedencia es la evidencia ya
+seleccionada (incluidas las celdas de tablas: "fila / columna = valor") se añaden al prompt en <grafo>, cada una
+con el [n] de su chunk, ordenadas por pertinencia a la pregunta y acotadas por RAG_GRAPH_CONTEXT_TOKENS. Las semillas
+del grafo usan además el vector de la consulta sobre embeddings de entidades y relaciones.
 """
 
 from __future__ import annotations
@@ -38,8 +47,8 @@ from ragsis_core.settings import get_settings
 from ragsis_core.telemetry import stage
 from ragsis_core.text import estimate_tokens
 
-from .prompting import ABSTAIN_TEXT, SYSTEM_PROMPT, classify, render_prompt
-from .retrieval import Candidate, expand_parents, graph_bridges, graph_search, hybrid_search
+from .prompting import ABSTAIN_TEXT, SYSTEM_PROMPT, classify, modality_preference, render_prompt
+from .retrieval import Candidate, expand_parents, graph_bridges, graph_facts, graph_search, hybrid_search
 from .smalltalk import SmallTalk
 from .smalltalk import detect as detect_smalltalk
 from .verifier import verify
@@ -159,6 +168,7 @@ class QueryOrchestrator:
 
         ctx = claims.security_context()
         graph_mode = self._graph_mode(claims, opts)
+        prefer = modality_preference(question)
         scope = {"organization_id": claims.organization_id, "workspace_id": claims.workspace_id,
                  "principals": list(claims.principals)}
         with tenant_tx(ctx, self.pool) as conn:
@@ -166,12 +176,15 @@ class QueryOrchestrator:
             graph = {}
             if graph_mode != "off":
                 with stage("rag.graph", timings, **{"ragsis.graph_mode": graph_mode}) as span:
-                    graph = graph_search(conn, **scope, question=question, mode=graph_mode, k=CANDIDATE_K)
+                    graph = graph_search(conn, **scope, question=question, mode=graph_mode, k=CANDIDATE_K,
+                                         query_vector=emb.vectors[0], model_version=emb.model_id,
+                                         min_similarity=embed_model.abstain_similarity)
                     span.set_attribute("ragsis.graph_chunks", len(graph))
             # 2b) retrieval híbrido con filtros de seguridad que el texto del usuario no puede alterar
             with stage("rag.retrieve", timings, **{"ragsis.candidate_k": CANDIDATE_K}):
                 cands = hybrid_search(conn, **scope, question=question, query_vector=emb.vectors[0],
-                                      model_version=emb.model_id, k=CANDIDATE_K, as_of=opts.as_of, graph=graph)
+                                      model_version=emb.model_id, k=CANDIDATE_K, as_of=opts.as_of, graph=graph,
+                                      prefer_kinds=prefer)
 
             # 3) umbral de evidencia: coincidencia de un solo término no basta; se exige cobertura lexical
             # mínima de la pregunta o similitud semántica sobre el umbral calibrado del modelo.
@@ -189,6 +202,7 @@ class QueryOrchestrator:
                     strategy = "hybrid_rerank"
             hops, hints = self._hop_evidence(conn, scope, question, cands, strong) if graph else ([], ())
             max_items = min(opts.top_k, MAX_EVIDENCE)
+            strong = self._reserve_modality(strong, prefer, max_items - len(hops))
             selected = self._fit_context(strong, claims.max_context_tokens, max_items - len(hops))
             if selected and hops:
                 used = sum(c.token_count + 40 for c in selected)
@@ -196,6 +210,7 @@ class QueryOrchestrator:
             if graph_mode != "off":
                 strategy += f"+graph_{graph_mode}"
             expand_parents(conn, selected)
+            facts = self._graph_facts(conn, scope, question, selected) if graph_mode != "off" else []
 
         abstain_reason = None
         answer = ""
@@ -208,7 +223,8 @@ class QueryOrchestrator:
             evidence = [Evidence(i + 1, self._evidence_text(c), c.title, c.page) for i, c in enumerate(selected)]
             meta = [{"version_no": c.version_no, "effective_from": c.effective_from, "kind": c.kind} for c in selected]
             images = self._figure_images(claims, selected, policy, timings)
-            prompt = render_prompt(question, evidence, meta, qclass, len(images))
+            prompt = render_prompt(question, evidence, meta, qclass, len(images), facts)
+            info["graph_facts"] = len(facts)
             hints = tuple(dict.fromkeys([*hints, *(b for c in selected for b in c.bridges)]))
             with stage("rag.generate", timings) as span:
                 gen = self.gateway.generate(GenerationRequest(SYSTEM_PROMPT, prompt, question, tuple(evidence),
@@ -237,6 +253,43 @@ class QueryOrchestrator:
         if not claims.graph_enabled or opts.graph_mode == "off":
             return "off"
         return "hybrid" if opts.graph_mode == "auto" else opts.graph_mode
+
+    @staticmethod
+    def _graph_facts(conn, scope: dict, question: str, selected: list[Candidate]) -> list[tuple[int, str]]:
+        """Entidades/relaciones de la evidencia seleccionada para el prompt: [(n, texto)], las más pertinentes a la
+        pregunta primero, sin las que no comparten ningún término con ella y dentro del presupuesto de tokens."""
+        budget = get_settings().rag_graph_context_tokens
+        if budget <= 0 or not selected:
+            return []
+        n_of = {c.chunk_id: i + 1 for i, c in enumerate(selected)}
+        scored = []
+        for f in graph_facts(conn, **scope, chunk_ids=list(n_of)):
+            score = lexical_score(question, f["text"])
+            if score > 0:
+                scored.append((score, n_of[f["chunk_id"]], f["text"][:400]))
+        scored.sort(key=lambda x: (-x[0], x[1], x[2]))
+        out, used, seen = [], 0, set()
+        for _, n, text in scored:
+            cost = estimate_tokens(text) + 8
+            if (n, text) in seen or used + cost > budget:
+                continue
+            seen.add((n, text))
+            out.append((n, text))
+            used += cost
+        return out
+
+    @staticmethod
+    def _reserve_modality(strong: list[Candidate], prefer: tuple[str, ...], slots: int) -> list[Candidate]:
+        """Si la pregunta pide una modalidad y ningún chunk de ese tipo entra en el corte, el mejor de ellos (ya
+        sobre el umbral de evidencia) pasa al último puesto. No añade candidatos ni cambia el resto del orden."""
+        if not prefer or slots < 1 or len(strong) <= slots or any(c.kind in prefer for c in strong[:slots]):
+            return strong
+        i = next((j for j, c in enumerate(strong) if c.kind in prefer), None)
+        if i is None:
+            return strong
+        out = list(strong)
+        out.insert(slots - 1, out.pop(i))
+        return out
 
     @staticmethod
     def _hop_evidence(conn, scope: dict, question: str, cands: list[Candidate],
@@ -297,7 +350,7 @@ class QueryOrchestrator:
     @staticmethod
     def _evidence_text(c: Candidate) -> str:
         parts = []
-        label = {"figure": "[Figura]", "table": "[Tabla]", "equation": "[Ecuación]"}.get(c.kind)
+        label = {"figure": "[Figura]", "table": "[Tabla]", "equation": "[Ecuación]", "audio": "[Audio]"}.get(c.kind)
         if label:
             parts.append(label)
         if c.section_path:
@@ -342,15 +395,20 @@ class QueryOrchestrator:
             "bbox": [round(float(v), 4) for v in c.bbox] if c.bbox else None,
             "caption": (c.meta or {}).get("caption"),
             "has_asset": bool(c.asset_key),
+            # Audio (ADR-030): rango en segundos del tramo citado, para reproducir desde ahí.
+            "t_start": (c.meta or {}).get("t_start") if c.kind == "audio" else None,
+            "t_end": (c.meta or {}).get("t_end") if c.kind == "audio" else None,
             # La evidencia incluye texto generado por IA (descripción de figura o resumen de tabla).
-            "ai_generated": (c.meta or {}).get("description_source") == "vlm" or "summary" in (c.meta or {}),
+            "ai_generated": (c.meta or {}).get("description_source") == "vlm" or "summary" in (c.meta or {})
+            or "analysis" in (c.meta or {}),
         }
 
     def _persist(self, claims: InternalClaims, question: str, r: QueryResult, cands: list[Candidate],
                  cost: float, billable: bool = True) -> None:
         refs = [{"chunk_id": str(c.chunk_id), "rrf": round(c.rrf, 6), "sim": round(c.similarity or 0, 4),
                  "lex_rank": c.lex_rank, "rerank": c.rerank, "graph_local_rank": c.graph_local_rank,
-                 "graph_global_rank": c.graph_global_rank, "hop": bool(c.extra.get("hop"))}
+                 "graph_global_rank": c.graph_global_rank, "hop": bool(c.extra.get("hop")),
+                 "kind": c.kind, "modality": bool(c.extra.get("modality"))}
                 for c in cands[:CANDIDATE_K]]
         with tenant_tx(claims.security_context(), self.pool) as conn:
             execute(conn, """

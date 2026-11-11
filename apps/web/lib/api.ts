@@ -37,7 +37,10 @@ export interface Citation {
   effective_from: string | null;
   snippet: string;
   chunk_id: string;
-  kind?: "text" | "table" | "figure" | "equation";
+  kind?: "text" | "table" | "figure" | "equation" | "audio";
+  /** Recordings: seconds from the start of the cited passage. */
+  t_start?: number | null;
+  t_end?: number | null;
   bbox?: [number, number, number, number] | null;
   caption?: string | null;
   has_asset?: boolean;

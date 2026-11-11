@@ -37,6 +37,9 @@ const DOC_ERRORS: Record<string, string> = {
   no_extractable_text: "No readable text found",
   ocr_required: "Scanned file — text recognition isn't available on your plan",
   model_policy_violation: "Your data policy doesn't allow processing this file",
+  transcription_required: "Recording — turning speech into text isn't switched on for this workspace yet",
+  no_speech_detected: "No speech could be heard in this recording",
+  audio_too_long: "The recording is too long — split it into shorter parts",
   dead_letter: "Processing failed several times — try uploading again",
 };
 export const docError = (code: string) => DOC_ERRORS[code] ?? "Couldn't process this file — try uploading again";

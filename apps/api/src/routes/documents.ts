@@ -18,6 +18,18 @@ export const ALLOWED_TYPES = new Set([
   "text/markdown",
   "text/html",
   "text/csv",
+  // Grabaciones de audio (ADR-030): se transcriben en la ingesta.
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/flac",
+  "audio/x-flac",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/m4a",
 ]);
 
 const Principal = z.string().regex(/^(workspace|group|user):[0-9a-f-]{36}$/);
@@ -39,6 +51,7 @@ const StartUpload = FileSpec.extend({
   source_id: z.string().max(300).optional(),
   classification: z.enum(["public", "internal", "confidential", "restricted"]).default("internal"),
   acl: z.array(Principal).max(50).optional(),
+  folder_id: z.string().uuid().nullish(),
 });
 
 // Solo IDs y traceparent (si hay trazas activas): nunca contenido ni secretos en la cola.
@@ -108,12 +121,15 @@ export async function documentRoutes(app: FastifyInstance, deps: Deps) {
       await checkQuota(db, t, body.size_bytes);
       try {
         await db.query(
-          `INSERT INTO documents (id, organization_id, workspace_id, source_id, title, classification, owner_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [documentId, t.organizationId, body.workspace_id, body.source_id ?? null, body.title || body.filename, body.classification, t.userId],
+          `INSERT INTO documents (id, organization_id, workspace_id, source_id, title, classification, owner_id, folder_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [documentId, t.organizationId, body.workspace_id, body.source_id ?? null, body.title || body.filename, body.classification, t.userId,
+           body.folder_id ?? null],
         );
       } catch (err: unknown) {
         if ((err as { code?: string }).code === "23505") throw conflict("source_id already exists in the workspace; create a new version");
+        // La carpeta no existe o es de otro workspace (FK o trigger documents_folder_check).
+        if (["23503", "23514"].includes((err as { code?: string }).code ?? "")) throw badRequest("folder not found in this workspace");
         throw err;
       }
       for (const p of acl) {
@@ -196,7 +212,13 @@ export async function documentRoutes(app: FastifyInstance, deps: Deps) {
   app.get("/v1/organizations/:org/documents", { config: { scopes: ["documents:read"] } }, async (req) => {
     const t = req.tenant!;
     const q = z
-      .object({ workspace_id: z.string().uuid(), limit: z.coerce.number().int().min(1).max(200).default(50), q: z.string().max(200).optional() })
+      .object({
+        workspace_id: z.string().uuid(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        q: z.string().max(200).optional(),
+        // Carpeta (ADR-031): un id, o "none" para los documentos sin carpeta. Sin el parámetro: todos.
+        folder_id: z.union([z.string().uuid(), z.literal("none")]).optional(),
+      })
       .parse(req.query);
     requireWorkspaceRead(t, q.workspace_id);
     const rows = await tx(pool, t, async (db) =>
@@ -204,15 +226,17 @@ export async function documentRoutes(app: FastifyInstance, deps: Deps) {
         await db.query(
           `SELECT d.id, d.title, d.classification, d.status, d.created_at, d.updated_at,
                   lv.id AS latest_version_id, lv.version_no, lv.status AS latest_status, lv.filename, lv.size_bytes,
-                  lv.page_count, lv.chunk_count, lv.error_code, lv.indexed_at, d.current_version_id, src.provider AS source_provider
+                  lv.page_count, lv.chunk_count, lv.error_code, lv.indexed_at, d.current_version_id, src.provider AS source_provider,
+                  d.folder_id, lv.content_type, lv.duration_seconds
              FROM documents d
              LEFT JOIN LATERAL (SELECT * FROM document_versions v WHERE v.document_id = d.id ORDER BY version_no DESC LIMIT 1) lv ON true
              LEFT JOIN LATERAL (SELECT c.provider FROM connector_items ci JOIN connectors c ON c.id = ci.connector_id
                                  WHERE ci.document_id = d.id LIMIT 1) src ON true
             WHERE d.workspace_id = $1 AND d.status = 'active'
               AND ($3::text IS NULL OR d.title ILIKE '%' || $3 || '%')
+              AND ($4::text IS NULL OR ($4 = 'none' AND d.folder_id IS NULL) OR d.folder_id::text = $4)
             ORDER BY d.updated_at DESC LIMIT $2`,
-          [q.workspace_id, q.limit, q.q ?? null],
+          [q.workspace_id, q.limit, q.q ?? null, q.folder_id ?? null],
         )
       ).rows,
     );
@@ -263,6 +287,35 @@ export async function documentRoutes(app: FastifyInstance, deps: Deps) {
       ? await storage.presignGet(row.s3_key, row.filename, cfg.DOWNLOAD_URL_TTL_SECONDS, "inline", textLike ? "text/plain; charset=utf-8" : undefined)
       : await storage.presignGet(row.s3_key, row.filename, cfg.DOWNLOAD_URL_TTL_SECONDS);
     return { url, expires_in: cfg.DOWNLOAD_URL_TTL_SECONDS };
+  });
+
+  /**
+   * ADR-030: transcripción de una grabación, por tramos con su rango de tiempo. Las filas son chunks: solo se ven
+   * si la persona pasa RLS + ACL del documento.
+   */
+  app.get("/v1/organizations/:org/documents/:id/versions/:ver/transcript", { config: { scopes: ["documents:read"] } }, async (req) => {
+    const t = req.tenant!;
+    const { id, ver } = req.params as { id: string; ver: string };
+    assertUuid(id, "documento");
+    assertUuid(ver, "version");
+    return tx(pool, t, async (db) => {
+      const v = await db.query(
+        `SELECT v.duration_seconds, v.transcription_language, d.workspace_id
+           FROM document_versions v JOIN documents d ON d.id = v.document_id
+          WHERE v.id = $1 AND v.document_id = $2 AND d.status = 'active' AND v.status IN ('indexed', 'superseded')`,
+        [ver, id],
+      );
+      if (!v.rows[0]) throw notFound("version");
+      requireWorkspaceRead(t, v.rows[0].workspace_id);
+      const c = await db.query(
+        `SELECT id AS chunk_id, text, (meta->>'t_start')::float8 AS t_start, (meta->>'t_end')::float8 AS t_end,
+                COALESCE(meta->'speakers', '[]'::jsonb) AS speakers
+           FROM chunks WHERE version_id = $1 AND kind = 'audio' AND index_state IN ('active', 'superseded')
+          ORDER BY ordinal`,
+        [ver],
+      );
+      return { duration_seconds: v.rows[0].duration_seconds, language: v.rows[0].transcription_language, segments: c.rows };
+    });
   });
 
   /**

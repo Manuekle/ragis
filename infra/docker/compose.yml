@@ -25,6 +25,10 @@ x-app-env: &app-env
   AI_VISION_MODEL: ${AI_VISION_MODEL:-}
   PARSER_PREFERENCE: ${PARSER_PREFERENCE:-native}
   INGEST_TABLE_SUMMARIES: ${INGEST_TABLE_SUMMARIES:-false}
+  INGEST_EQUATION_ANALYSIS: ${INGEST_EQUATION_ANALYSIS:-false}
+  # ADR-030: transcripción de audio (none | transcribe). Sin proveedor, las grabaciones quedan en error transcription_required.
+  TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-none}
+  TRANSCRIPTION_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-}
   RAG_VLM_ENHANCED: ${RAG_VLM_ENHANCED:-auto}
   # RAG-05: extracción de grafo (solo tenants con grafo habilitado por plan u organización).
   AI_GRAPH_MODEL: ${AI_GRAPH_MODEL:-local-graph-heuristic@v1}

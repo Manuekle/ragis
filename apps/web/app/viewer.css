@@ -172,8 +172,9 @@
 
 /* ── the app's element-level rules (button, input, h1, table…) must not leak into the viewers.
       `revert-layer` from an unlayered rule discards every unlayered declaration (the app's) and falls back to
-      the layers above: the scoped preflight + Tailwind utilities. Triple :is() keeps it above `button:active` etc. ── */
-:is(.xui, [data-slot]):is(.xui, [data-slot]):is(.xui, [data-slot]) :is(button, input, textarea, h1, h2, h3, h4, h5, h6, p, a, table, th, td, kbd):not(.viewer-md *) {
+      the layers above: the scoped preflight + Tailwind utilities. Triple :is() keeps it above `button:active` etc.
+      Markdown and the recording view are styled by the app, so they are exempt. ── */
+:is(.xui, [data-slot]):is(.xui, [data-slot]):is(.xui, [data-slot]) :is(button, input, textarea, h1, h2, h3, h4, h5, h6, p, a, table, th, td, kbd):not(.viewer-md *, .audio-view *) {
   all: revert-layer;
 }
 

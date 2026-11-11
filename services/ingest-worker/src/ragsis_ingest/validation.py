@@ -25,7 +25,37 @@ ALLOWED = {
     "html": {"text/html"},
     "markdown": {"text/markdown", "text/x-markdown", "text/plain"},
     "text": {"text/plain", "text/csv"},
+    "audio": {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "audio/x-flac",
+              "audio/ogg", "audio/mp4", "audio/x-m4a", "audio/m4a"},
 }
+# Contenedor detectado → MIME declarados que le corresponden (un .wav declarado como MP3 se rechaza).
+AUDIO_MIME = {
+    "mp3": {"audio/mpeg", "audio/mp3"},
+    "wav": {"audio/wav", "audio/x-wav", "audio/wave"},
+    "flac": {"audio/flac", "audio/x-flac"},
+    "ogg": {"audio/ogg"},
+    "m4a": {"audio/mp4", "audio/x-m4a", "audio/m4a"},
+}
+_M4A_BRANDS = (b"M4A ", b"M4B ", b"mp42", b"mp41", b"isom", b"iso2", b"dash")
+
+
+def sniff_audio(head: bytes) -> str | None:
+    """Contenedor de audio por magic bytes: mp3 | wav | flac | ogg | m4a. None si no es audio admitido."""
+    if head.startswith(b"fLaC"):
+        return "flac"
+    if head.startswith(b"OggS"):
+        return "ogg"
+    if head.startswith(b"RIFF") and head[8:12] == b"WAVE":
+        return "wav"
+    if head[4:8] == b"ftyp":
+        return "m4a" if head[8:12] in _M4A_BRANDS else None
+    if head.startswith(b"ID3"):
+        return "mp3"
+    # Frame MPEG audio: 11 bits de sync, capa III (o II/I) y bitrate/frecuencia válidos.
+    if len(head) > 3 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0 and (head[1] & 0x06) != 0 \
+            and (head[2] & 0xF0) != 0xF0 and (head[2] & 0x0C) != 0x0C:
+        return "mp3"
+    return None
 
 
 class ValidationError(Exception):
@@ -37,8 +67,9 @@ class ValidationError(Exception):
 
 @dataclass(frozen=True)
 class FileInfo:
-    kind: str           # pdf | docx | pptx | xlsx | image | html | markdown | text
+    kind: str           # pdf | docx | pptx | xlsx | image | html | markdown | text | audio
     size: int
+    audio_format: str | None = None     # mp3 | wav | flac | ogg | m4a
 
 
 def _check_zip(data: bytes) -> zipfile.ZipFile:
@@ -86,6 +117,8 @@ def sniff(data: bytes, filename: str) -> str:
         if image.mime not in ("image/png", "image/jpeg"):
             raise ValidationError("unsupported_type", f"imagen {image.mime} no admitida (PNG/JPEG)")
         return "image"
+    if sniff_audio(head) is not None:
+        return "audio"
     if head.startswith((b"\xd0\xcf\x11\xe0", b"MZ", b"\x7fELF", b"\xca\xfe\xba\xbe")):
         raise ValidationError("unsupported_type", "binario/OLE no admitido")
     if b"\x00" in head:
@@ -114,6 +147,11 @@ def validate(data: bytes, filename: str, declared_type: str, declared_size: int,
     declared = declared_type.split(";")[0].strip().lower()
     if declared not in ALLOWED[kind]:
         raise ValidationError("mime_mismatch", f"declarado {declared}, detectado {kind}")
+    if kind == "audio":
+        fmt = sniff_audio(data[:2048])
+        if declared not in AUDIO_MIME[fmt]:
+            raise ValidationError("mime_mismatch", f"declarado {declared}, detectado audio {fmt}")
+        return FileInfo(kind, size, fmt)
     if kind == "image":
         info = inspect_image(data[:IMAGE_HEADER_BYTES])
         if info is None:

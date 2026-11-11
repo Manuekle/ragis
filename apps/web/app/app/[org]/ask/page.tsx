@@ -26,6 +26,7 @@ import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { ClickUpLogo, FolderGlyph, GmailLogo, SlackLogo } from "@/components/brand-logos";
 import { DatePicker } from "@/components/ui";
 import { DocViewer, type ViewerDoc } from "@/components/DocViewer";
+import { clock } from "@/components/AudioView";
 import { duration } from "@/lib/plain";
 import { HistoryMenu } from "./HistoryMenu";
 
@@ -62,7 +63,7 @@ const SUGGESTIONS = [
   "Who approves purchases above the limit?",
 ];
 
-const KIND_LABEL: Record<string, string> = { table: "Table", figure: "Figure", equation: "Equation" };
+const KIND_LABEL: Record<string, string> = { table: "Table", figure: "Figure", equation: "Equation", audio: "Recording" };
 
 /** Imagen de una figura citada: la URL firmada se pide solo al abrir la fuente y no se guarda. */
 function FigurePreview({ chunkId, alt }: { chunkId: string; alt: string }) {
@@ -89,7 +90,7 @@ function FigurePreview({ chunkId, alt }: { chunkId: string; alt: string }) {
 }
 
 function citationMeta(c: Citation) {
-  return [`v${c.version_no}`, c.page ? `p. ${c.page}` : "", c.section, c.effective_from ? `effective from ${c.effective_from}` : ""].filter(Boolean).join(" · ");
+  return [`v${c.version_no}`, c.page ? `p. ${c.page}` : "", c.t_start != null ? `at ${clock(c.t_start)}` : "", c.section, c.effective_from ? `effective from ${c.effective_from}` : ""].filter(Boolean).join(" · ");
 }
 
 function Sources({ citations, openN, setOpenN, flashN, onOpen }: { citations: Citation[]; openN: number | null; setOpenN: (n: number | null) => void; flashN: number | null; onOpen: (c: Citation) => void }) {
@@ -117,11 +118,12 @@ function Sources({ citations, openN, setOpenN, flashN, onOpen }: { citations: Ci
                   {c.ai_generated && (
                     <p className="faint ai-note">Includes an AI-generated description of a figure or table. Check the original document for exact values.</p>
                   )}
+                  {c.kind === "audio" && <p className="faint ai-note">Transcript written by AI. Listen to the recording to confirm the exact words.</p>}
                   <div className="row spread">
                     <span className="mono faint">{c.filename}</span>
                     <button type="button" className="ghost small" onClick={() => onOpen(c)}>
                       <IconExternal size={14} />
-                      Open document
+                      {c.t_start != null ? `Listen from ${clock(c.t_start)}` : "Open document"}
                     </button>
                   </div>
                 </div>
@@ -308,7 +310,8 @@ export default function AskPage() {
     }
   }
 
-  const openDoc = (c: Citation) => setViewing({ documentId: c.document_id, versionId: c.version_id, title: c.title, filename: c.filename });
+  const openDoc = (c: Citation) =>
+    setViewing({ documentId: c.document_id, versionId: c.version_id, title: c.title, filename: c.filename, startAt: c.t_start ?? undefined });
   const closeDoc = useCallback(() => setViewing(null), []);
 
   async function feedback(id: number, value: 1 | -1) {

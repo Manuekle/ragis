@@ -198,3 +198,53 @@ def test_xlsx_numbers_answerable_with_table_citation(make_tenant, s3, worker_poo
     assert not r.abstained and "15%" in r.answer
     assert r.citations[0]["kind"] == "table" and r.citations[0]["section"] == "Hoja: Resumen"
     assert "Salarios" not in r.answer
+
+
+def test_cross_modal_graph_anchors_figure_and_links_it_to_text(make_tenant, s3, worker_pool, app_pool, owner, env, gw):
+    """ADR-029: la figura es un nodo del grafo; sus entidades le pertenecen y la unen al texto que las menciona."""
+    from ragsis_core.db import SecurityContext, tenant_tx
+    from ragsis_rag.retrieval import graph_search
+
+    env(AI_VISION_MODEL="fake-vlm@v1")
+    t = make_tenant("mmgraph")
+    t.set_graph("on")
+    pipeline = IngestPipeline(gateway=gw, pool=worker_pool)
+    _, ver, msg = t.add_document(s3, "q3.pptx", pptx(), PPTX, title="Resultados Q3")
+    assert pipeline.handle(msg) == "indexed"
+    memo = "# Logística\n\nEl despacho a la costa lo coordina la planta de Barranquilla junto con Transportes Caribe.\n"
+    memo_doc, _, msg2 = t.add_document(s3, "memo.md", memo.encode(), "text/markdown", title="Memo logística")
+    assert pipeline.handle(msg2) == "indexed"
+
+    fig = _one(owner, "SELECT id, ordinal FROM chunks WHERE version_id=%s AND kind='figure'", ver)
+    anchor = _one(owner, "SELECT s.entity_id, s.name, e.normalized_name FROM entity_sources s JOIN entities e "
+                         "ON e.id = s.entity_id WHERE s.chunk_id=%s AND s.type='figura'", fig["id"])
+    assert anchor["name"] == f"Figura p.1 n.{fig['ordinal'] + 1} · Resultados Q3"
+    belongs = owner.execute(
+        "SELECT e.normalized_name FROM relation_sources rs JOIN relations r ON r.id = rs.relation_id "
+        "JOIN entities e ON e.id = r.src_entity_id WHERE rs.chunk_id=%s AND r.dst_entity_id=%s "
+        "AND rs.keywords='pertenece_a contenido_en'", (fig["id"], anchor["entity_id"])).fetchall()
+    assert "barranquilla" in {r["normalized_name"] for r in belongs}
+    # Tablas del mismo documento también tienen su nodo.
+    assert _one(owner, "SELECT count(*) AS n FROM entity_sources s JOIN chunks c ON c.id = s.chunk_id "
+                       "WHERE c.version_id=%s AND s.type='tabla'", ver)["n"] >= 1
+    audit = _one(owner, "SELECT metadata FROM audit_events WHERE organization_id=%s AND action='document.indexed' "
+                        "ORDER BY id LIMIT 1", t.org)["metadata"]
+    assert audit["graph"]["anchors"] >= 2
+
+    # Fusión por nombre: "Barranquilla" del memo y de la figura es una sola entidad con dos documentos fuente.
+    docs = owner.execute("SELECT DISTINCT s.document_id FROM entity_sources s JOIN entities e ON e.id = s.entity_id "
+                         "WHERE e.organization_id=%s AND e.normalized_name='barranquilla'", (t.org,)).fetchall()
+    assert len(docs) == 2
+    # Navegación estructural: una pregunta sobre el memo llega a la figura por el grafo (texto → entidad → figura).
+    with tenant_tx(SecurityContext(t.org, t.user, t.principals), app_pool) as conn:
+        hits = graph_search(conn, organization_id=t.org, workspace_id=t.ws, principals=list(t.principals),
+                            question="¿Quién coordina el despacho con Transportes Caribe?", mode="local")
+    assert fig["id"] in hits
+
+    # Consulta consciente de modalidad: la pregunta nombra "figura" y el chunk de figura queda marcado en la traza.
+    r = QueryOrchestrator(gateway=gw, pool=app_pool, s3=s3).run(
+        t.claims(graph=True), "Según la figura del mapa de plantas, ¿qué planta aparece marcada como nueva?")
+    assert not r.abstained and any(c["kind"] == "figure" for c in r.citations)
+    refs = _one(owner, "SELECT retrieved_refs FROM query_runs WHERE id=%s", r.trace_id)["retrieved_refs"]
+    assert {x["modality"] for x in refs if x["kind"] == "figure"} == {True}
+    assert not any(x["modality"] for x in refs if x["kind"] == "text")

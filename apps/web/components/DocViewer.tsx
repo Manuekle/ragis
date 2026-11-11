@@ -36,6 +36,10 @@ const MarkdownView = dynamic(() => import("./MarkdownView"), {
   ssr: false,
   loading: () => <div className="viewer-note"><IconSpinner size={20} /></div>,
 });
+const AudioView = dynamic(() => import("./AudioView"), {
+  ssr: false,
+  loading: () => <div className="viewer-note"><IconSpinner size={20} /></div>,
+});
 const CsvViewer = dynamic(() => import("./extend/csv-viewer").then((m) => m.CsvViewer), { ssr: false, loading: Loading });
 
 /** The app's theme: <html data-theme> when the user picked one, else the OS preference. */
@@ -66,9 +70,11 @@ export interface ViewerDoc {
   versionId: string;
   title: string;
   filename: string;
+  /** Recordings: second to open at (the moment a source cites). */
+  startAt?: number;
 }
 
-type Kind = "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "md" | "image" | "text" | "none";
+type Kind = "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "md" | "image" | "text" | "audio" | "none";
 
 const ext = (f: string) => f.split(".").pop()?.toLowerCase() ?? "";
 function kindOf(filename: string): Kind {
@@ -77,6 +83,7 @@ function kindOf(filename: string): Kind {
   if (["png", "jpg", "jpeg"].includes(e)) return "image";
   if (e === "md" || e === "markdown") return "md";
   if (["txt", "html", "htm"].includes(e)) return "text";
+  if (["mp3", "wav", "m4a", "ogg", "flac"].includes(e)) return "audio";
   return "none";
 }
 
@@ -143,7 +150,7 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && layerRef.current) {
-        const f = Array.from(layerRef.current.querySelectorAll<HTMLElement>("button:not(:disabled), .viewer-mermaid-scroll[tabindex='0']"));
+        const f = Array.from(layerRef.current.querySelectorAll<HTMLElement>("button:not(:disabled), audio[controls], .viewer-mermaid-scroll[tabindex='0']"));
         if (!f.length) return;
         const i = f.indexOf(document.activeElement as HTMLElement);
         e.preventDefault();
@@ -221,6 +228,10 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
             <Stage note={false}>
               {/* eslint-disable-next-line @next/next/no-img-element -- short-lived presigned URL, not optimizable */}
               <img className="viewer-img" src={url} alt={current.title} referrerPolicy="no-referrer" />
+            </Stage>
+          ) : kind === "audio" ? (
+            <Stage note={false}>
+              <AudioView key={url} src={url} orgId={orgId} documentId={current.documentId} versionId={current.versionId} title={current.title} startAt={current.startAt} />
             </Stage>
           ) : kind === "md" ? (
             <Stage note={false}>

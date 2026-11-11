@@ -12,6 +12,14 @@ const TYPE: Record<string, string> = {
   csv: "csv",
   html: "html",
   htm: "html",
+  png: "png",
+  jpg: "jpg",
+  jpeg: "jpeg",
+  mp3: "mp3",
+  wav: "wav",
+  m4a: "audio",
+  ogg: "audio",
+  flac: "audio",
 };
 
 export function FileTile({ ext, size = 40 }: { ext: string; size?: number }) {

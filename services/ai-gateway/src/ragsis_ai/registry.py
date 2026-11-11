@@ -77,6 +77,8 @@ DEFAULT_MODELS: tuple[ModelSpec, ...] = (
               CLOUD, context_tokens=1000000, regions=_US, vision=True),
     ModelSpec("aws-textract@v1", ModelKind.OCR, "textract", "detect-document-text", CLOUD, regions=_US,
               notes="OCR asíncrono sobre el objeto S3; datos salen a un servicio administrado de AWS."),
+    ModelSpec("aws-transcribe@v1", ModelKind.TRANSCRIBE, "transcribe", "start-transcription-job", CLOUD, regions=_US,
+              notes="Voz a texto asíncrono sobre el objeto S3; el audio sale a un servicio administrado de AWS."),
     ModelSpec("bedrock-cohere-rerank-3-5@v1", ModelKind.RERANK, "bedrock", "cohere.rerank-v3-5:0", CLOUD,
               regions=("us-west-2",), notes="Verificar región de rerank."),
 )

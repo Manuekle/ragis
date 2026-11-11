@@ -1,14 +1,15 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, formatBytes } from "@/lib/api";
 import { useOrg } from "../layout";
 import { AppErrorState, requestErrorKind, StateIllustration } from "@/components/AppState";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
-import { IconAlert, IconEye, IconFolder, IconSearch, IconSpinner, IconTrash, IconUpload, IconX } from "@/components/icons";
+import { IconAlert, IconChevronRight, IconEdit, IconEye, IconFolder, IconPlus, IconSearch, IconSparkles, IconSpinner, IconTrash, IconUpload, IconX } from "@/components/icons";
 import { Skel, SkeletonStatus, SkeletonTable } from "@/components/skeletons";
-import { useConfirm } from "@/components/ui";
+import { Select, TextField, useConfirm } from "@/components/ui";
+import { clock } from "@/components/AudioView";
 import { FileTile } from "@/components/FileTile";
 import { DocViewer, type ViewerDoc } from "@/components/DocViewer";
 import { Seg, SoftText } from "@/components/motion";
@@ -29,7 +30,25 @@ interface Doc {
   updated_at: string;
   /** Conector de origen (CON-01) o null si se subió a mano. */
   source_provider?: "gmail" | "slack" | "clickup" | null;
+  folder_id: string | null;
+  /** Recordings: length in seconds. */
+  duration_seconds?: number | null;
 }
+
+interface Folder {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  document_count: number;
+}
+interface Suggestion {
+  document_id: string;
+  folder_id: string;
+  folder_name: string;
+  reason: "similar_content" | "name_match";
+}
+/** Which documents the list shows: everything, the ones without a folder, or one folder. */
+type FolderView = "all" | "none" | string;
 
 const SOURCE_NAMES = { gmail: "Gmail", slack: "Slack", clickup: "ClickUp" } as const;
 
@@ -47,6 +66,11 @@ const TYPES: Record<string, string> = {
   csv: "text/csv",
   html: "text/html",
   htm: "text/html",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
 };
 const PENDING = new Set(["pending_upload", "uploaded", "quarantined", "validated", "parsing", "enriched", "embedding"]);
 // Everything between upload and "ready" is one step for people: the file is being prepared.
@@ -107,7 +131,59 @@ function ago(iso: string) {
 }
 
 type View = "all" | "indexed" | "pending" | "failed";
-type Listing = { orgId: string; workspaceId: string; filter: string; docs: Doc[] | null; error?: Error };
+type Listing = { orgId: string; workspaceId: string; filter: string; folder: FolderView; docs: Doc[] | null; error?: Error };
+
+/** "Legal / Contracts": the folder's full path, for menus and the document's subtitle. */
+function folderPath(folders: Folder[], id: string | null): Folder[] {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const path: Folder[] = [];
+  for (let cur = id ? byId.get(id) : undefined; cur && path.length < 8; cur = cur.parent_id ? byId.get(cur.parent_id) : undefined) path.unshift(cur);
+  return path;
+}
+const pathLabel = (folders: Folder[], id: string | null) => folderPath(folders, id).map((f) => f.name).join(" / ");
+
+/** Small form dialog (same surface as the confirm dialog). Esc or a click outside cancels. */
+function FormDialog({ title, submitLabel, busy, onSubmit, onClose, children }: { title: string; submitLabel: string; busy: boolean; onSubmit: () => void; onClose: () => void; children: React.ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+  return (
+    <div className={`dialog-layer${shown ? " is-open" : ""}`} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <form
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <span className="dialog-icon">
+          <IconFolder size={20} variant="duotone" />
+        </span>
+        <h2>{title}</h2>
+        {children}
+        <div className="dialog-actions">
+          <button type="button" className="ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy} aria-busy={busy}>
+            {submitLabel}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 const DOCUMENT_COLUMNS = ["", "", "hide-sm", "num hide-sm", "num hide-sm", "hide-md", ""];
 
 function LibrarySkeleton({ hasDocuments }: { hasDocuments: boolean | undefined }) {
@@ -170,13 +246,20 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string[]>([]);
   const [over, setOver] = useState(false);
-  const [filters, setFilters] = useState({ orgId, workspaceId, title: "", view: "all" as View });
+  const [filters, setFilters] = useState({ orgId, workspaceId, title: "", view: "all" as View, folder: "all" as FolderView });
   if (filters.orgId !== orgId || filters.workspaceId !== workspaceId) {
-    setFilters({ orgId, workspaceId, title: "", view: "all" });
+    setFilters({ orgId, workspaceId, title: "", view: "all", folder: "all" });
   }
-  const { title: filter, view } = filters;
+  const { title: filter, view, folder: folderView } = filters;
+  const [tree, setTree] = useState<{ workspaceId: string; folders: Folder[]; unfiled: number }>();
+  const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>({});
+  const [naming, setNaming] = useState<{ mode: "create" | "rename"; value: string; error?: string } | null>(null);
+  const [moving, setMoving] = useState<{ doc: Doc; target: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const folders = useMemo(() => (tree?.workspaceId === workspaceId ? tree.folders : []), [tree, workspaceId]);
+  const currentFolder = folders.find((f) => f.id === folderView);
   const workspaceListing = listing?.orgId === orgId && listing.workspaceId === workspaceId ? listing : undefined;
-  const filteredListing = workspaceListing?.filter === filter ? workspaceListing : undefined;
+  const filteredListing = workspaceListing?.filter === filter && workspaceListing.folder === folderView ? workspaceListing : undefined;
   const docs = filteredListing?.docs;
   const listError = filteredListing?.error;
   const errorKind = docs === null ? requestErrorKind(listError) : null;
@@ -192,11 +275,11 @@ export default function LibraryPage() {
     async function load() {
       try {
         const r = await api<{ documents: Doc[] }>(
-          `organizations/${orgId}/documents?workspace_id=${workspaceId}${filter ? `&q=${encodeURIComponent(filter)}` : ""}`,
+          `organizations/${orgId}/documents?workspace_id=${workspaceId}${filter ? `&q=${encodeURIComponent(filter)}` : ""}${folderView !== "all" ? `&folder_id=${folderView}` : ""}`,
         );
         if (!active) return;
-        setListing({ orgId, workspaceId, filter, docs: r.documents });
-        if (!filter || r.documents.length > 0) {
+        setListing({ orgId, workspaceId, filter, folder: folderView, docs: r.documents });
+        if (folderView === "all" && (!filter || r.documents.length > 0)) {
           setWorkspaceHasDocuments(workspaceId, r.documents.length > 0);
         }
         pending = r.documents.some((d) => PENDING.has(d.latest_status));
@@ -206,7 +289,8 @@ export default function LibraryPage() {
           orgId,
           workspaceId,
           filter,
-          docs: current?.orgId === orgId && current.workspaceId === workspaceId && current.filter === filter ? current.docs : null,
+          folder: folderView,
+          docs: current?.orgId === orgId && current.workspaceId === workspaceId && current.filter === filter && current.folder === folderView ? current.docs : null,
           error: e as Error,
         }));
       }
@@ -217,14 +301,29 @@ export default function LibraryPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [orgId, workspaceId, filter, revision, setWorkspaceHasDocuments]);
+  }, [orgId, workspaceId, filter, folderView, revision, setWorkspaceHasDocuments]);
+
+  // Folders and, for documents without one, the folder suggested from their content. Neither blocks the list.
+  useEffect(() => {
+    if (!workspaceId) return;
+    let active = true;
+    api<{ folders: Folder[]; unfiled_count: number }>(`organizations/${orgId}/folders?workspace_id=${workspaceId}`)
+      .then((r) => active && setTree({ workspaceId, folders: r.folders, unfiled: r.unfiled_count }))
+      .catch(() => undefined);
+    api<{ suggestions: Suggestion[] }>(`organizations/${orgId}/documents/folder-suggestions?workspace_id=${workspaceId}`)
+      .then((r) => active && setSuggestions(Object.fromEntries(r.suggestions.map((s) => [s.document_id, s]))))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [orgId, workspaceId, revision, listing?.docs]);
 
   async function uploadOne(file: File) {
     const contentType = TYPES[ext(file.name)];
     if (!contentType) throw new Error(`${file.name}: this file type isn't supported`);
     const start = await api<{ document_id: string; version_id: string; upload: { url: string; headers: Record<string, string> } }>(
       `organizations/${orgId}/documents/uploads`,
-      { method: "POST", body: { workspace_id: workspaceId, filename: file.name, content_type: contentType, size_bytes: file.size, title: file.name.replace(/\.[^.]+$/, "") } },
+      { method: "POST", body: { workspace_id: workspaceId, filename: file.name, content_type: contentType, size_bytes: file.size, title: file.name.replace(/\.[^.]+$/, ""), ...(currentFolder ? { folder_id: currentFolder.id } : {}) } },
     );
     // Direct browser → S3 upload via presigned URL; the file never passes through the API.
     const put = await fetch(start.upload.url, { method: "PUT", headers: start.upload.headers, body: file });
@@ -266,6 +365,76 @@ export default function LibraryPage() {
     }
   }
 
+  const refresh = () => setRevision((value) => value + 1);
+  const goFolder = (folder: FolderView) => setFilters({ ...filters, folder, view: "all" });
+
+  async function saveFolderName() {
+    if (!naming || !workspaceId) return;
+    const name = naming.value.trim();
+    if (!name) return setNaming({ ...naming, error: "Give the folder a name." });
+    setBusy(true);
+    try {
+      if (naming.mode === "create") {
+        await api(`organizations/${orgId}/folders`, { method: "POST", body: { workspace_id: workspaceId, name, ...(currentFolder ? { parent_id: currentFolder.id } : {}) } });
+      } else if (currentFolder) {
+        await api(`organizations/${orgId}/folders/${currentFolder.id}`, { method: "PATCH", body: { name } });
+      }
+      setNaming(null);
+      refresh();
+    } catch (e) {
+      setNaming({ ...naming, error: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeFolder(f: Folder) {
+    const ok = await confirm({
+      title: `Delete the folder "${f.name}"?`,
+      body: "Folders inside it are deleted too. No document is deleted: they go back to “No folder”.",
+      confirmLabel: "Delete folder",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api(`organizations/${orgId}/folders/${f.id}`, { method: "DELETE" });
+      goFolder(f.parent_id ?? "all");
+      refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function moveTo(docIds: string[], folderId: string | null) {
+    setBusy(true);
+    try {
+      await api(`organizations/${orgId}/documents/move`, { method: "POST", body: { document_ids: docIds, folder_id: folderId } });
+      setMoving(null);
+      refresh();
+    } catch (e) {
+      setMoving(null);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dismissSuggestion(d: Doc) {
+    setSuggestions(({ [d.id]: _gone, ...rest }) => rest);
+    try {
+      await api(`organizations/${orgId}/documents/${d.id}/folder-suggestion/dismiss`, { method: "POST" });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const trail = folderPath(folders, currentFolder?.id ?? null);
+  const childFolders = folders.filter((f) => (currentFolder ? f.parent_id === currentFolder.id : f.parent_id === null));
+  const folderOptions = [
+    { value: "none", label: "No folder" },
+    ...folders.map((f) => ({ value: f.id, label: pathLabel(folders, f.id) })).sort((a, b) => a.label.localeCompare(b.label)),
+  ];
+
   const all = docs ?? [];
   const counts = {
     all: all.length,
@@ -283,9 +452,9 @@ export default function LibraryPage() {
           : d.latest_status === "rejected" || d.latest_status === "failed",
   );
   const loadingDocs = loadingOrg || (!!workspaceId && docs === undefined);
-  const blank = docs?.length === 0 && !filter;
+  const blank = docs?.length === 0 && !filter && folderView === "all" && folders.length === 0;
   const hasListing = workspaceListing?.docs != null;
-  const showToolbar = !blank && (hasListing || (!!workspaceId && !!filter));
+  const showToolbar = !blank && (hasListing || (!!workspaceId && (!!filter || folderView !== "all")));
   const loadingLayout = loadingDocs && !showToolbar;
   const loadingHasDocuments = loadingOrg ? undefined : workspace?.has_documents ?? true;
   const alert = error ?? (errorKind ? null : listError?.message);
@@ -345,7 +514,7 @@ export default function LibraryPage() {
           </div>
         </header>
 
-        <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.md,.markdown,.txt,.csv,.html,.htm" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+        <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.md,.markdown,.txt,.csv,.html,.htm,.mp3,.wav,.m4a,.ogg,.flac" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
 
         <div className="stack" style={{ gap: 20 }}>
           {loadingLayout && <LibrarySkeleton hasDocuments={loadingHasDocuments} />}
@@ -357,7 +526,7 @@ export default function LibraryPage() {
               <button type="button" className="ghost" onClick={browse} disabled={!workspaceId}>
                 Choose files
               </button>
-              <span className="formats">PDF · DOCX · PPTX · XLSX · PNG/JPEG · Markdown · TXT · CSV · HTML</span>
+              <span className="formats">PDF · DOCX · PPTX · XLSX · PNG/JPEG · Markdown · TXT · CSV · HTML · Audio (MP3, WAV, M4A)</span>
               <ol className="pipeline" aria-label="What happens on upload">
                 <li>
                   <span>1</span>Uploaded and validated
@@ -381,14 +550,14 @@ export default function LibraryPage() {
                     "Drop to upload"
                   ) : (
                     <>
-                      Drop files here or{" "}
+                      Drop files {currentFolder ? `into ${currentFolder.name}` : "here"} or{" "}
                       <button type="button" className="link" onClick={browse}>
                         browse
                       </button>
                     </>
                   )}
                 </span>
-                <span>PDF, DOCX, PPTX, XLSX, PNG/JPEG, Markdown, TXT, CSV or HTML</span>
+                <span>PDF, DOCX, PPTX, XLSX, PNG/JPEG, Markdown, TXT, CSV, HTML or audio recordings</span>
               </span>
             </div>
           )}
@@ -414,6 +583,65 @@ export default function LibraryPage() {
                 <IconX size={14} />
               </button>
             </div>
+          )}
+
+          {showToolbar && tree?.workspaceId === workspaceId && (
+            <nav className="folder-bar" aria-label="Folders">
+              <div className="folder-trail">
+                <button type="button" className="folder-crumb" aria-current={folderView === "all" ? "page" : undefined} onClick={() => goFolder("all")}>
+                  All files
+                </button>
+                {folderView === "none" && (
+                  <>
+                    <IconChevronRight size={14} />
+                    <span className="folder-crumb" aria-current="page">No folder</span>
+                  </>
+                )}
+                {trail.map((f, i) => (
+                  <span key={f.id} className="folder-step">
+                    <IconChevronRight size={14} />
+                    <button type="button" className="folder-crumb" aria-current={i === trail.length - 1 ? "page" : undefined} onClick={() => goFolder(f.id)}>
+                      {f.name}
+                    </button>
+                  </span>
+                ))}
+                <span className="folder-tools">
+                  {currentFolder && (
+                    <>
+                      <button type="button" className="quiet icon small" onClick={() => setNaming({ mode: "rename", value: currentFolder.name })} aria-label={`Rename ${currentFolder.name}`} data-tip="Rename folder">
+                        <IconEdit size={15} />
+                      </button>
+                      <button type="button" className="quiet icon small" onClick={() => removeFolder(currentFolder)} aria-label={`Delete ${currentFolder.name}`} data-tip="Delete folder">
+                        <IconTrash size={15} />
+                      </button>
+                    </>
+                  )}
+                  {folderView !== "none" && (
+                    <button type="button" className="ghost small" onClick={() => setNaming({ mode: "create", value: "" })}>
+                      <IconPlus size={14} />
+                      New folder
+                    </button>
+                  )}
+                </span>
+              </div>
+              {folderView !== "none" && (childFolders.length > 0 || (folderView === "all" && folders.length > 0)) && (
+                <div className="folder-chips">
+                  {childFolders.map((f) => (
+                    <button key={f.id} type="button" className="folder-chip" onClick={() => goFolder(f.id)}>
+                      <IconFolder size={15} />
+                      <span className="name">{f.name}</span>
+                      <span className="count">{f.document_count}</span>
+                    </button>
+                  ))}
+                  {folderView === "all" && tree.unfiled > 0 && (
+                    <button type="button" className="folder-chip plain" onClick={() => goFolder("none")}>
+                      <span className="name">No folder</span>
+                      <span className="count">{tree.unfiled}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </nav>
           )}
 
           {(showToolbar || errorKind) && (
@@ -457,8 +685,14 @@ export default function LibraryPage() {
                     <span className="bubble">
                       <IconSearch size={20} />
                     </span>
-                    <strong>{filter ? "No titles match" : "Nothing in this status"}</strong>
-                    <span>{filter ? "Try a different word from the title." : "Change the filter to see the rest of the documents."}</span>
+                    <strong>{filter ? "No titles match" : all.length === 0 && folderView !== "all" ? "No documents here yet" : "Nothing in this status"}</strong>
+                    <span>
+                      {filter
+                        ? "Try a different word from the title."
+                        : all.length === 0 && folderView !== "all"
+                          ? "Drop files on this page to upload them here, or move documents in from All files."
+                          : "Change the filter to see the rest of the documents."}
+                    </span>
                   </div>
                 ) : (
                   <div className="table-wrap">
@@ -493,9 +727,25 @@ export default function LibraryPage() {
                                   <div className="mono">
                                     {d.source_provider && <span className="doc-source">From {SOURCE_NAMES[d.source_provider]} · </span>}
                                     {d.filename}
+                                    {d.duration_seconds != null && ` · ${clock(d.duration_seconds)}`}
+                                    {folderView === "all" && d.folder_id && pathLabel(folders, d.folder_id) && ` · in ${pathLabel(folders, d.folder_id)}`}
                                   </div>
+                                  {!d.folder_id && suggestions[d.id] && (
+                                    <div className="folder-hint">
+                                      <IconSparkles size={13} />
+                                      <span>
+                                        Looks like it belongs in <strong>{pathLabel(folders, suggestions[d.id]!.folder_id) || suggestions[d.id]!.folder_name}</strong>
+                                      </span>
+                                      <button type="button" className="link" disabled={busy} onClick={() => moveTo([d.id], suggestions[d.id]!.folder_id)}>
+                                        Move there
+                                      </button>
+                                      <button type="button" className="link subtle" onClick={() => dismissSuggestion(d)}>
+                                        No thanks
+                                      </button>
+                                    </div>
+                                  )}
                                   {d.error_code && (
-                                    <span className="badge err" style={{ marginTop: 4 }}>
+                                    <span className="badge err doc-error">
                                       {docError(d.error_code)}
                                     </span>
                                   )}
@@ -513,6 +763,9 @@ export default function LibraryPage() {
                                   <IconEye size={16} />
                                 </button>
                               )}
+                              <button type="button" className="quiet icon" onClick={() => setMoving({ doc: d, target: d.folder_id ?? "none" })} aria-label={`Move ${d.title} to a folder`} data-tip="Move to folder" data-tip-side="end">
+                                <IconFolder size={16} />
+                              </button>
                               <button type="button" className="danger icon" onClick={() => remove(d)} aria-label={`Delete ${d.title}`} data-tip="Delete" data-tip-side="end">
                                 <IconTrash size={16} />
                               </button>
@@ -529,6 +782,17 @@ export default function LibraryPage() {
         </div>
       </div>
       <DocViewer doc={viewing} orgId={orgId} onClose={closeDoc} />
+      {naming && (
+        <FormDialog title={naming.mode === "create" ? (currentFolder ? `New folder in ${currentFolder.name}` : "New folder") : "Rename folder"} submitLabel={naming.mode === "create" ? "Create folder" : "Save"} busy={busy} onSubmit={saveFolderName} onClose={() => setNaming(null)}>
+          <TextField label="Name" value={naming.value} maxLength={120} autoFocus error={naming.error} onChange={(e) => setNaming({ mode: naming.mode, value: e.target.value })} />
+        </FormDialog>
+      )}
+      {moving && (
+        <FormDialog title={`Move "${moving.doc.title}"`} submitLabel="Move" busy={busy} onSubmit={() => moveTo([moving.doc.id], moving.target === "none" ? null : moving.target)} onClose={() => setMoving(null)}>
+          <p className="muted">Folders only organize the library. Moving a document doesn't change who can see it.</p>
+          <Select ariaLabel="Folder" value={moving.target} onChange={(target) => setMoving({ doc: moving.doc, target })} options={folderOptions} />
+        </FormDialog>
+      )}
     </div>
   );
 }

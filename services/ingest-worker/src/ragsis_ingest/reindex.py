@@ -40,9 +40,15 @@ def plan_versions(org: uuid.UUID, mode: str, model: str, only_stale: bool, pool=
                 SELECT v.id, v.document_id FROM document_versions v JOIN documents d ON d.id = v.document_id
                  WHERE v.is_current AND v.status = 'indexed' AND d.status = 'active'
                    AND EXISTS (SELECT 1 FROM chunks c WHERE c.version_id = v.id AND c.index_state = 'active'
-                                 AND NOT EXISTS (SELECT 1 FROM chunk_embeddings e
-                                                  WHERE e.chunk_id = c.id AND e.model_version = %s))
-                 ORDER BY v.created_at""", (model,))
+                                 AND (NOT EXISTS (SELECT 1 FROM chunk_embeddings e
+                                                   WHERE e.chunk_id = c.id AND e.model_version = %s)
+                                      -- grafo: entidades de la versión sin vector en ese modelo (ADR-029)
+                                      OR EXISTS (SELECT 1 FROM entity_sources s WHERE s.chunk_id = c.id
+                                                    AND NOT EXISTS (SELECT 1 FROM entity_source_embeddings g
+                                                                     WHERE g.entity_id = s.entity_id
+                                                                       AND g.chunk_id = s.chunk_id
+                                                                       AND g.model_version = %s))))
+                 ORDER BY v.created_at""", (model, model))
         return fetch_all(conn, """
             SELECT v.id, v.document_id FROM document_versions v JOIN documents d ON d.id = v.document_id
              WHERE v.is_current AND v.status = 'indexed' AND d.status = 'active'
@@ -80,6 +86,9 @@ def purge_model(org: uuid.UUID, model: str, pool=None) -> int:
         raise SystemExit("no se puede purgar el modelo de embeddings activo")
     with tenant_tx(SecurityContext(org), pool) as conn:
         n = execute(conn, "DELETE FROM chunk_embeddings WHERE model_version = %s", (model,))
+        n += execute(conn, "DELETE FROM entity_source_embeddings WHERE model_version = %s", (model,))
+        n += execute(conn, "DELETE FROM relation_source_embeddings WHERE model_version = %s", (model,))
+        execute(conn, "DELETE FROM document_centroids WHERE model_version = %s", (model,))
         execute(conn, "INSERT INTO audit_events (organization_id, action, resource, decision, metadata) "
                       "VALUES (%s, 'embeddings.purged', %s, 'allow', %s::jsonb)",
                 (org, f"model:{model}", json.dumps({"rows": n})))

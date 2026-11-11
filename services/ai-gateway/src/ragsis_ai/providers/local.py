@@ -25,7 +25,7 @@ from ..types import GenerationRequest, GenerationResult
 from .base import ProviderError
 
 DIM = 1024
-_SECTION_PREFIX = re.compile(r"^\[(?:Sección:[^\]]*|Figura|Tabla|Ecuación)\]\s*", re.MULTILINE)
+_SECTION_PREFIX = re.compile(r"^\[(?:Sección:[^\]]*|Figura|Tabla|Ecuación|Audio|\d{1,2}:\d{2}(?::\d{2})?)\]\s*", re.MULTILINE)
 
 
 def _features(text: str) -> Counter:
@@ -170,7 +170,10 @@ def _sentence_entities(sentence: str) -> list[tuple[int, int, str, str]]:
 def graph_heuristic(text: str) -> dict:
     entities: dict[str, dict] = {}
     relations: dict[tuple[str, str], dict] = {}
-    for sentence in split_sentences(_SECTION_PREFIX.sub("", text)):
+    # Las filas de tablas Markdown no son prosa: sus celdas las modela el grafo intra-tabla (ADR-029), no este
+    # extractor de nombres propios, que leería "Región | Margen" como una entidad.
+    prose, _ = split_tables(_SECTION_PREFIX.sub("", text))
+    for sentence in split_sentences(prose):
         found = _sentence_entities(sentence)
         for _, _, name, etype in found:
             key = fold(name)

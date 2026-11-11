@@ -10,6 +10,7 @@ class ModelKind(StrEnum):
     RERANK = "rerank"
     VISION = "vision"
     OCR = "ocr"
+    TRANSCRIBE = "transcribe"
 
 
 class DataClass(StrEnum):
