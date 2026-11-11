@@ -1,9 +1,8 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { ImageResponse } from "next/og";
 import { LOGO_PATH } from "@/components/Logo";
 import { BADGE_THEMES, BAND_COLOR, badgeBloom, badgeLines, badgeNumber, type BadgePalette, badgeSeal, type BadgeTheme, initials, isBadgeTheme, mix, monthYear, type PublicBadge, seedOf, tierLabel } from "@/lib/badge";
 import { badgeLogo } from "@/lib/badge-logo";
+import { brandFonts } from "@/lib/og";
 import { findBadge } from "@/lib/waitlist-db";
 
 export const runtime = "nodejs";
@@ -11,19 +10,13 @@ export const runtime = "nodejs";
 /**
  * The share image of a badge (1200 × 630, the size LinkedIn and X show in a post). A flat
  * version of the 3D card in the look its owner had on screen (light or dark), drawn with the
- * same bloom, colors and words as components/badge/draw.ts. `?download=1` sends it as a file.
+ * same bloom, colors, words and type as components/badge/draw.ts: Universal Sans for the name and
+ * number, Lanterne for the wordmark and the company in italic, Basier Square Mono for small meta.
+ * `?download=1` sends it as a file.
  */
 
-type Font = { name: string; data: ArrayBuffer; weight: 400; style: "normal" };
-let fonts: Promise<Font[]> | undefined;
-
-/** Universal Sans from public/fonts. Satori can't read woff2, so the other brand fonts are left out. */
-function loadFonts(): Promise<Font[]> {
-  fonts ??= readFile(path.join(process.cwd(), "public/fonts/UniversalSans-Display-450-Trial.ttf"))
-    .then((buf) => [{ name: "Universal Sans", data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, weight: 400 as const, style: "normal" as const }])
-    .catch(() => []);
-  return fonts;
-}
+const SERIF = "Lanterne";
+const MONO = "Basier Square Mono";
 
 function svgUri(svg: string): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
@@ -79,10 +72,16 @@ function Card({ badge, theme, logo, width }: { badge: PublicBadge; theme: BadgeT
       <div style={{ position: "absolute", left: guide, top: 0, height, borderLeft: dash }} />
       <div style={{ position: "absolute", right: guide, top: 0, height, borderLeft: dash }} />
       <div style={{ position: "absolute", left: 0, bottom: rule, width, borderTop: dash }} />
+      {[guide, width - guide].map((x) => (
+        <div key={x} style={{ position: "absolute", left: x - 12 * k, bottom: rule - 11 * k, width: 24 * k, height: 24 * k, display: "flex" }}>
+          <div style={{ position: "absolute", left: 0, top: 11 * k, width: 24 * k, height: 2 * k, background: p.cross }} />
+          <div style={{ position: "absolute", left: 11 * k, top: 0, width: 2 * k, height: 24 * k, background: p.cross }} />
+        </div>
+      ))}
 
       <div style={{ position: "absolute", left: pad, top: 100 * k, display: "flex", alignItems: "center", gap: 20 * k, color: p.text }}>
         <Mark size={62 * k} color={p.text} />
-        <span style={{ fontSize: 62 * k, letterSpacing: -2 * k }}>Ragis</span>
+        <span style={{ fontFamily: SERIF, fontSize: 66 * k, letterSpacing: -1.4 * k }}>Ragis</span>
       </div>
 
       {/* the text block grows upward from the rule: logo, tier, name, company */}
@@ -92,15 +91,16 @@ function Card({ badge, theme, logo, width }: { badge: PublicBadge; theme: BadgeT
             {logo?.fill ? <img src={logo.uri} width={plate} height={plate} style={{ objectFit: "cover" }} /> : logo ? <img src={logo.uri} width={logoW} height={logoH} /> : <span style={{ fontSize: (initials(company).length > 1 ? 68 : 82) * k, letterSpacing: -3 * k, color: BADGE_THEMES.light.accentText }}>{initials(company)}</span>}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 * k, marginBottom: 26 * k, fontSize: 34 * k, color: p.muted }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 * k, marginBottom: 26 * k, fontFamily: MONO, fontSize: 36 * k, letterSpacing: -0.7 * k, color: p.muted }}>
           <div style={{ width: 20 * k, height: 20 * k, borderRadius: 10 * k, background: p.accent }} />
           {tierLabel(badge.tier)}
         </div>
         <div style={{ display: "flex", marginLeft: -size * 0.045, fontSize: size, lineHeight: 1.02, letterSpacing: -0.045 * size, color: p.text }}>{title}</div>
-        {subtitle && <div style={{ display: "flex", marginTop: 20 * k, fontSize: 60 * k, letterSpacing: -1.5 * k, color: p.accentText }}>{subtitle}</div>}
+        {/* one line, cut with an ellipsis, like clip() in draw.ts */}
+        {subtitle && <div style={{ display: "block", maxWidth: width - pad * 2, marginTop: 18 * k, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontFamily: SERIF, fontStyle: "italic", fontSize: 68 * k, lineHeight: 1.1, letterSpacing: -1.2 * k, color: p.accentText }}>{subtitle}</div>}
       </div>
 
-      <div style={{ position: "absolute", left: pad, right: pad, bottom: rule - 96 * k, display: "flex", justifyContent: "space-between", fontSize: 34 * k, color: p.faint }}>
+      <div style={{ position: "absolute", left: pad, right: pad, bottom: rule - 96 * k, display: "flex", justifyContent: "space-between", fontFamily: MONO, fontSize: 36 * k, letterSpacing: -0.7 * k, color: p.faint }}>
         <span>Nº</span>
         <span>{monthYear(badge.createdAt)}</span>
       </div>
@@ -140,7 +140,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const asked = query.get("theme");
   const theme: BadgeTheme = isBadgeTheme(asked) ? asked : (badge.theme ?? "dark");
   const p = BADGE_THEMES[theme];
-  const [file, fontList] = await Promise.all([badgeLogo(found).catch(() => null), loadFonts()]);
+  // Without the fonts Satori falls back to its own sans; the card still renders.
+  const [file, fontList] = await Promise.all([
+    badgeLogo(found).catch(() => null),
+    brandFonts().catch((err) => {
+      console.error("[badge image] brand fonts unavailable:", err instanceof Error ? err.message : err);
+      return [];
+    }),
+  ]);
   const logo = file ? { uri: `data:${file.type};base64,${Buffer.from(file.bytes).toString("base64")}`, ratio: imageRatio(new Uint8Array(file.bytes), file.type), fill: badge.logoFill } : null;
   const { title } = badgeLines(badge);
   const host = (process.env.PUBLIC_BASE_URL ? URL.parse(process.env.PUBLIC_BASE_URL)?.host : null) ?? new URL(req.url).host;
@@ -156,19 +163,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         <div style={{ position: "absolute", left: 72, top: 64, bottom: 64, width: 620, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <Mark size={40} color={p.text} />
-            <span style={{ fontSize: 38, letterSpacing: -1.2 }}>Ragis</span>
+            <span style={{ fontFamily: SERIF, fontSize: 40, letterSpacing: -0.8 }}>Ragis</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 26, color: p.muted }}>
-              <div style={{ width: 14, height: 14, borderRadius: 7, background: p.accent }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: MONO, fontSize: 20, letterSpacing: 1.6, textTransform: "uppercase", color: p.muted }}>
+              <div style={{ width: 10, height: 10, borderRadius: 5, background: p.accent }} />
               Waitlist badge
             </div>
-            <span style={{ fontSize: 132, lineHeight: 0.95, letterSpacing: -6 }}>Nº {badgeNumber(badge.number)}</span>
-            <span style={{ fontSize: 40, lineHeight: 1.2, letterSpacing: -1, color: p.muted, maxWidth: 580 }}>{title === "Early member" ? "Joined the Ragis waitlist." : `${title} joined the Ragis waitlist.`}</span>
+            {/* "Nº" in mono as on the card: the Universal Sans trial has no "º" */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+              <span style={{ marginTop: 14, fontFamily: MONO, fontSize: 40, letterSpacing: -0.8, color: p.faint }}>Nº</span>
+              <span style={{ fontSize: 132, lineHeight: 0.95, letterSpacing: -6 }}>{badgeNumber(badge.number)}</span>
+            </div>
+            {/* word by word, so the accent word can sit inline in Lanterne italic and the line still wraps */}
+            <div style={{ display: "flex", flexWrap: "wrap", columnGap: 10, maxWidth: 580, fontSize: 40, lineHeight: 1.2, letterSpacing: -1, color: p.muted }}>
+              {`${title === "Early member" ? "Joined" : `${title} joined`} the Ragis`.split(/\s+/).map((word, i) => (
+                <span key={i}>{word}</span>
+              ))}
+              <span style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 44, letterSpacing: -0.6, color: p.accentText }}>waitlist.</span>
+            </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 24, color: p.faint }}>
-            <span>Answers from your company&apos;s documents, each with its source.</span>
-            <span style={{ color: p.accentText }}>{host}/waitlist</span>
+            <span>Answers from your documents, cited to the page.</span>
+            <span style={{ fontFamily: MONO, fontSize: 20, letterSpacing: -0.2, color: p.accentText }}>{host}/waitlist</span>
           </div>
         </div>
 

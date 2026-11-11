@@ -38,19 +38,27 @@ const C = {
 // Satori reads TTF/OTF/WOFF, not WOFF2: assets/og-fonts holds the brand fonts decompressed
 // from public/fonts (fonttools ttLib.woff2 decompress). Universal Sans is a TTF already.
 
-type Font = { name: string; data: ArrayBuffer; weight: 300 | 400; style: "normal" | "italic" };
+export type OgFont = { name: string; data: ArrayBuffer; weight: 400; style: "normal" | "italic" };
 
-const fontFile = (rel: string) =>
-  readFile(path.join(process.cwd(), rel)).then((buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+const bytes = (buf: Buffer) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 
-let fonts: Promise<Font[]> | undefined;
-function loadFonts(): Promise<Font[]> {
+let fonts: Promise<OgFont[]> | undefined;
+/**
+ * The brand fonts for Satori: "Universal Sans", "Lanterne" (regular and italic) and
+ * "Basier Square Mono". Each path is a literal on purpose: Next's file tracing follows literal
+ * `path.join(process.cwd(), …)` calls, so routes rendered on request (the badge share image)
+ * ship the files too, on Vercel and in the standalone Docker build.
+ */
+export function brandFonts(): Promise<OgFont[]> {
   fonts ??= Promise.all([
-    fontFile("public/fonts/UniversalSans-Display-450-Trial.ttf").then((data): Font => ({ name: "Universal Sans", data, weight: 400, style: "normal" })),
-    fontFile("assets/og-fonts/Lanterne-Regular-Trial.otf").then((data): Font => ({ name: "Lanterne", data, weight: 400, style: "normal" })),
-    fontFile("assets/og-fonts/Lanterne-Italic-Trial.otf").then((data): Font => ({ name: "Lanterne", data, weight: 400, style: "italic" })),
-    fontFile("assets/og-fonts/BasierSquareMono-Regular.ttf").then((data): Font => ({ name: "Basier Square Mono", data, weight: 400, style: "normal" })),
-  ]);
+    readFile(path.join(process.cwd(), "public/fonts/UniversalSans-Display-450-Trial.ttf")).then((buf): OgFont => ({ name: "Universal Sans", data: bytes(buf), weight: 400, style: "normal" })),
+    readFile(path.join(process.cwd(), "assets/og-fonts/Lanterne-Regular-Trial.otf")).then((buf): OgFont => ({ name: "Lanterne", data: bytes(buf), weight: 400, style: "normal" })),
+    readFile(path.join(process.cwd(), "assets/og-fonts/Lanterne-Italic-Trial.otf")).then((buf): OgFont => ({ name: "Lanterne", data: bytes(buf), weight: 400, style: "italic" })),
+    readFile(path.join(process.cwd(), "assets/og-fonts/BasierSquareMono-Regular.ttf")).then((buf): OgFont => ({ name: "Basier Square Mono", data: bytes(buf), weight: 400, style: "normal" })),
+  ]).catch((err) => {
+    fonts = undefined; // try again on the next image instead of caching the failure
+    throw err;
+  });
   return fonts;
 }
 
@@ -244,7 +252,7 @@ function Check() {
 }
 
 export async function ogImage({ eyebrow, title, titleSize = 78, lead, checks, art }: OgCard): Promise<ImageResponse> {
-  const [fontData, artUri] = await Promise.all([loadFonts(), illustration(art)]);
+  const [fontData, artUri] = await Promise.all([brandFonts(), illustration(art)]);
 
   const lineHeight = 1.02;
   const titleBottom = Math.round(GY_TOP + PAD + title.length * titleSize * lineHeight + PAD + 4);
