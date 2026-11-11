@@ -7,6 +7,7 @@ import { DitherField } from "@/components/DitherField";
 import { IconArrowRight } from "@/components/icons";
 import { badgeLines, badgeNumber, shareText } from "@/lib/badge";
 import { findBadge, publicBadge } from "@/lib/waitlist-db";
+import { siteUrl } from "../../../site";
 import "../../waitlist.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -14,7 +15,7 @@ type Params = { params: Promise<{ slug: string }> };
 // One lookup per request, shared by the metadata and the page.
 const load = cache(async (slug: string) => findBadge(slug).catch(() => null));
 
-const base = URL.parse(process.env.PUBLIC_BASE_URL ?? "") ?? new URL("http://localhost:3000");
+const base = siteUrl();
 
 /**
  * A shared badge. The link people post on LinkedIn and X lands here; the preview card those sites
@@ -23,7 +24,7 @@ const base = URL.parse(process.env.PUBLIC_BASE_URL ?? "") ?? new URL("http://loc
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const badge = await load(slug);
-  if (!badge) return { title: "Badge not found · Ragis", robots: { index: false } };
+  if (!badge) return { title: "Badge not found", robots: { index: false } };
   const { title } = badgeLines(badge);
   const heading = title === "Early member" ? "Joined the Ragis waitlist" : `${title} joined the Ragis waitlist`;
   const description = shareText(badge);
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const image = { url: `/api/waitlist/badge/${slug}/image?v=${encodeURIComponent(badge.updatedAt)}`, width: 1200, height: 630, alt: `Ragis waitlist badge Nº ${badgeNumber(badge.number)}` };
   return {
     metadataBase: base,
-    title: `${heading} · Nº ${badgeNumber(badge.number)}`,
+    title: { absolute: `${heading} · Nº ${badgeNumber(badge.number)}` },
     description,
     robots: { index: false, follow: true },
     alternates: { canonical: `/waitlist/badge/${slug}` },

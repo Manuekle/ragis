@@ -1,20 +1,20 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { IconArrowRight, IconCheck } from "@/components/icons";
+import { breadcrumbLd, JsonLd, pageMetadata, softwareLd, webPageLd } from "@/lib/seo";
 import { PubTitle } from "../PubTitle";
-import { demoCta, salesHref, signInHref } from "../site";
+import { demoCta, pageUpdated, salesHref, signInHref } from "../site";
+import { EVERY_PLAN, PRICE_RANGE } from "./plans";
 import { PricingPlans } from "./PricingPlans";
 
-export const metadata: Metadata = {
-  title: "Pricing · Ragis",
-  description: "Plans for cited, permission-aware answers over your company documents.",
-};
+const DESCRIPTION = `Ragis plans start at $${PRICE_RANGE.low} a month: Team Cloud, Business Cloud, Private Cloud and self-hosted. Every plan cites the page and respects who can see what.`;
 
-const EVERY_PLAN = ["Answers cited to the page", "Document-level permissions", "PII redaction", "Encryption in transit and at rest", "SSO with your identity provider", "Tables, figures and scanned pages"];
+export const metadata = pageMetadata({ title: `Pricing: plans from $${PRICE_RANGE.low} a month`, description: DESCRIPTION, path: "/pricing" });
+
 
 export default function PricingPage() {
   return (
     <div className="gate-col pub-col pub-col-wide">
+      <JsonLd graph={[webPageLd({ path: "/pricing", name: "Ragis pricing", description: DESCRIPTION, updated: pageUpdated("/pricing") }), softwareLd({ detailed: true }), breadcrumbLd([{ name: "Pricing", path: "/pricing" }])]} />
       <i className="gate-beam" data-line="left" aria-hidden="true" />
       <i className="gate-beam" data-line="right" aria-hidden="true" />
 

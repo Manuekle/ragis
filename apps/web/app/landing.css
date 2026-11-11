@@ -509,6 +509,11 @@ html:has(.land-page) { overscroll-behavior-y: none; }
 .land-trust strong { font-size: 15px; font-weight: 500; color: var(--text); }
 .land-trust span { font-size: 14px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
 
+/* questions people ask, two columns of plain answers (same type scale as the waitlist's "Good to know") */
+.land-faq { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 26px 44px; }
+.land-faq h3 { margin: 0 0 5px; font-size: 15px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); text-wrap: balance; }
+.land-faq p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+
 .land-final { text-align: left; }
 .land-final h2 { margin-bottom: 26px; }
 /* the content now ends here: leave room under the buttons for the floating "Backers" pill */

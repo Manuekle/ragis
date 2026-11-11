@@ -6,7 +6,7 @@ import "../waitlist.css";
 // The link carries a one-time token: keep the page out of search results and the token out of
 // the Referer header of anything the page loads or links to.
 export const metadata: Metadata = {
-  title: "Confirm your place · Ragis",
+  title: "Confirm your place",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

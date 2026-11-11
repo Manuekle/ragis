@@ -10,13 +10,17 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SponsorWall } from "@/components/SponsorWall";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IconActivity, IconAgent, IconArrowRight, IconCheck, IconChat, IconFiles, IconShield, IconSignature, IconWorkflow } from "@/components/icons";
+import { faqLd, JsonLd, organizationLd, pageMetadata, softwareLd, webPageLd, websiteLd } from "@/lib/seo";
 import { sponsorWall } from "@/lib/waitlist-db";
-import { demoCta, publicOnly, signInHref, signInLabel } from "./(public)/site";
+import { FEATURES as CONTENT_FEATURES, STEPS as CONTENT_STEPS, LANDING_FAQ, TRUST } from "./(public)/content";
+import { demoCta, pageUpdated, publicOnly, signInHref, signInLabel, site } from "./(public)/site";
 import { SPONSOR_TIERS } from "./(public)/waitlist/sponsors";
 import "./(public)/public.css";
 import "./landing.css";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = pageMetadata({ title: `${site.name}: ${site.tagline}`, description: site.description, path: "/", absoluteTitle: true });
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
 const lowestTier = usd.format(Math.min(...SPONSOR_TIERS.map((tier) => tier.price)));
@@ -39,6 +43,7 @@ export default async function Landing() {
 
   return (
     <main className="land-page">
+      <JsonLd graph={[organizationLd(), websiteLd(), webPageLd({ path: "/", name: `${site.name}: ${site.tagline}`, description: site.description, updated: pageUpdated("/") }), softwareLd(), faqLd(LANDING_FAQ)]} />
       <LandingViews
         hero={
           <section className="gate land">
@@ -156,6 +161,20 @@ export default async function Landing() {
                 </ul>
               </section>
 
+              <section className="land-sec">
+                <h2>
+                  Questions, <em>answered</em>.
+                </h2>
+                <ul className="land-faq">
+                  {LANDING_FAQ.map(({ q, text }) => (
+                    <li key={q}>
+                      <h3>{q}</h3>
+                      <p>{text}</p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
               <section className="land-sec land-final glyph-host">
                 <GlyphField />
                 <h2>
@@ -260,22 +279,6 @@ function Header({ signedIn }: { signedIn: boolean }) {
   );
 }
 
-const STEPS = [
-  { n: "01", Icon: IconFiles, title: "Connect your documents", text: "Upload PDFs, Word files, slides, spreadsheets and scans. Ragis reads the text, tables, charts and figures." },
-  { n: "02", Icon: IconChat, title: "Ask in plain language", text: "Anyone on the team asks a question. Answers come from your documents only, never from the open web." },
-  { n: "03", Icon: IconShield, title: "Check the source", text: "Every claim links to the document and page it came from. Claims the sources don't support are caught before you see them." },
-];
-
-const FEATURES = [
-  { Icon: IconAgent, title: "Agents", text: "Build assistants for a team or a task in Agent Studio. Set what they can use, test them in a sandbox, ship versioned releases." },
-  { Icon: IconWorkflow, title: "Workflows", text: "Turn a recurring process into steps that run on their own and wait for a person whenever a decision is needed." },
-  { Icon: IconSignature, title: "Signatures", text: "Send a document to be signed and keep a verifiable record of who signed what, and when." },
-  { Icon: IconActivity, title: "Audit trail", text: "See who asked what, which sources were used and what each model call cost." },
-];
-
-const TRUST = [
-  { title: "Permission-aware answers", text: "Access follows your org, workspace, group and document rules. A question never surfaces a file you couldn't open." },
-  { title: "PII redacted", text: "Personal data is detected and masked when documents are ingested." },
-  { title: "Choose where models run", text: "Pick the models and the region, or run them on-prem for restricted teams." },
-  { title: "Single sign-on", text: "Plug into your identity provider. API keys scoped per workspace for integrations." },
-];
+// The words live in (public)/content.ts, shared with /llms.txt; the icons go with them in order.
+const STEPS = CONTENT_STEPS.map((step, i) => ({ ...step, Icon: [IconFiles, IconChat, IconShield][i] }));
+const FEATURES = CONTENT_FEATURES.map((feature, i) => ({ ...feature, Icon: [IconAgent, IconWorkflow, IconSignature, IconActivity][i] }));

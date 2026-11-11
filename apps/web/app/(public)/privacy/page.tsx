@@ -1,11 +1,10 @@
-import type { Metadata } from "next";
+import { breadcrumbLd, JsonLd, pageMetadata, webPageLd } from "@/lib/seo";
 import { ContactLine, LegalPage, type LegalSection } from "../LegalPage";
-import { site } from "../site";
+import { pageUpdated, site } from "../site";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy · Ragis",
-  description: "What Ragis collects, why, where it is stored and how to control it.",
-};
+const DESCRIPTION = "What Ragis collects, why, where it is stored and how to control it. We don't sell personal data or use your documents to train AI models.";
+
+export const metadata = pageMetadata({ title: "Privacy Policy", description: DESCRIPTION, path: "/privacy" });
 
 // Template text grounded in the platform's security design (master plan §12). Have counsel review it before launch.
 const SECTIONS: LegalSection[] = [
@@ -125,5 +124,10 @@ const SECTIONS: LegalSection[] = [
 ];
 
 export default function PrivacyPage() {
-  return <LegalPage title="Privacy Policy." lead="What we collect, why, and how you stay in control." sections={SECTIONS} art="privacy" />;
+  return (
+    <>
+      <JsonLd graph={[webPageLd({ path: "/privacy", name: "Privacy Policy", description: DESCRIPTION, updated: pageUpdated("/privacy") }), breadcrumbLd([{ name: "Privacy Policy", path: "/privacy" }])]} />
+      <LegalPage title="Privacy Policy." lead="What we collect, why, and how you stay in control." sections={SECTIONS} art="privacy" />
+    </>
+  );
 }

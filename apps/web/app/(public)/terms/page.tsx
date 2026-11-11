@@ -1,12 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { breadcrumbLd, JsonLd, pageMetadata, webPageLd } from "@/lib/seo";
 import { ContactLine, LegalPage, type LegalSection } from "../LegalPage";
-import { site } from "../site";
+import { pageUpdated, site } from "../site";
 
-export const metadata: Metadata = {
-  title: "Terms of Service · Ragis",
-  description: "The terms that govern your use of Ragis.",
-};
+const DESCRIPTION = "The terms that govern use of Ragis: accounts and access, your content, acceptable use, AI-generated answers, plans and fees, security, and liability.";
+
+export const metadata = pageMetadata({ title: "Terms of Service", description: DESCRIPTION, path: "/terms" });
 
 // Template text: have counsel review it before launch and keep it in line with your order forms and DPA.
 const SECTIONS: LegalSection[] = [
@@ -130,5 +129,10 @@ const SECTIONS: LegalSection[] = [
 ];
 
 export default function TermsPage() {
-  return <LegalPage title="Terms of Service." lead="The rules for using Ragis, written to be read." sections={SECTIONS} art="terms" />;
+  return (
+    <>
+      <JsonLd graph={[webPageLd({ path: "/terms", name: "Terms of Service", description: DESCRIPTION, updated: pageUpdated("/terms") }), breadcrumbLd([{ name: "Terms of Service", path: "/terms" }])]} />
+      <LegalPage title="Terms of Service." lead="The rules for using Ragis, written to be read." sections={SECTIONS} art="terms" />
+    </>
+  );
 }
