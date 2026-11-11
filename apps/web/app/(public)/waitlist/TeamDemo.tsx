@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { FileTile } from "@/components/FileTile";
 import { LogoMark } from "@/components/Logo";
+import { typewriter } from "@/components/paperFont";
 import "./team-demo.css";
 
 /*
@@ -494,7 +495,7 @@ function Desk({ team }: { team: Team }) {
   return (
     <div className="td-desk" data-state={state}>
       {others.map((f, k) => (
-        <div key={f.name} className="td-sheet" data-k={k}>
+        <div key={f.name} className={`td-sheet ${typewriter.variable}`} data-k={k}>
           <span className="td-sheet-title">{f.name}</span>
           <Greek widths={[92, 100, 78, 100, 96, 54]} />
         </div>
@@ -512,7 +513,7 @@ function Beam() {
 
 function Paper({ doc }: { doc: Team["doc"] }) {
   return (
-    <div className="td-paper">
+    <div className={`td-paper ${typewriter.variable}`}>
       <Beam />
       <div className="td-p-head">
         <span className="td-p-brand">

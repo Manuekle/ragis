@@ -1,9 +1,11 @@
 "use client";
 
+import { avatarStyle } from "@/components/ui";
 import { Homemade_Apple } from "next/font/google";
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { FileTile } from "@/components/FileTile";
 import { LogoMark } from "@/components/Logo";
+import { typewriter } from "@/components/paperFont";
 import { IconCheck, IconFiles, IconHourglass, IconLock, IconSend, IconShield, IconSignature } from "@/components/icons";
 
 /*
@@ -244,7 +246,7 @@ function Paper() {
   const signing = useAfter(T.sign[0]);
   const stamped = useAfter(T.stamp);
   return (
-    <div className="ld-paper" data-stamped={stamped ? "" : undefined}>
+    <div className={`ld-paper ${typewriter.variable}`} data-stamped={stamped ? "" : undefined}>
       <Beam />
 
       <div className="ld-p-head">
@@ -305,27 +307,9 @@ function Paper() {
   );
 }
 
-/** Rubber stamp: round, red, bigger than the corner it lands in, so the sheet's edge cuts it off. */
+/** Rubber stamp: the supplied artwork as-is, whole, in the sheet's bottom-right corner. */
 function Stamp() {
-  return (
-    <svg viewBox="0 0 120 120" className="ld-stamp">
-      <defs>
-        <path id="ld-stamp-ring" d="M60 60m-41 0a41 41 0 1 1 82 0a41 41 0 1 1 -82 0" />
-      </defs>
-      <circle cx="60" cy="60" r="56" className="ld-stamp-line" strokeWidth="3.2" />
-      <circle cx="60" cy="60" r="49" className="ld-stamp-line" strokeWidth="1.2" />
-      <circle cx="60" cy="60" r="30" className="ld-stamp-line" strokeWidth="1.2" />
-      <text className="ld-stamp-ring">
-        <textPath href="#ld-stamp-ring" startOffset="0">
-          RAGIS · FINANCE · EX-2411 · NOV 16 2026 ·
-        </textPath>
-      </text>
-      <rect x="10" y="49" width="100" height="22" className="ld-stamp-band" />
-      <text x="60" y="65.5" textAnchor="middle" className="ld-stamp-word">
-        APPROVED
-      </text>
-    </svg>
-  );
+  return <img src="/illustrations/approved-stamp.svg" alt="" className="ld-stamp" draggable={false} />;
 }
 
 // ───────────── what Ragis is doing ─────────────
@@ -522,7 +506,7 @@ function ApprovePhase() {
   return (
     <div className="ld-approve">
       <In at={T.approve + 150} className="ld-rise ld-person">
-        <span className="ld-avatar">MB</span>
+        <span className="avatar ld-avatar" style={avatarStyle("Michael Brooks")} aria-hidden="true" />
         <span className="ld-person-name">
           Michael Brooks
           <span>Finance lead</span>

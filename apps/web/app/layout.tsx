@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { SoftNav } from "@/components/SoftNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       {/* Extensions (ColorZilla, Grammarly…) inject attributes on <body> before hydration. */}
       <body suppressHydrationWarning>
         <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInit }} />
+        <SoftNav />
         {children}
       </body>
     </html>

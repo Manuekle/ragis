@@ -65,7 +65,7 @@ export default async function BadgePage({ params }: Params) {
           guest={
             <div className="badge-guest">
               <p>Ragis reads a company&apos;s documents and answers questions with the exact page each answer came from. Join the waitlist and get a badge of your own.</p>
-              <Link href="/waitlist#join" className="gate-cta halftone">
+              <Link href="/waitlist" className="gate-cta halftone">
                 Get your own badge
                 <IconArrowRight size={16} />
               </Link>

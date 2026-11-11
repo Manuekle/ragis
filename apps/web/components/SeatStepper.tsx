@@ -64,7 +64,7 @@ export function SeatStepper() {
 
   return (
     <div className="seats-stage">
-    <DitherField className="seats-dither" pattern="waves" intensity={0.5} speed={0.4} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
+    <DitherField className="seats-dither seats-dither-wide" pattern="waves" intensity={0.5} speed={0.4} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
     <section className="seats" aria-label="Seats">
       <header>
         <h2>Team size</h2>

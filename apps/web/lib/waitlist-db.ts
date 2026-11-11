@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createClient, type Client } from "@libsql/client/web";
-import { EARLY_ACCESS } from "@/app/(public)/waitlist/sponsors";
+import { EARLY_ACCESS, SPONSOR_TIERS } from "@/app/(public)/waitlist/sponsors";
 import type { BadgeTheme, PublicBadge } from "@/lib/badge";
 
 /**
@@ -240,13 +240,19 @@ const BADGE_SELECT = `SELECT b.id, b.slug, b.name, b.company, b.domain, b.theme,
     l.updated_at AS logo_at, l.fill AS logo_fill
   FROM waitlist_badges b JOIN waitlist w ON w.id = b.waitlist_id LEFT JOIN waitlist_badge_logos l ON l.badge_id = b.id`;
 
+/**
+ * An uploaded logo wins over the company's icon. Its URL changes with each upload, so browsers
+ * and the 3D texture never keep showing the one before. Null when there is neither.
+ */
+function logoUrl(slug: string, logoAt: string | null, domain: string | null): string | null {
+  const logo = `/api/waitlist/badge/${slug}/logo`;
+  return logoAt ? `${logo}?v=${encodeURIComponent(logoAt)}` : domain ? logo : null;
+}
+
 function toBadge(row: Record<string, unknown>): BadgeRow {
   const slug = String(row.slug);
   const domain = row.domain ? String(row.domain) : null;
-  // An uploaded logo wins over the company's icon. Its URL changes with each upload, so browsers
-  // and the 3D texture never keep showing the one before.
   const logoAt = row.logo_at ? String(row.logo_at) : null;
-  const logo = `/api/waitlist/badge/${slug}/logo`;
   return {
     slug,
     number: Number(row.id),
@@ -255,7 +261,7 @@ function toBadge(row: Record<string, unknown>): BadgeRow {
     theme: row.theme === "light" || row.theme === "dark" ? row.theme : null,
     // A sponsor tier shows only once the slot is paid and confirmed.
     tier: row.status === "confirmed" ? String(row.interest) : EARLY_ACCESS,
-    logoUrl: logoAt ? `${logo}?v=${encodeURIComponent(logoAt)}` : domain ? logo : null,
+    logoUrl: logoUrl(slug, logoAt, domain),
     ownLogo: Boolean(logoAt),
     logoFill: Boolean(logoAt) && Number(row.logo_fill) === 1,
     createdAt: String(row.created_at ?? ""),
@@ -365,4 +371,62 @@ export async function takenSlots(): Promise<Record<string, number>> {
   for (const row of rs.rows) taken[String(row.interest)] = Number(row.n);
   slots = { at: Date.now(), taken };
   return taken;
+}
+
+// ── sponsor wall (landing) ──
+
+/** One confirmed sponsor as the landing's wall shows it: what their badge says, never the email. */
+export type WallSponsor = {
+  /** Sponsor tier id (sponsors.ts). */
+  tier: string;
+  /** Badge number, stable: a key and an avatar seed. */
+  number: number;
+  name: string;
+  company: string;
+  logoUrl: string | null;
+  logoFill: boolean;
+  /** The company's site. Founding partners only: a logo and a link is one of their perks. */
+  href: string | null;
+};
+
+const WALL_TTL_MS = 60_000;
+let wall: { at: number; sponsors: WallSponsor[] } | undefined;
+
+/**
+ * Confirmed sponsors in the order they joined, for the wall on the landing. Each shows what its
+ * badge shows (the first badge, if an older sign-up left several; the sign-up's company when it
+ * has none). Cached for a minute like takenSlots. Empty when Turso is not configured.
+ */
+export async function sponsorWall(): Promise<WallSponsor[]> {
+  if (wall && Date.now() - wall.at < WALL_TTL_MS) return wall.sponsors;
+  const c = await db();
+  if (!c) return [];
+  const tiers = SPONSOR_TIERS.map((tier) => tier.id);
+  const rs = await c.execute({
+    sql: `SELECT w.id, w.interest, w.company AS signup_company, b.slug, b.name, b.company, b.domain,
+            l.updated_at AS logo_at, l.fill AS logo_fill
+          FROM waitlist w
+          LEFT JOIN waitlist_badges b ON b.id = (SELECT MIN(id) FROM waitlist_badges WHERE waitlist_id = w.id)
+          LEFT JOIN waitlist_badge_logos l ON l.badge_id = b.id
+          WHERE w.status = 'confirmed' AND w.interest IN (${tiers.map(() => "?").join(", ")})
+          ORDER BY w.id`,
+    args: tiers,
+  });
+  const sponsors = rs.rows.map((row): WallSponsor => {
+    const tier = String(row.interest);
+    const slug = row.slug ? String(row.slug) : null;
+    const domain = row.domain ? String(row.domain) : null;
+    const logoAt = row.logo_at ? String(row.logo_at) : null;
+    return {
+      tier,
+      number: Number(row.id),
+      name: String(row.name ?? "").trim(),
+      company: String(row.company || row.signup_company || "").trim(),
+      logoUrl: slug ? logoUrl(slug, logoAt, domain) : null,
+      logoFill: Boolean(logoAt) && Number(row.logo_fill) === 1,
+      href: tier === "founding" && domain ? `https://${domain}` : null,
+    };
+  });
+  wall = { at: Date.now(), sponsors };
+  return sponsors;
 }

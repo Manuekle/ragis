@@ -79,6 +79,17 @@
   mask-composite: intersect;
   opacity: 0.6;
 }
+/* pricing: the field covers the whole top of the section, from above the billing toggle down
+   behind the plan cards, and fades out around the middle of the cards */
+.seats-stage .seats-dither-wide {
+  inset: -104px -40px -400px;
+  /* the old field faded hard on every side; this one stays solid over a bigger area, so it runs dimmer to match */
+  opacity: 0.4;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%), linear-gradient(180deg, transparent 0%, #000 12%, #000 50%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%), linear-gradient(180deg, transparent 0%, #000 12%, #000 50%, transparent 100%);
+}
+/* the field spills over its neighbours, so keep the toggle above it (the cards already follow it in the DOM) */
+.plan-billing { position: relative; z-index: 1; }
 .seats-stage .seats { margin: 0; width: 100%; }
 
 /* seats: team-size picker above the plans */
@@ -182,17 +193,50 @@
 .legal-doc strong { font-weight: 500; color: var(--text); }
 .legal-doc a { text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--accent-text) 35%, transparent); text-underline-offset: 3px; }
 
-/* footer */
-.pub-foot {
-  position: relative; z-index: 2;
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-  padding: 20px clamp(16px, 4vw, 32px);
-  font-size: 13px; color: var(--faint);
+/* footer (components/SiteFooter.tsx): pitch + link columns, legal line, then an oversized
+   wordmark cut off by the page edge that lights up in the accent under the pointer */
+.sf {
+  position: relative; z-index: 2; overflow: hidden;
   background: var(--bg); border-top: 1px solid var(--border);
 }
-.pub-foot nav { display: flex; gap: 20px; }
-.pub-foot a { color: var(--muted); }
-@media (hover: hover) { .pub-foot a:hover { color: var(--text); text-decoration: none; } }
+.sf-inner { position: relative; z-index: 1; width: min(100% - 32px, 1060px); margin: 0 auto; padding: clamp(44px, 7vw, 72px) 0 0; }
+.sf-top { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px clamp(24px, 6vw, 72px); }
+.sf-lead { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.sf-brand { display: inline-flex; }
+.sf-brand .brand { font-size: 20px; }
+.sf-brand .brand-mark { width: 24px; height: 24px; }
+@media (hover: hover) { .sf-brand:hover { text-decoration: none; } }
+.sf-lead p { margin: 0 0 6px; max-width: 26em; font-size: 15px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+.sf-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 28px 24px; }
+.sf-cols h3 { margin: 0 0 14px; font-family: var(--mono); font-size: 11.5px; font-weight: 400; letter-spacing: var(--tracking-mono); color: var(--faint); }
+.sf-cols ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sf-cols a { font-size: 14px; color: var(--muted); transition: color var(--duration-fast, 150ms) ease; }
+@media (hover: hover) { .sf-cols a:hover { color: var(--text); text-decoration: none; } }
+.sf-bottom {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: clamp(40px, 6vw, 64px); padding: 16px 0;
+  border-top: 1px dashed var(--guide); font-size: 13px; color: var(--faint);
+}
+
+/* the wordmark: sized off the footer width, sunk so only the top ~70% shows */
+.sf-mark { position: relative; container-type: inline-size; width: min(100% - 32px, 1060px); margin: 0 auto; aspect-ratio: 5 / 1; user-select: none; }
+.sf-word {
+  position: absolute; left: 50%; top: 0; transform: translateX(-50%); pointer-events: none;
+  display: inline-flex; align-items: center; gap: 0.06em;
+  font-family: var(--serif); font-size: 32cqi; line-height: 0.8; letter-spacing: -0.04em; white-space: nowrap;
+  color: transparent;
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--text) 13%, transparent), color-mix(in oklab, var(--text) 2%, transparent) 80%);
+  -webkit-background-clip: text; background-clip: text;
+}
+.sf-word-mark { width: 0.72em; height: 0.72em; color: color-mix(in oklab, var(--text) 8%, transparent); }
+.sf-mark-dither { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; }
+/* the hero's blue ramp, lifted: on thin glyphs the hero's dim end vanishes into the page */
+.sf { --dither-low: #8cc0ff; --dither-mid: #0a84ff; --dither-high: #0050b3; }
+:root[data-theme="dark"] .sf { --dither-low: #2b6fd1; --dither-mid: #3d9bff; --dither-high: #cfe7ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sf { --dither-low: #2b6fd1; --dither-mid: #3d9bff; --dither-high: #cfe7ff; } }
+
+@media (max-width: 720px) { .sf-top { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .sf-cta { width: 100%; justify-content: center; } }
 
 @media (max-width: 860px) {
   .plans { grid-template-columns: minmax(0, 1fr); }
@@ -210,3 +254,69 @@
   .plan-wide .plan-cta { width: 100%; }
   .plan-wide-actions { flex-direction: column; }
 }
+
+/* ───────────── moving between pages ─────────────
+   The intro (guides drawing in, crosses popping, a headline that waits 200–360ms) is for the first
+   page of a visit. After a link inside the site (html[data-nav="soft"], set by components/SoftNav)
+   the guides are already there and the content settles in at once, so a click never shows a blank
+   column. The landing hero shares the rule. */
+html[data-nav="soft"] :is(.pub, .land) .gate-col::before,
+html[data-nav="soft"] :is(.pub, .land) .gate-col::after { animation: guide-march-y 3.2s linear infinite; }
+html[data-nav="soft"] :is(.pub, .land) .gate-title::before,
+html[data-nav="soft"] :is(.pub, .land) .gate-title::after { animation: guide-march-x 3.2s linear infinite; }
+html[data-nav="soft"] :is(.pub, .land) :is(.gate-col, .gate-title)::after { animation-direction: reverse; }
+html[data-nav="soft"] :is(.pub, .land) .gate-x { animation-duration: 0s; animation-delay: 0s; }
+
+html[data-nav="soft"] :is(.pub-title h1, .land-title h1, .pub-lead, .pub-title-art, .pub-body, .wl-stage, .land-body > *) {
+  animation-duration: 320ms; animation-delay: 0ms;
+}
+html[data-nav="soft"] :is(.pub-lead, .land-body > *:nth-child(2)) { animation-delay: 40ms; }
+html[data-nav="soft"] :is(.pub-title-art, .land-body > *:nth-child(n + 3)) { animation-delay: 70ms; }
+html[data-nav="soft"] .gate-col :is(.pub-body, .wl-stage) { animation-delay: 90ms; }
+
+/* ───────────── glowing headlines ─────────────
+   Landing hero and page titles: the fill runs bright to dim from top to bottom, with a soft halo
+   around the letters (dark theme). The halo is a drop-shadow filter, so it follows the
+   gradient-clipped glyphs (a text-shadow would paint over the fill). The entrance keyframe carries
+   the same filter list, so the blur-in hands straight over to the glow. The <em> keeps its accent
+   colour: it sets its own `color`, which shows over the clipped fill. */
+:root {
+  --title-top: var(--text);
+  --title-bottom: color-mix(in oklab, var(--text) 74%, var(--bg));
+  --title-rim: transparent;
+  --title-glow: transparent;
+  --title-halo: transparent;
+}
+:root[data-theme="dark"] {
+  --title-top: #fff;
+  --title-bottom: color-mix(in oklab, #fff 80%, var(--bg));
+  --title-rim: rgb(255 255 255 / 0.3);
+  --title-glow: rgb(255 255 255 / 0.18);
+  --title-halo: rgb(255 255 255 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --title-top: #fff;
+    --title-bottom: color-mix(in oklab, #fff 80%, var(--bg));
+    --title-rim: rgb(255 255 255 / 0.3);
+    --title-glow: rgb(255 255 255 / 0.18);
+    --title-halo: rgb(255 255 255 / 0.1);
+  }
+}
+
+.gate :is(.land-title, .pub-title) :is(h1, h2) {
+  color: transparent;
+  background: linear-gradient(180deg, var(--title-top) 35%, var(--title-bottom) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* room for descenders and accents: the fill is clipped to the box, the tight line-height isn't */
+  padding-block: 0.1em; margin-block: -0.1em;
+  filter: drop-shadow(0 0 1px var(--title-rim)) drop-shadow(0 0 10px var(--title-glow)) drop-shadow(0 0 28px var(--title-halo));
+  animation-name: title-enter;
+}
+@keyframes title-enter {
+  from { opacity: 0; transform: translateY(12px); filter: blur(4px) drop-shadow(0 0 1px transparent) drop-shadow(0 0 10px transparent) drop-shadow(0 0 28px transparent); }
+  to { opacity: 1; transform: none; filter: blur(0) drop-shadow(0 0 1px var(--title-rim)) drop-shadow(0 0 10px var(--title-glow)) drop-shadow(0 0 28px var(--title-halo)); }
+}
+/* pages that already close on a CTA (landing, waitlist) don't need a second one in the footer */
+.gate:has(.glyph-host) .sf-cta { display: none; }

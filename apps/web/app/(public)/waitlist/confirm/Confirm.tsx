@@ -77,7 +77,7 @@ export function Confirm({ token }: { token: string }) {
         </button>
       )}
       {error && (
-        <Link href="/waitlist#join" className="wl-back">
+        <Link href="/waitlist" className="wl-back">
           Join the waitlist again
           <IconArrowRight size={14} />
         </Link>

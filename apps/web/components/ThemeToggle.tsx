@@ -6,6 +6,7 @@ import { IconMoon, IconSun, IconSunMoon } from "./icons";
 export type Theme = "light" | "system" | "dark";
 
 const KEY = "ragsis:theme";
+const EVENT = "ragsis:theme-change";
 
 const OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
   { value: "light", label: "Light theme", Icon: IconSun },
@@ -29,12 +30,19 @@ function apply(theme: Theme) {
   try {
     localStorage.setItem(KEY, theme);
   } catch {}
+  // keep every toggle on the page (header and footer) showing the same choice
+  window.dispatchEvent(new CustomEvent<Theme>(EVENT, { detail: theme }));
 }
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("system");
 
-  useEffect(() => setTheme(stored()), []);
+  useEffect(() => {
+    setTheme(stored());
+    const sync = (e: Event) => setTheme((e as CustomEvent<Theme>).detail);
+    window.addEventListener(EVENT, sync);
+    return () => window.removeEventListener(EVENT, sync);
+  }, []);
 
   const pick = (value: Theme) => {
     setTheme(value);

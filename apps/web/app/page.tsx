@@ -2,25 +2,40 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/Brand";
 import { DitherField } from "@/components/DitherField";
+import { GlyphField } from "@/components/GlyphField";
 import { Illustration } from "@/components/Illustration";
 import { LandingDemo } from "@/components/LandingDemo";
 import { LandingViews } from "@/components/LandingViews";
+import { SiteFooter } from "@/components/SiteFooter";
+import { SponsorWall } from "@/components/SponsorWall";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IconActivity, IconAgent, IconArrowRight, IconCheck, IconChat, IconFiles, IconShield, IconSignature, IconWorkflow } from "@/components/icons";
-import { demoCta, publicOnly, signInHref, signInLabel, site } from "./(public)/site";
+import { sponsorWall } from "@/lib/waitlist-db";
+import { demoCta, publicOnly, signInHref, signInLabel } from "./(public)/site";
+import { SPONSOR_TIERS } from "./(public)/waitlist/sponsors";
 import "./(public)/public.css";
 import "./landing.css";
 
 export const dynamic = "force-dynamic";
 
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
+const lowestTier = usd.format(Math.min(...SPONSOR_TIERS.map((tier) => tier.price)));
+
 /**
- * Landing, in two views. The hero keeps the sign-in gate's visual language (dashed guides,
+ * Landing, in three views. The hero keeps the sign-in gate's visual language (dashed guides,
  * crosses, travelling beams, dither horizon) and fits one viewport. "See how it works" swaps it
- * for plain sections on what Ragis is, what it does and why to trust it; the same floating
- * button then returns to the hero, so the hero is never scrolled past, only left and re-entered.
+ * for plain sections on what Ragis is, what it does and why to trust it, ending on the last call
+ * to action; "Backers" then opens the wall of sponsors, dressed like the hero, with the
+ * footer under it. A button at the top steps back, so the hero is never scrolled past, only left
+ * and re-entered.
  */
 export default async function Landing() {
   const signedIn = !publicOnly && (await cookies()).has("ragsis_session");
+  // Confirmed sponsors from the waitlist. If the database can't be reached the wall still renders, every seat open.
+  const sponsors = await sponsorWall().catch((err) => {
+    console.error("[landing] could not read sponsors:", err instanceof Error ? err.message : err);
+    return [];
+  });
 
   return (
     <main className="land-page">
@@ -54,7 +69,7 @@ export default async function Landing() {
 
                 <div className="land-actions">
                   <div className="land-buttons">
-                    <Link href={signedIn ? "/app" : "/waitlist#join"} className="gate-cta land-cta">
+                    <Link href={signedIn ? "/app" : "/waitlist"} className="gate-cta land-cta">
                       {signedIn ? "Open workspace" : "Join the waitlist"}
                       <IconArrowRight size={16} />
                     </Link>
@@ -141,12 +156,13 @@ export default async function Landing() {
                 </ul>
               </section>
 
-              <section className="land-sec land-final">
+              <section className="land-sec land-final glyph-host">
+                <GlyphField />
                 <h2>
                   Try it on your own <em>documents</em>.
                 </h2>
                 <div className="land-buttons">
-                  <Link href={signedIn ? "/app" : "/waitlist#join"} className="gate-cta land-cta">
+                  <Link href={signedIn ? "/app" : "/waitlist"} className="gate-cta land-cta">
                     {signedIn ? "Open workspace" : "Join the waitlist"}
                     <IconArrowRight size={16} />
                   </Link>
@@ -159,19 +175,62 @@ export default async function Landing() {
               </section>
 
             </div>
-
-            <footer className="pub-foot">
-              <span>
-                © {new Date().getFullYear()} {site.legalEntity}
-              </span>
-              <nav>
-                <Link href="/pricing">Pricing</Link>
-                <Link href="/waitlist">Waitlist</Link>
-                <Link href="/terms">Terms</Link>
-                <Link href="/privacy">Privacy</Link>
-              </nav>
-            </footer>
           </div>
+        }
+        wall={
+          <>
+            <section id="backers" className="gate land-wall">
+              <DitherField className="gate-dither" pattern="horizon" intensity={0.7} speed={0.6} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
+
+              <Header signedIn={signedIn} />
+
+              <div className="gate-col land-col land-wall-col">
+                <i className="gate-beam" data-line="left" aria-hidden="true" />
+                <i className="gate-beam" data-line="right" aria-hidden="true" />
+
+                <div className="gate-title land-title">
+                  <i className="gate-beam" data-line="top" aria-hidden="true" />
+                  <i className="gate-beam" data-line="bottom" aria-hidden="true" />
+                  <i className="gate-x" data-at="tl" aria-hidden="true" />
+                  <i className="gate-x" data-at="tr" aria-hidden="true" />
+                  <i className="gate-x" data-at="bl" aria-hidden="true" />
+                  <i className="gate-x" data-at="br" aria-hidden="true" />
+                  <h2>
+                    Built with the teams
+                    <br />
+                    who backed it <em>early</em>.
+                  </h2>
+                </div>
+
+                <div className="gate-body land-body">
+                  <p className="land-lead">The founding partners, backers and supporters who chipped in before launch. They get in first and keep their place here. The dotted seats are still open.</p>
+
+                  <div className="land-actions">
+                    <div className="land-buttons">
+                      <Link href="/waitlist#sponsor" className="gate-cta land-cta">
+                        Take a seat
+                        <IconArrowRight size={16} />
+                      </Link>
+                    </div>
+                    <ul className="gate-checks land-checks">
+                      {[`One-time, from ${lowestTier}`, "Invited first", "Your name stays here"].map((item) => (
+                        <li key={item}>
+                          <IconCheck size={12} />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <SponsorWall tiers={SPONSOR_TIERS} sponsors={sponsors} />
+                </div>
+              </div>
+
+              <div className="gate-foot" />
+            </section>
+
+            <SiteFooter signedIn={signedIn} onLanding />
+          </>
         }
       />
     </main>

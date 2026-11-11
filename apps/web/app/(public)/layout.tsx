@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/Brand";
+import { SiteFooter } from "@/components/SiteFooter";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { demoCta, publicOnly, signInHref, signInLabel, site } from "./site";
+import { demoCta, publicOnly, signInHref, signInLabel } from "./site";
 import "../landing.css";
 import "./public.css";
 
@@ -37,17 +38,7 @@ export default async function PublicLayout({ children }: { children: React.React
 
       {children}
 
-      <footer className="pub-foot">
-        <span>
-          © {new Date().getFullYear()} {site.legalEntity}
-        </span>
-        <nav>
-          <Link href="/pricing">Pricing</Link>
-          <Link href="/waitlist">Waitlist</Link>
-          <Link href="/terms">Terms</Link>
-          <Link href="/privacy">Privacy</Link>
-        </nav>
-      </footer>
+      <SiteFooter signedIn={signedIn} />
     </main>
   );
 }

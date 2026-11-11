@@ -22,6 +22,10 @@
 @font-face { font-family: "Basier Square Mono"; src: url("/fonts/BasierSquareMono-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 
 :root {
+  /* paper grain for the demo sheets (landing + waitlist): fine fractal noise in warm ink, alpha only,
+     tiled as a background layer so it sits under the type and costs one decoded image */
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.13 0 0 0 0 0.09 1.1 0 0 0 -0.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --paper-fibre: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.09' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.17 0 0 0 0 0.12 0 0 0.7 0 -0.36'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
   /* color */
   /* No pure #fff / #000 anywhere: off-white surfaces, near-black ink, tinted shadows.
      Text pairs hold WCAG AA (≥4.5:1) on every surface they sit on, including --faint. */
@@ -1953,3 +1957,21 @@ button.primary::after, a.btn.primary::after, a.btn-link:not(.ghost)::after, .sen
   .gate-title { padding: 22px 20px 24px; }
   .gate-body { padding: 24px 20px 0; }
 }
+
+/* drifting document text behind a closing CTA (components/GlyphField.tsx).
+   The host section is the positioning box; the field fades in from the right so the copy stays clean. */
+.glyph-host { position: relative; isolation: isolate; overflow: hidden; }
+.glyph-host > :not(.glyph-field) { position: relative; z-index: 1; }
+.glyph-field {
+  position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  opacity: 0; transition: opacity 900ms ease;
+  --glyph-fade: linear-gradient(to right, transparent 0 34%, #000 78%), linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+  -webkit-mask-image: var(--glyph-fade);
+  -webkit-mask-composite: source-in;
+  mask-image: var(--glyph-fade);
+  mask-composite: intersect;
+}
+.glyph-field[data-ready] { opacity: 1; }
+@media (max-width: 560px) { .glyph-field { display: none; } }
+@media (prefers-reduced-motion: reduce) { .glyph-field { transition: none; } }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { GlyphField } from "@/components/GlyphField";
 import { IconArrowRight, IconCheck } from "@/components/icons";
 import { takenSlots } from "@/lib/waitlist-db";
 import { PubTitle } from "../PubTitle";
@@ -89,7 +90,8 @@ export default async function WaitlistPage() {
         </ul>
       </section>
 
-      <section className="wl-sec wl-final">
+      <section className="wl-sec wl-final glyph-host">
+        <GlyphField />
         <h2>
           Save your place before the first <em>invites</em> go out.
         </h2>

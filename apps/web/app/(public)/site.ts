@@ -16,7 +16,7 @@ export const site = {
 export const publicOnly = process.env.PUBLIC_SITE_ONLY === "1";
 
 /** Where "Sign in" and "Get started" go. */
-export const signInHref = publicOnly ? "/waitlist#join" : "/login";
+export const signInHref = publicOnly ? "/waitlist" : "/login";
 export const signInLabel = publicOnly ? "Join the waitlist" : "Sign in";
 
 /** Where "Contact sales" goes: a mailto when CONTACT_EMAIL is set, otherwise sign-in. */

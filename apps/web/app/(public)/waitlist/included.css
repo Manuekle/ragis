@@ -67,6 +67,15 @@
   transition: transform 700ms var(--ease-smooth-out), opacity 400ms ease;
 }
 .inc-card[aria-current] .inc-art.ill img { transform: translateX(-50%); opacity: 1; }
+/* folded slices show frosted glass, not the drawing: a blurred, tinted pane over the frame that clears as the card opens */
+.inc-art::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 72%, transparent), color-mix(in oklab, var(--surface) 58%, transparent));
+  -webkit-backdrop-filter: blur(30px) saturate(140%); backdrop-filter: blur(30px) saturate(140%);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 22%, transparent), inset 0 0 0 1px color-mix(in oklab, var(--text) 7%, transparent);
+  opacity: 1; transition: opacity 420ms ease;
+}
+.inc-card[aria-current] .inc-art::after { opacity: 0; transition: opacity 500ms ease 180ms; }
 .inc-card[aria-current] .inc-art { background: radial-gradient(120% 90% at 50% 100%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 70%), var(--surface-2); }
 
 /* the number sits centred in a column as wide as a folded slice, under the drawing. Folded it is
@@ -130,6 +139,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .inc-card, .inc-art, .inc-art.ill img, .inc-label, .inc-body, .inc-n { transition-duration: 1ms !important; transition-delay: 0ms !important; }
+  .inc-card, .inc-art, .inc-art::after, .inc-art.ill img, .inc-label, .inc-body, .inc-n { transition-duration: 1ms !important; transition-delay: 0ms !important; }
   .inc-count b { animation: none; }
 }

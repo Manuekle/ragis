@@ -52,11 +52,12 @@
 .td-sheet, .td-paper {
   position: absolute; inset: 0;
   color: var(--ink); background: var(--paper);
-  /* a faint fibre and a little light falloff so it reads as stock, not as a div */
+  font-family: var(--font-typewriter), var(--mono); font-synthesis: none;
+  /* grain and long fibres in the stock (shared with the hero, see --paper-grain), and a little light falloff */
   background-image:
     radial-gradient(120% 90% at 30% 0%, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(rgba(29, 29, 31, 0.035) 0.6px, transparent 0.8px);
-  background-size: auto, 3px 3px;
+    var(--paper-grain), var(--paper-fibre);
+  background-size: auto, 180px 180px, 260px 260px;
   transition: transform 750ms cubic-bezier(0.32, 1.18, 0.5, 1), box-shadow 700ms var(--ease-smooth-out);
 }
 .td-sheet {
@@ -89,31 +90,31 @@
 .td-p-brand { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; padding: 0 12px; border-right: 1px solid var(--ink-rule); }
 .td-p-brand span { font-size: 7px; font-weight: 600; letter-spacing: 0.1em; color: var(--ink-soft); }
 .td-p-brand strong { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.td-p-no { display: grid; place-items: center; min-width: 52px; padding: 0 12px; font-family: var(--mono); font-size: 19px; letter-spacing: -0.02em; }
+.td-p-no { display: grid; place-items: center; min-width: 52px; padding: 0 12px; font-size: 20px; letter-spacing: 0; }
 
 .td-p-body {
   flex: 1; min-height: 0; overflow: hidden;
   display: flex; flex-direction: column; gap: 8px; padding: 13px 14px 0;
-  font-family: var(--serif); font-size: 10.5px; line-height: 1.5; color: var(--ink);
+  font-size: 10.5px; line-height: 1.5; color: var(--ink);
 }
-.td-d-h { margin: 0; font-family: var(--font); font-size: 7.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.td-d-h { margin: 0; font-size: 8.5px; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase; }
 .td-d-p { margin: 0; text-wrap: pretty; }
-.td-d-p b { margin-right: 2px; font-family: var(--mono); font-size: 9.5px; font-weight: 400; }
+.td-d-p b { margin-right: 2px; font-size: 9.5px; font-weight: 400; }
 .td-d-list { margin: 0; padding: 0 0 0 15px; display: flex; flex-direction: column; gap: 4px; }
 .td-d-list li { padding-left: 2px; text-wrap: pretty; }
-.td-d-list li::marker { font-family: var(--mono); font-size: 9px; }
+.td-d-list li::marker { font-size: 9px; }
 .td-d-list .td-greek { padding-top: 5px; }
 
 .td-greek { display: flex; flex-direction: column; gap: 7px; padding-top: 4px; }
 .td-greek i { display: block; height: 4px; border-radius: 2px; background: var(--ink-greek); }
 
-.td-table { display: flex; flex-direction: column; font-family: var(--mono); font-size: 9.5px; letter-spacing: -0.01em; }
+.td-table { display: flex; flex-direction: column; font-size: 9.5px; letter-spacing: 0; }
 .td-tr { position: relative; display: grid; align-items: center; height: 24px; padding: 0 6px; border-bottom: 1px solid var(--ink-line); }
 .td-table[data-cols="2"] .td-tr { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
 .td-table[data-cols="4"] .td-tr { grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); }
 .td-tr > span { position: relative; white-space: nowrap; }
 .td-tr > span + span { text-align: right; }
-.td-tr.is-head { height: 22px; border-top: 1px solid var(--ink-rule); border-bottom-color: var(--ink-rule); font-family: var(--font); font-size: 7px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.td-tr.is-head { height: 22px; border-top: 1px solid var(--ink-rule); border-bottom-color: var(--ink-rule); font-size: 7.5px; font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; }
 .td-tr.is-total { border-top: 1px solid var(--ink-rule); border-bottom: 0; font-weight: 600; }
 /* a highlighted row: the marker runs along it, left to right */
 .td-tr::before {
@@ -126,7 +127,7 @@
 .td-p-foot {
   flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 26px; padding: 0 12px;
   border-top: 1px solid var(--ink-rule);
-  font-family: var(--mono); font-size: 8px; letter-spacing: 0.02em; color: var(--ink-soft); white-space: nowrap;
+  font-size: 8.5px; letter-spacing: 0.02em; color: var(--ink-soft); white-space: nowrap;
 }
 /* the spreadsheet's sheet tabs */
 .td-p-tabs { display: flex; align-self: stretch; margin-left: -12px; }
@@ -146,6 +147,8 @@
 .td-circled { position: relative; display: inline-block; white-space: nowrap; }
 .td-pen { position: absolute; left: -7px; top: -4px; width: calc(100% + 14px); height: calc(100% + 8px); overflow: visible; pointer-events: none; }
 .td-pen path { fill: none; stroke: var(--pen); stroke-width: 1.3; stroke-linecap: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 1; }
+/* hidden until it draws: with non-scaling-stroke, Chrome's dash maths can leave a sliver of the line showing */
+.td-pen:not([data-on]) path { opacity: 0; }
 .td-pen[data-on] path { stroke-dashoffset: 0; transition: stroke-dashoffset 700ms cubic-bezier(0.55, 0.08, 0.35, 1); }
 
 /* scan beam: a lit edge with a soft trail, crossing the page once. It moves by transform on its
