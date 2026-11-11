@@ -3,6 +3,7 @@ const illustrationSizes = {
   pricing: { width: 1651, height: 953 },
   privacy: { width: 1651, height: 953 },
   terms: { width: 1651, height: 953 },
+  waitlist: { width: 1651, height: 953 },
 };
 
 export type IllustrationName = keyof typeof illustrationSizes;

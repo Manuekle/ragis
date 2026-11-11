@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { useOrg } from "../layout";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 import { ClickUpLogo, GmailLogo, SlackLogo } from "@/components/brand-logos";
-import { IconAlert, IconBuilding, IconLock, IconPause, IconPlay, IconRefresh, IconSpinner, IconTrash, IconUser, IconX } from "@/components/icons";
+import { IconAlert, IconBuilding, IconLock, IconPause, IconPlay, IconPlus, IconRefresh, IconSpinner, IconTrash, IconUser, IconX } from "@/components/icons";
 import { Checkbox, Seg, Toast } from "@/components/motion";
 import { Disclosure, Select, useConfirm } from "@/components/ui";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
@@ -371,8 +371,10 @@ function AppCard({
     });
   }
 
+  const editingConn = mine.find((c) => c.id === editing) ?? null;
+
   return (
-    <article className="card conn-card" data-provider={p.id}>
+    <article className={`card conn-card${mine.length === 0 ? " is-idle" : ""}${editingConn ? " is-editing" : ""}`} data-provider={p.id}>
       <header className="conn-head">
         <span className="conn-logo" aria-hidden="true">
           <Logo size={26} />
@@ -383,53 +385,55 @@ function AppCard({
         </div>
       </header>
 
-      {mine.map((c) => {
-        const problem = problemText(c, p.name);
-        const needsReconnect = c.status === "error" && (c.last_error_code === "reconnect_needed" || c.last_error_code === "owner_removed");
-        const manage = personal ? c.is_mine : canManage;
-        return (
-          <section key={c.id} className="conn-account" aria-label={`${p.name} connection ${c.account_label}`}>
-            <div className="conn-account-row">
-              <div className="conn-account-meta">
-                <strong>{c.account_label}</strong>
-                <small className="muted">
-                  {personal ? "Only you" : `Everyone in ${c.workspace_name}`}
-                  {!personal && c.owner_name && ` · connected by ${c.is_mine ? "you" : c.owner_name}`}
-                  {c.item_count > 0 && ` · ${c.item_count.toLocaleString("en-US")} ${items[c.item_count === 1 ? 0 : 1]}`}
-                  {c.last_success_at && ` · updated ${ago(c.last_success_at)}`}
-                </small>
+      <div className="conn-body">
+        {mine.map((c) => {
+          const problem = problemText(c, p.name);
+          const needsReconnect = c.status === "error" && (c.last_error_code === "reconnect_needed" || c.last_error_code === "owner_removed");
+          const manage = personal ? c.is_mine : canManage;
+          // two short lines (who can see it / what it holds) so a long line never wraps with a stray separator
+          const who = [
+            personal ? "Only you" : `Everyone in ${c.workspace_name}`,
+            !personal && c.owner_name ? `connected by ${c.is_mine ? "you" : c.owner_name}` : null,
+          ].filter((m): m is string => !!m);
+          const what = [
+            c.item_count > 0 ? `${c.item_count.toLocaleString("en-US")} ${items[c.item_count === 1 ? 0 : 1]}` : null,
+            c.last_success_at ? `updated ${ago(c.last_success_at)}` : null,
+          ].filter((m): m is string => !!m);
+          return (
+            <section key={c.id} className="conn-account" aria-label={`${p.name} connection ${c.account_label}`}>
+              <div className="conn-account-row">
+                <div className="conn-account-meta">
+                  <strong>{c.account_label}</strong>
+                  <small className="conn-meta muted">
+                    {who.map((m) => (
+                      <span key={m}>{m}</span>
+                    ))}
+                  </small>
+                  {what.length > 0 && (
+                    <small className="conn-meta muted">
+                      {what.map((m) => (
+                        <span key={m}>{m}</span>
+                      ))}
+                    </small>
+                  )}
+                </div>
+                <StatusBadge c={c} />
               </div>
-              <StatusBadge c={c} />
-            </div>
 
-            {problem && c.status !== "needs_setup" && (
-              <p className={`conn-note${c.status === "error" ? " err" : ""}`}>
-                <IconAlert size={14} />
-                {problem}
-              </p>
-            )}
-            {c.problems.length > 0 && (
-              <p className="conn-note">
-                <IconAlert size={14} />
-                {c.problems.length === 1 ? "One channel couldn't be read" : `${c.problems.length} channels couldn't be read`}. Invite the app to them in Slack, or remove them from the list.
-              </p>
-            )}
+              {problem && c.status !== "needs_setup" && (
+                <p className={`conn-note${c.status === "error" ? " err" : ""}`}>
+                  <IconAlert size={14} />
+                  {problem}
+                </p>
+              )}
+              {c.problems.length > 0 && (
+                <p className="conn-note">
+                  <IconAlert size={14} />
+                  {c.problems.length === 1 ? "One channel couldn't be read" : `${c.problems.length} channels couldn't be read`}. Invite the app to them in Slack, or remove them from the list.
+                </p>
+              )}
 
-            {editing === c.id ? (
-              <SettingsEditor
-                org={org}
-                c={c}
-                name={p.name}
-                onDone={(saved) => {
-                  setEditing(null);
-                  if (saved) {
-                    notify(c.status === "needs_setup" ? `Bringing in from ${p.name}. This can take a few minutes.` : "Changes saved");
-                    reload();
-                  }
-                }}
-              />
-            ) : (
-              manage && (
+              {editing !== c.id && manage && (
                 <div className="conn-actions">
                   {needsReconnect ? (
                     <button type="button" className="primary small" onClick={() => reconnect(c)} disabled={!!busy || !p.available}>
@@ -462,52 +466,67 @@ function AppCard({
                     Disconnect
                   </button>
                 </div>
-              )
-            )}
-          </section>
-        );
-      })}
+              )}
+            </section>
+          );
+        })}
 
-      {!p.available ? (
-        <p className="conn-note">
-          <IconAlert size={14} />
-          Not available yet. {canManage ? `Your technical team needs to finish setting up ${p.name} on the server.` : "Ask your administrator."}
-        </p>
-      ) : !p.allowed ? (
-        mine.length === 0 && (
+        {!p.available ? (
           <p className="conn-note">
-            <IconLock size={14} />
-            Turned off by your administrator.
+            <IconAlert size={14} />
+            Not available yet. {canManage ? `Your technical team needs to finish setting up ${p.name} on the server.` : "Ask your administrator."}
           </p>
-        )
-      ) : (
-        canConnect && (
-          <div className="conn-connect">
-            {folders.length > 1 && (
-              <label className="conn-folder">
-                <small className="muted">{personal ? "Search them in" : "Make it searchable in"}</small>
-                <Select
-                  size="sm"
-                  ariaLabel="Folder"
-                  value={folder}
-                  onChange={setFolder}
-                  options={folders.map((w) => ({ value: w.id, label: w.name }))}
-                />
-              </label>
-            )}
-            <button type="button" className={mine.length ? "ghost small" : "primary small"} onClick={connect} disabled={!!busy || !folder}>
-              {busy === "connect" && <IconSpinner size={14} />}
-              {mine.length ? `Connect another ${p.name} account` : `Connect ${p.name}`}
-            </button>
-          </div>
-        )
-      )}
-      {!personal && !canManage && mine.length === 0 && p.available && p.allowed && (
-        <p className="muted conn-hint">An administrator can connect {p.name} for your company.</p>
+        ) : !p.allowed ? (
+          mine.length === 0 && (
+            <p className="conn-note">
+              <IconLock size={14} />
+              Turned off by your administrator.
+            </p>
+          )
+        ) : (
+          canConnect && (
+            <div className={`conn-connect${mine.length ? " is-extra" : ""}`}>
+              {folders.length > 1 && (
+                <label className="conn-folder">
+                  <span className="muted">{personal ? "Search them in" : "Searchable in"}</span>
+                  <Select
+                    size="sm"
+                    ariaLabel="Folder"
+                    value={folder}
+                    onChange={setFolder}
+                    options={folders.map((w) => ({ value: w.id, label: w.name }))}
+                  />
+                </label>
+              )}
+              <button type="button" className={mine.length ? "quiet small" : "primary small"} onClick={connect} disabled={!!busy || !folder}>
+                {busy === "connect" ? <IconSpinner size={14} /> : mine.length > 0 && <IconPlus size={14} />}
+                {mine.length ? `Connect another ${p.name} account` : `Connect ${p.name}`}
+              </button>
+            </div>
+          )
+        )}
+        {!personal && !canManage && mine.length === 0 && p.available && p.allowed && (
+          <p className="muted conn-hint">An administrator can connect {p.name} for your company.</p>
+        )}
+      </div>
+
+      {editingConn && (
+        <SettingsEditor
+          org={org}
+          c={editingConn}
+          name={p.name}
+          onDone={(saved) => {
+            setEditing(null);
+            if (saved) {
+              notify(editingConn.status === "needs_setup" ? `Bringing in from ${p.name}. This can take a few minutes.` : "Changes saved");
+              reload();
+            }
+          }}
+        />
       )}
 
       {error && (
-        <div className="alert">
+        <div className="alert conn-alert">
           <IconAlert size={16} />
           <span style={{ flex: 1 }}>{error}</span>
           <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label="Dismiss">
@@ -642,12 +661,19 @@ function ConnectionsView() {
 
         {data === undefined ? (
           <SkeletonStatus label="Loading connected apps…">
-            <div className="conn-grid">
+            <div className="conn-list">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="card conn-card">
-                  <Skel w={36} h={36} r={10} />
-                  <Skel w="70%" h={14} />
-                  <Skel w="90%" h={12} />
+                <div key={i} className="card conn-card is-idle">
+                  <div className="conn-head">
+                    <Skel w={44} h={44} r={12} />
+                    <div className="stack" style={{ gap: 8, flex: 1 }}>
+                      <Skel w="35%" h={14} />
+                      <Skel w="85%" h={12} />
+                    </div>
+                  </div>
+                  <div className="conn-body">
+                    <Skel w={140} h={30} r={12} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -656,18 +682,24 @@ function ConnectionsView() {
           data && (
             <>
               <section className="conn-section" aria-labelledby="conn-personal">
-                <h3 id="conn-personal" className="conn-section-title">
-                  <IconUser size={15} />
-                  Just for you
-                </h3>
-                <div className="conn-grid">{personal.map(card)}</div>
+                <header className="conn-section-head">
+                  <h3 id="conn-personal" className="conn-section-title">
+                    <IconUser size={15} />
+                    Just for you
+                  </h3>
+                  <p className="muted">Private to your account. Nobody else can see what you bring in.</p>
+                </header>
+                <div className="conn-list">{personal.map(card)}</div>
               </section>
               <section className="conn-section" aria-labelledby="conn-company">
-                <h3 id="conn-company" className="conn-section-title">
-                  <IconBuilding size={15} />
-                  For your company
-                </h3>
-                <div className="conn-grid">{company.map(card)}</div>
+                <header className="conn-section-head">
+                  <h3 id="conn-company" className="conn-section-title">
+                    <IconBuilding size={15} />
+                    For your company
+                  </h3>
+                  <p className="muted">Shared with everyone in the folder you pick. Administrators connect these.</p>
+                </header>
+                <div className="conn-list">{company.map(card)}</div>
               </section>
 
               {data.can_manage_company && (

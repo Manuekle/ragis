@@ -1,121 +1,125 @@
-# ragsis
+# Ragsis
 
-Plataforma B2B de RAG empresarial: convierte documentos internos en **respuestas verificables con citas**,
-respetando permisos por tenant, workspace, grupo y documento. Implementación de las fases **F1 (Core SaaS)**,
-la parte técnica de **F2 (calidad)** y **F3 multimodal (OCR, figuras, tablas, ecuaciones — RAG-04)** del
-*Plan Maestro — Plataforma RAG Empresarial AWS* v1.0.
+Plataforma B2B de RAG empresarial: convierte documentos internos en **respuestas verificables con citas**, respetando
+permisos por tenant, workspace, grupo y documento. Implementa las fases **F1 (Core SaaS)**, la parte técnica de **F2
+(calidad)** y **F3 multimodal (OCR, figuras, tablas y ecuaciones, RAG-04)** del *Plan Maestro — Plataforma RAG
+Empresarial AWS* v1.0.
 
-```
-apps/
-  web/              Next.js 16 (UX + BFF con cookie httpOnly)
-  api/              TypeScript/Fastify · control plane, authZ, uploads, query API
-services/
-  rag-engine/       Python/FastAPI · query orchestrator (híbrido + RRF + rerank + verificación de citas)
-  ingest-worker/    Python · SQS → validación → antimalware → parsing (+OCR, multimodal/VLM) → chunking → PII → embeddings → índice
-  ai-gateway/       Python · ModelRegistry, política de residencia, fallback acotado, presupuestos
-packages/
-  ragsis-core/      Python · settings, BD con contexto RLS, token interno, utilidades de texto
-  contracts/        OpenAPI v1
-  policy/           Índice de pruebas de autorización
-db/migrations/      Esquema + RLS forzada + funciones SECURITY DEFINER acotadas
-infra/
-  docker/           Compose local (Postgres+pgvector, SeaweedFS S3, ElasticMQ SQS, servicios)
-  terraform/        Módulos AWS: network, security, storage, database, compute, edge, observability
-ops/runbooks/       DLQ, reindex, restore, incidente cross-tenant, borrado, bootstrap de BD
-eval/               Golden set, corpus de muestra y harness de métricas
-docs/adr/           ADR-001…023
-```
+<p>
+  <img alt="TypeScript" src="docs/assets/icons/tech/typescript.svg" height="30">
+  <img alt="Node.js" src="docs/assets/icons/tech/node-js.svg" height="30">
+  <img alt="Python" src="docs/assets/icons/tech/python.svg" height="30">
+  <img alt="FastAPI" src="docs/assets/icons/tech/fastapi.svg" height="30">
+  <img alt="PostgreSQL" src="docs/assets/icons/tech/postgresql.svg" height="30">
+  <img alt="Docker" src="docs/assets/icons/tech/docker.svg" height="30">
+  <img alt="Terraform" src="docs/assets/icons/tech/terraform.svg" height="30">
+  &nbsp;·&nbsp;
+  <img alt="Amazon EC2" src="docs/assets/icons/aws/ec2.svg" height="30">
+  <img alt="Amazon S3" src="docs/assets/icons/aws/s3.svg" height="30">
+  <img alt="Amazon SQS" src="docs/assets/icons/aws/sqs.svg" height="30">
+  <img alt="Amazon Cognito" src="docs/assets/icons/aws/cognito.svg" height="30">
+  <img alt="Amazon Bedrock" src="docs/assets/icons/aws/bedrock.svg" height="30">
+</p>
 
-## Arranque local
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/containers-dark.svg">
+  <img alt="Contenedores de Ragsis: web, api, rag-engine, ingest-worker, Postgres, S3, SQS y proveedores de modelos" src="docs/diagrams/containers.svg">
+</picture>
 
-Requisitos: Docker, `uv`, `pnpm` (Node 24+).
+## Qué hace
+
+- **Respuestas con citas verificables.** Cada cita y cada cifra deben estar en el texto citado; si falta evidencia, el
+  sistema se abstiene.
+- **Permisos de verdad.** El tenant se resuelve por membresía, RLS está forzada en la base y la ACL del documento se aplica
+  en SQL antes de recuperar nada.
+- **Documentos reales.** PDF, DOCX, PPTX, XLSX, imágenes, HTML, Markdown, TXT y CSV, con OCR, tablas, ecuaciones y figuras.
+- **Más que búsqueda.** GraphRAG, agentes con política deny-by-default, workflows con revisión humana, firma electrónica y
+  conectores a Gmail, Slack y ClickUp. Ver [docs/features.md](docs/features.md).
+- **Funciona sin red.** El proveedor de modelos local es determinista; Bedrock y Ollama son opcionales.
+
+## Arranque rápido
+
+Requisitos: Docker, `uv`, `pnpm` (Node 24 o superior).
 
 ```bash
 make up        # genera .env con secretos aleatorios y levanta el stack
-make up-obs    # igual + Jaeger con trazas OpenTelemetry (UI http://localhost:16686)
+make up-obs    # igual, con Jaeger y trazas OpenTelemetry (http://localhost:16686)
 ```
 
-- Web: http://localhost:3000 (login de desarrollo por email)
-- API: http://localhost:4000 · contrato en `packages/contracts/openapi.yaml`
+- Web: <http://localhost:3000> (login de desarrollo: entra con cualquier correo)
+- `make seed`: crea la organización «ACME Demo (local)» con `prueba@ragsis.test` y nueve documentos para probar Ask
+  ([detalle y preguntas de prueba](docs/development.md#usuario-y-datos-de-prueba))
+- API: <http://localhost:4000>, con el contrato en [`packages/contracts/openapi.yaml`](packages/contracts/openapi.yaml)
 
-Por defecto todo corre **sin red ni credenciales** con el proveedor local determinista (ADR-010).
-Para Bedrock: `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1`
-(o `bedrock-claude-sonnet-5-5@v1`) y credenciales AWS en el entorno de los contenedores.
-Para on-prem/offline: modelos `ollama-*` con `OLLAMA_BASE_URL`.
+Más comandos, pruebas y convenciones: [docs/development.md](docs/development.md).
 
-**SSO (OIDC).** Con `AUTH_MODE=oidc`, `OIDC_ISSUER` y `OIDC_AUDIENCE` (= client_id) la web usa Authorization Code
-+ PKCE y la API valida el `id_token`. Para probar sin IdP real: `make mock-oidc` (issuer `http://localhost:9000`,
-client_id `ragsis-web`). En AWS se usa Cognito (Hosted UI) u otro IdP corporativo.
+## Entornos
 
-**Integraciones.** Admins crean claves `rsk_…` en *Gobierno* (o `POST /v1/organizations/{org}/api-keys`) con
-scopes `query`, `documents:read`, `documents:write` y alcance por workspace.
+La regla: **toda infraestructura de AWS se ensaya primero en Floci (emulador local) y solo después se crea en AWS real.**
 
-**OCR.** `OCR_PROVIDER=textract` habilita OCR de PDFs escaneados e imágenes en AWS (respeta la política de datos del tenant).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/environments-dark.svg">
+  <img alt="Local con Docker Compose, ensayo en Floci y AWS real" src="docs/diagrams/environments.svg">
+</picture>
 
-**Multimodal (RAG-04, ADR-018).** Formatos: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT, CSV.
-- Tablas (incluidos gráficos nativos de Office convertidos a tabla con sus cifras) y ecuaciones son chunks propios con
-  página, bbox y caption; funcionan sin ningún modelo extra.
-- Figuras: `AI_VISION_MODEL=bedrock-nova-lite@v1` (o `bedrock-claude-sonnet-5-5@v1`, u `ollama-qwen3-vl-8b@v1` para
-  tenants restringidos/on-prem) las describe con contexto del documento y las guarda como activo S3 citable. Sin VLM,
-  una figura se indexa solo si tiene caption o texto alternativo.
-- `PARSER_PREFERENCE=docling` (con `docling` instalado en la imagen del worker) añade layout, tablas de PDF, fórmulas y
-  bbox; `DOCLING_OCR=true` da OCR local sin red.
-- Consulta: con un generador con visión, las imágenes de las figuras citadas se adjuntan al modelo (`RAG_VLM_ENHANCED`);
-  el verificador de citas sigue exigiendo que toda cifra esté en el texto de la evidencia.
+| Entorno | Comando | Detalle |
+|---|---|---|
+| Local | `make up` | Docker Compose con SeaweedFS (S3) y ElasticMQ (SQS) |
+| Ensayo | `make rehearse` | Terraform del piloto contra Floci ([guía](docs/guides/floci.md)) |
+| AWS real | `terraform apply` | Piloto en `us-east-2`: una EC2, S3, SQS, KMS, ECR y Cognito ([runbook](ops/runbooks/piloto-aws.md)) |
 
-**GraphRAG (RAG-05, ADR-019).** Habilitado por plan (business/private) o por organización
-(`PATCH /v1/organizations/{org}/settings {"graph_mode": "on"|"off"|"inherit"}`). La ingesta extrae entidades y
-relaciones por chunk con `AI_GRAPH_MODEL` (por defecto `local-graph-heuristic@v1`, offline; o un LLM permitido por la
-política del tenant). Toda entidad/relación es visible solo si el usuario puede leer al menos un chunk fuente, y sus
-descripciones se arman solo con fuentes visibles. Consulta: `mode` = `auto|off|local|global|hybrid`; las citas siguen
-siendo chunks. Backfill tras activarlo: `make reindex ARGS="--org <uuid> --mode graph"`.
+Dónde corre cada cosa y cuánto cuesta el piloto con el plan FREE: [docs/environments.md](docs/environments.md).
 
-**Reindexado.** `make reindex ARGS="--org <uuid> --mode embeddings --model <id> --dry-run"` (ver `ops/runbooks/reindex.md`).
+## Arquitectura
 
-## Onboarding y Agent Studio
+```
+apps/
+  web/              Next.js 16: interfaz y BFF con cookie httpOnly; el login vive aquí
+  api/              TypeScript/Fastify: plano de control, authZ, uploads, consultas
+services/
+  rag-engine/       Python/FastAPI: consulta (híbrido + RRF + rerank + verificación de citas)
+  ingest-worker/    Python: SQS → validación → antimalware → parseo (+OCR, multimodal) → chunking → PII → embeddings → índice
+  ai-gateway/       Python: ModelRegistry, política de residencia, fallback acotado, presupuestos
+packages/
+  ragsis-core/      Python: ajustes, BD con contexto RLS, token interno, utilidades de texto
+  contracts/        OpenAPI v1
+  policy/           Índice de pruebas de autorización
+db/migrations/      Esquema, RLS forzada y funciones SECURITY DEFINER acotadas
+infra/
+  docker/           Compose local y del piloto
+  terraform/        Módulos AWS (network, security, storage, database, compute, edge, observability) y entornos dev y pilot
+ops/runbooks/       DLQ, reindex, restore, incidente cross-tenant, borrado, bootstrap de BD, piloto en AWS
+eval/               Golden set, corpus de muestra y métricas
+docs/               Documentación, ADR, diagramas e iconos
+```
 
-El [ADR-020](docs/adr/README.md#adr-020--onboarding-sectorial-y-agent-studio-hitos-a-b-d-de-la-especificación-de-agentes) documenta el onboarding y Agent Studio. Al crear una organización la web abre
-**Setup** (`/app/{org}/onboarding`): 9 pasos reanudables (sector, objetivos, documentos, privacidad, espacios, agentes
-sugeridos, prueba controlada, activar). Las recomendaciones salen de presets deterministas por sector; activar no
-publica agentes ni habilita acciones externas. La calificación comercial (sector, tamaño, comprador, usuarios iniciales, fuentes documentales, señales de dolor, canal de origen) se pregunta en la pantalla de alta, antes de entrar a la app, y produce un puntaje interno que la API no expone (ADR-021). **Agent Studio** (`/app/{org}/agents`) crea agentes desde plantillas o
-en blanco, valida la definición contra la política del tenant, la prueba en sandbox (búsqueda real con tu ACL,
-escrituras simuladas) y publica versiones semánticas inmutables.
+Cómo fluye un documento y una pregunta, con diagramas paso a paso: [docs/architecture.md](docs/architecture.md).
 
-**Workflows** (`/app/{org}/workflows`) encadenan agentes publicados con revisión humana, gates de aprobación y
-condiciones; cada versión fija la versión de sus agentes. Los runs se inician con `Idempotency-Key`, se ejecutan con
-los permisos de quien los inicia y esperan en el **Inbox** de quien tenga el rol funcional (asignado en *Gobierno →
-Roles*). Una aprobación queda atada al hash de lo revisado y a las versiones de documento citadas; un rechazo
-detiene el run. **Activity** muestra la línea de tiempo, decisiones y eventos de cada run.
+## Documentación
 
-**Ragsis Sign** (`/app/{org}/signatures`) permite crear sobres con PDF de la Biblioteca o generarlos desde un workflow.
-Un segundo usuario con permiso aprueba el envío. Cada firmante revisa la copia fijada del documento, escribe su
-nombre y acepta firmar con su cuenta verificada o mediante una invitación personal por email. Al finalizar, la app
-genera un PDF con la hoja de firmas y un certificado de auditoría sellado con Ed25519. El verificador público
-`/sign/verify` compara los archivos con las huellas registradas sin subirlos. Los enlaces compartidos y las
-invitaciones externas respetan los dominios autorizados en *Gobierno → External sharing*.
-
-En **Signatures → My signatures** puedes guardar hasta seis imágenes PNG o JPG y elegir una al firmar.
-También puedes cargar una imagen para un solo sobre, incluso como invitado. La imagen queda incorporada
-a la hoja final y el certificado registra su huella.
-
-Si ya tienes el stack local levantado, actualiza la API y la web con
-`docker compose -f infra/docker/compose.yml --env-file .env up -d --build --wait api web`.
-Compose aplica la migración antes de iniciar la API. Los sobres del simulador siguen disponibles como historial.
-
-Para enviar invitaciones y avisos de finalización en AWS, configura `signature_email_from` y
-`signature_email_identity_arn` en Terraform con una identidad SES verificada en la región del API y con acceso de
-producción. En una instalación directa, el API recibe `SIGNATURE_EMAIL_FROM`, credenciales con `ses:SendEmail` y
-`PUBLIC_BASE_URL` con HTTPS. El modo de desarrollo ofrece enlaces de prueba al regenerar una invitación.
+| Tema | Documento |
+|---|---|
+| Índice de todo | [docs/README.md](docs/README.md) |
+| Arquitectura, modelo de datos, ingesta y consulta | [docs/architecture.md](docs/architecture.md) |
+| Entornos, piloto en AWS y costos | [docs/environments.md](docs/environments.md) |
+| Ensayar infraestructura en Floci | [docs/guides/floci.md](docs/guides/floci.md) |
+| Variables de entorno y secretos | [docs/configuration.md](docs/configuration.md) |
+| Inicio de sesión (dentro de la app, con Cognito) | [docs/authentication.md](docs/authentication.md) |
+| Seguridad | [docs/security.md](docs/security.md) |
+| Funciones: multimodal, GraphRAG, agentes, workflows, firma, conectores | [docs/features.md](docs/features.md) |
+| Desarrollo, pruebas y CI | [docs/development.md](docs/development.md) |
+| Decisiones (ADR-001 a ADR-028) | [docs/adr/README.md](docs/adr/README.md) |
+| Runbooks operativos | [ops/runbooks/README.md](ops/runbooks/README.md) |
 
 ## Pruebas
 
 ```bash
-make test      # pytest + vitest contra Postgres/S3 reales
-make e2e       # stack completo: provisiona 2 tenants, ingesta corpus, evalúa golden set con metas
-make tf-validate
+make test          # pytest + vitest contra Postgres y S3 reales
+make e2e           # stack completo: provisiona 2 tenants, ingesta el corpus y evalúa el golden set con metas
+make tf-validate   # terraform validate del entorno dev
 ```
 
-Resultado actual del E2E (`eval/golden/sample.yaml`, 18 preguntas incl. tablas en PPTX/XLSX, proveedor local):
+Resultado actual del E2E (`eval/golden/sample.yaml`, 18 preguntas incluidas tablas en PPTX y XLSX, proveedor local):
 
 | Métrica | Valor | Meta piloto |
 |---|---|---|
@@ -125,17 +129,20 @@ Resultado actual del E2E (`eval/golden/sample.yaml`, 18 preguntas incl. tablas e
 | abstention precision / recall | 1.00 / 1.00 | ≥ 0.90 |
 | ACL leakage | 0 | 0 |
 
-El golden set de muestra es sintético y pequeño; las metas deben medirse con 100–200 preguntas reales por vertical (F0/F2).
+El golden set de muestra es sintético y pequeño; las metas deben medirse con 100 a 200 preguntas reales por vertical
+(F0/F2).
 
 ## Seguridad (resumen)
 
-- Tenant resuelto **solo** por membresía verificada; nunca desde el cliente. No miembro → 404.
-- RLS **forzada** en todas las tablas de cliente; ACL de documento aplicada en la BD antes del retrieval (ADR-008).
-- Roles `ragsis_app` / `ragsis_worker` sin `BYPASSRLS`; token interno API→rag-engine de 60 s (ADR-009).
-- Upload directo a S3 con URL prefirmada; cuarentena, magic bytes, MIME, cifrado, macros, ZIP bomb y ClamAV.
+- Tenant resuelto **solo** por membresía verificada; nunca desde el cliente. No miembro: 404.
+- RLS **forzada** en todas las tablas de cliente; ACL de documento aplicada en la base antes del retrieval (ADR-008).
+- Roles `ragsis_app` y `ragsis_worker` sin `BYPASSRLS`; token interno API → rag-engine de 60 s (ADR-009).
+- Subida directa a S3 con URL prefirmada; cuarentena, magic bytes, MIME, cifrado, macros, ZIP bomb y ClamAV.
 - Prompt con contenido documental delimitado y escapado; verificador de citas y cifras; abstención por defecto.
 - Política de modelos por clasificación de datos: `restricted` nunca llama APIs externas; sin fallback silencioso a la nube.
 - Auditoría con cadena de hashes por tenant; logs JSON con redacción; preguntas guardadas solo como SHA-256.
+
+Detalle y controles de infraestructura: [docs/security.md](docs/security.md).
 
 ## Estado frente al Plan Maestro
 
@@ -150,7 +157,7 @@ El golden set de muestra es sintético y pequeño; las metas deben medirse con 1
 | AUTH-02 | Roles y grupos por workspace | ✅ |
 | RAG-03 | Reindex + deletion | ✅ dual-write de embeddings, full con swap atómico, purga, borrado verificable |
 | API-01 | API v1 y claves de servicio | ✅ scopes, alcance por workspace, expiración, revocación, auditoría |
-| AUTH-SSO | Login OIDC en la web | ✅ Authorization Code + PKCE, logout RP-initiated |
+| AUTH-SSO | Login en la web | ✅ Cognito con formulario dentro de la app ([ADR-026](docs/adr/README.md#adr-026--login-dentro-de-la-app-con-cognito-user_password_auth)); otros IdP OIDC con Authorization Code + PKCE y logout RP-initiated |
 | RAG-04 | Tablas/figuras multimodales | ✅ PPTX/XLSX/imágenes, figuras con VLM + activo S3, gráficos→tabla, ecuaciones, bbox, VLM-enhanced; Docling opcional |
 | RAG-05 | GraphRAG | ✅ Entidades/relaciones en Postgres con ACL derivada de los chunks (ADR-019), modos local/global/hybrid fusionados por RRF, multi-hop con citas a chunks; por plan u organización |
 | P0-01/02 | Perfil sectorial + onboarding de 9 pasos | ✅ Presets deterministas versionados, máquina de estados reanudable, espacios y agentes draft sin sobrescribir (ADR-020) |
@@ -158,9 +165,16 @@ El golden set de muestra es sintético y pequeño; las metas deben medirse con 1
 | P1-01…04 | Runtime de agentes, workflows/HITL, Approval Inbox, delegación limitada, trazas de run | ✅ Runner durable en Postgres + outbox, aprobaciones atadas a hash/versión, separación de funciones, budget, Activity (ADR-022) |
 | P2-01/02 | Firma electrónica y compartición controlada | ✅ Ragsis Sign, aprobaciones, invitaciones SES, PDF final, certificado sellado y verificación pública (ADR-024) |
 | CON-01 | Conectores | ✅ Gmail (personal, solo su dueño), Slack y ClickUp (empresa → workspace); OAuth+PKCE, tokens AES-GCM, delta sync con cursor/lease/backoff, tombstones y borrado al desconectar (ADR-025). Pendiente: validar con apps OAuth reales |
+| HIST-01 | Historial de conversaciones | ✅ Ask guarda cada turno en una conversación privada de su autor (RLS), con lista, reapertura por enlace `?c=`, renombrar y borrar; al releer se oculta todo turno cuyo documento citado ya no es visible (ADR-028). Pendiente: retención configurable y pasar el contexto previo al modelo |
+| INFRA-PILOT | Piloto de bajo costo en AWS | ✅ Terraform y Compose en una EC2 (us-east-2); ensayo previo en Floci (ADR-027). Pendiente: redeploy con el login nuevo |
 | ENT-01/02, AGT-01 | Dedicado, offline, agentic | ⏳ P2/P3 |
 
-Pendientes conocidos antes de producción: validar Textract y Bedrock (incl. visión de Nova/Claude) en la cuenta/región
-AWS real (aquí se probaron con dobles de prueba), validar Docling y su OCR local en la imagen del worker,
-medir el aporte de las descripciones VLM con el golden set real, refresh tokens de sesión, colector ADOT en
-ECS, CloudFront, pentest de permisos, y los gates legales/privacidad de la checklist (sección 20).
+Pendientes conocidos antes de producción: validar Textract y Bedrock (incluida la visión de Nova y Claude) en la
+cuenta y región reales (aquí se probaron con dobles de prueba), validar Docling y su OCR local en la imagen del worker,
+medir el aporte de las descripciones VLM con el golden set real, refresh tokens de sesión, colector ADOT en ECS,
+CloudFront, pentest de permisos, y los gates legales y de privacidad de la checklist (sección 20).
+
+---
+
+*Los iconos de AWS pertenecen a Amazon Web Services y los logotipos de tecnología a sus dueños; ver
+[docs/assets/icons/README.md](docs/assets/icons/README.md). Emulador local: [Floci](https://github.com/floci-io/floci) (MIT).*

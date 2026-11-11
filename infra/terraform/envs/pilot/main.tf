@@ -237,10 +237,12 @@ resource "aws_cognito_user_pool" "pilot" {
   }
 }
 
+# El login es un formulario de la app (apps/web/app/login): la web llama a Cognito con USER_PASSWORD_AUTH desde el servidor.
 resource "aws_cognito_user_pool_client" "web" {
   name                                 = "${local.name}-web"
   user_pool_id                         = aws_cognito_user_pool.pilot.id
   generate_secret                      = false
+  explicit_auth_flows                  = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "email", "profile"]

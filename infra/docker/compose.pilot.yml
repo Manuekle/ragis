@@ -115,6 +115,12 @@ services:
       PUBLIC_BASE_URL: https://${PILOT_HOSTNAME:?set PILOT_HOSTNAME}
       OIDC_ISSUER: ${OIDC_ISSUER:?set OIDC_ISSUER}
       OIDC_CLIENT_ID: ${OIDC_AUDIENCE:?set OIDC_AUDIENCE}
+      # Waitlist only: its own Turso database, separate from the app's PostgreSQL.
+      TURSO_DATABASE_URL: ${TURSO_DATABASE_URL:?set TURSO_DATABASE_URL}
+      TURSO_AUTH_TOKEN: ${TURSO_AUTH_TOKEN:?set TURSO_AUTH_TOKEN}
+      # Sender verified in Amazon SES for the waitlist's confirmation email. Empty = sign-ups
+      # are saved without confirming the address.
+      WAITLIST_EMAIL_FROM: ${WAITLIST_EMAIL_FROM:-}
     depends_on:
       api: { condition: service_healthy }
     healthcheck:

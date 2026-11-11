@@ -1,0 +1,186 @@
+/* ───────────── waitlist ─────────────
+   Built from the pricing page's parts: the title block, the dither stage behind one card
+   (.seats-stage) and the plan cards (.plan), here used as sponsor tiers with a slot meter. */
+
+.wl { padding-bottom: 0; }
+
+/* sign-up stage: the card sits on the same faded dither field as the seat picker */
+.seats-stage.wl-stage {
+  margin: 0; padding: 44px 40px 52px; scroll-margin-top: 24px;
+  animation: enter 500ms var(--ease-smooth-out) 360ms both;
+}
+.seats-stage.wl-stage .seats-dither { inset: 0; }
+/* joined: the badge takes the top of the page. The headline has done its job and steps aside,
+   so the badge's strap can come down from the top edge without crossing it. */
+.wl:has(.badge-show) > .pub-title { display: none; }
+
+.wl-card {
+  width: min(100%, 480px); padding: 24px 24px 20px;
+  border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-md);
+}
+.wl-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.wl-card h2 { font-size: 17px; letter-spacing: -0.01em; }
+/* each option has its own mesh: the upgrade button's four radial washes and pale base, retinted.
+   Free is green, Supporter blue, Backer violet, Founding partner gold. They stay light in both themes. */
+[data-tier="access"] {
+  --mesh:
+    radial-gradient(55% 130% at 0% 0%, #b8efce 0%, rgba(184, 239, 206, 0) 100%),
+    radial-gradient(55% 130% at 100% 0%, #d9f5a6 0%, rgba(217, 245, 166, 0) 100%),
+    radial-gradient(42% 110% at 66% 100%, #74d7a8 0%, rgba(116, 215, 168, 0) 100%),
+    radial-gradient(38% 100% at 30% 85%, #a6f0e4 0%, rgba(166, 240, 228, 0) 100%),
+    #eefaf3;
+  --glow: rgba(52, 190, 120, 0.5);
+}
+[data-tier="supporter"] {
+  --mesh:
+    radial-gradient(55% 130% at 0% 0%, #c4dafd 0%, rgba(196, 218, 253, 0) 100%),
+    radial-gradient(55% 130% at 100% 0%, #b8c4ff 0%, rgba(184, 196, 255, 0) 100%),
+    radial-gradient(42% 110% at 66% 100%, #7aaef8 0%, rgba(122, 174, 248, 0) 100%),
+    radial-gradient(38% 100% at 30% 85%, #a4e8fc 0%, rgba(164, 232, 252, 0) 100%),
+    #eef3fd;
+  --glow: rgba(80, 140, 248, 0.55);
+}
+[data-tier="backer"] {
+  --mesh:
+    radial-gradient(55% 130% at 0% 0%, #f5c6e6 0%, rgba(245, 198, 230, 0) 100%),
+    radial-gradient(55% 130% at 100% 0%, #cdaffa 0%, rgba(205, 175, 250, 0) 100%),
+    radial-gradient(42% 110% at 66% 100%, #a596f8 0%, rgba(165, 150, 248, 0) 100%),
+    radial-gradient(38% 100% at 30% 85%, #c9d2ff 0%, rgba(201, 210, 255, 0) 100%),
+    #f4f0fd;
+  --glow: rgba(139, 92, 246, 0.5);
+}
+[data-tier="founding"] {
+  --mesh:
+    radial-gradient(55% 130% at 0% 0%, #f9d9a4 0%, rgba(249, 217, 164, 0) 100%),
+    radial-gradient(55% 130% at 100% 0%, #f7c8b4 0%, rgba(247, 200, 180, 0) 100%),
+    radial-gradient(42% 110% at 66% 100%, #e6bb62 0%, rgba(230, 187, 98, 0) 100%),
+    radial-gradient(38% 100% at 30% 85%, #fff0bf 0%, rgba(255, 240, 191, 0) 100%),
+    #fbf5e6;
+  --glow: rgba(201, 149, 44, 0.55);
+}
+
+/* top badge: the picked option's mesh, with the upgrade button's glassy sheen */
+.wl-kind {
+  position: relative; isolation: isolate;
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+  border-radius: var(--r-pill); font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums;
+  color: #18181b; background: var(--mesh);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 1px 2px rgba(14, 18, 27, 0.12), 0 6px 14px -6px var(--glow);
+}
+.wl-kind[data-sponsor] { padding-left: 7px; }
+.wl-kind::after {
+  content: ""; position: absolute; inset: 1px; z-index: -1; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 55%);
+}
+.wl-kind .svg-icon { color: #18181b; }
+
+/* tier picker: one recessed track, the four options on one line. The sliding pill (<Seg>) wears the
+   picked option's mesh, so it changes color as it moves. */
+.wl-card .wl-tiers.seg {
+  display: flex; flex-wrap: nowrap; width: 100%; max-width: none; gap: 2px; padding: 3px; border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border), inset 0 1px 2px rgba(14, 18, 27, 0.06);
+}
+.wl-card .wl-tiers button {
+  flex: 1 1 auto; min-width: 0; height: 34px; padding: 0 12px; border-radius: 9px;
+  font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; color: var(--muted);
+}
+.wl-card .wl-tiers.seg .seg-pill {
+  border-radius: 9px; background: var(--mesh);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), inset 0 -1px 1px rgba(14, 18, 27, 0.06), 0 1px 2px rgba(14, 18, 27, 0.16), 0 6px 16px -6px var(--glow);
+  transition: transform var(--duration-fast) var(--ease-smooth-out), width var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-quick) ease, box-shadow var(--duration-fast) ease;
+}
+.wl-card .wl-tiers.seg .seg-pill::after {
+  content: ""; position: absolute; inset: 1px; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 55%);
+}
+.wl-card .wl-tiers button[aria-pressed="true"] { color: #18181b; }
+/* before the pill has measured (first paint), the pressed option carries the mesh itself */
+.wl-card .wl-tiers.seg:not([data-slide]) button[aria-pressed="true"] { background: var(--mesh); box-shadow: 0 1px 2px rgba(14, 18, 27, 0.16); }
+.wl-card .wl-tiers button:disabled { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+.wl-card .gate-cta { margin-top: 0; }
+.wl-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.wl-error {
+  display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 9px 12px; border-radius: var(--r-md);
+  font-size: 13.5px; line-height: 1.45; color: var(--err); background: var(--err-soft);
+  animation: enter 250ms var(--ease-smooth-out) both;
+}
+.wl-error .svg-icon { flex: none; margin-top: 2px; }
+.wl-error a { color: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.wl-fine { margin: -4px 0 0; text-align: center; font-size: 12.5px; line-height: 1.45; color: var(--faint); text-wrap: balance; }
+
+/* saved: the card stays, the form gives way to a confirmation */
+.wl-done { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 28px 38px; text-align: center; animation: enter 400ms var(--ease-smooth-out) both; }
+.wl-done-mark {
+  display: inline-grid; place-items: center; width: 44px; height: 44px; margin-bottom: 6px; border-radius: 50%;
+  color: var(--ok); background: var(--ok-soft);
+  animation: wl-pop 450ms var(--ease-smooth-out) 120ms both;
+}
+.wl-done-mark[data-kind="mail"] { color: var(--accent-text); background: var(--accent-soft); }
+.wl-done h2, .wl-done h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+.wl-done h1 { font-family: var(--font); line-height: 1.3; }
+.wl-done .wl-fine { margin: 0; font-size: 12.5px; color: var(--faint); }
+.wl-done .wl-error { text-align: left; }
+.wl-done .gate-cta { margin-top: 8px; }
+.wl-done button.link, .wl-back { margin-top: 6px; font-size: 13.5px; }
+.wl-back { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+/* only on servers that send no email: the link, shown in place of the message */
+.wl-test {
+  padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border); font-size: 13px !important; text-align: left;
+}
+.wl-test a { font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+/* the confirm page is only this card: give it the height of a first screen */
+.wl-confirm-stage { min-height: min(560px, 70vh); align-items: center; }
+.wl-done p { margin: 0; max-width: 30em; font-size: 14.5px; line-height: 1.55; color: var(--muted); overflow-wrap: anywhere; text-wrap: pretty; }
+@keyframes wl-pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+
+/* sections: dashed rule on top, like the landing's */
+.wl-sec { padding: clamp(48px, 7vw, 76px) 40px; border-top: 1px dashed var(--guide); scroll-margin-top: 12px; }
+.wl-sec > h2 {
+  margin: 0 0 clamp(24px, 3.4vw, 34px); max-width: 17em;
+  font-weight: 400; font-size: clamp(26px, 3.8vw, 36px); line-height: 1.1; letter-spacing: -0.04em; text-wrap: balance;
+}
+.wl-sec > h2:has(+ .wl-sec-lead) { margin-bottom: 12px; }
+.wl-sec > h2 em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.02em; color: var(--accent-text); }
+.wl-sec-lead { margin: 0 0 clamp(24px, 3.4vw, 34px); max-width: 38em; font-size: 15.5px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+
+/* sponsor tiers: plan cards with a slot meter between the price and the button.
+   Each card lays its six parts (name, blurb, price, meter, button, perks) on rows shared with
+   its neighbours, so a longer blurb in one card never pushes its price or button out of line. */
+@media (min-width: 861px) {
+  .wl-sec .plan { display: grid; grid-template-rows: subgrid; grid-row: span 6; row-gap: 0; }
+  .wl-sec .plan-price { align-self: end; }
+}
+.wl-sec .plan h3 { margin: 0; font-size: 15px; }
+.wl-sec .plan-price { margin-bottom: 16px; }
+.wl-sec .plan { transition: box-shadow var(--duration-fast) var(--ease-smooth-out); }
+.wl-sec .plan[data-selected] { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); }
+.wl-avail { display: flex; flex-direction: column; gap: 10px; margin: 0 0 18px; padding: 13px 12px 11px; border-radius: var(--r-md); background: var(--surface-2); }
+.wl-avail p { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wl-avail strong { color: var(--text); }
+/* the meter: a track of the same size in every card, cut into one segment per slot; taken slots fill with the accent */
+.wl-meter { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; height: 8px; }
+.wl-meter i { border-radius: 2px; background: color-mix(in oklab, var(--text) 16%, transparent); }
+.wl-meter i:first-child { border-radius: 4px 2px 2px 4px; }
+.wl-meter i:last-child { border-radius: 2px 4px 4px 2px; }
+.wl-meter i[data-taken] { background: var(--accent); }
+.wl-sec .plan-cta:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.wl-faq { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 26px 44px; }
+.wl-faq h3 { margin: 0 0 5px; font-size: 15px; font-weight: 500; color: var(--text); }
+.wl-faq p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+.wl-faq a { text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--accent-text) 35%, transparent); text-underline-offset: 3px; }
+
+.wl-final { padding-bottom: clamp(56px, 8vw, 88px); }
+
+@media (max-width: 560px) {
+  .wl-card .wl-tiers button { padding: 0 6px; font-size: 12.5px; }
+  .wl-chip-more { display: none; }
+  .seats-stage.wl-stage { padding: 28px 16px 36px; }
+  .wl-card { padding: 20px 18px 18px; }
+  .wl-sec { padding-left: 20px; padding-right: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wl-done-mark { animation: none; }
+}

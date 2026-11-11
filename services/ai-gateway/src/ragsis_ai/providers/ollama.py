@@ -25,6 +25,9 @@ class OllamaProvider:
             r = self._http.post(f"{self.base_url}/api/chat", json={
                 "model": model.provider_model_id,
                 "stream": False,
+                # Los modelos con razonamiento (qwen3) gastan num_predict pensando: respuestas de 50 s o vacías.
+                # RAG necesita extraer y citar, no razonar; los modelos sin razonamiento ignoran el campo.
+                "think": False,
                 "messages": [{"role": "system", "content": request.system}, self._user_message(model, request)],
                 "options": {"num_predict": request.max_output_tokens},
             })

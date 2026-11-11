@@ -54,6 +54,36 @@ export interface QueryResult {
   question_class: string;
   generation_model: string | null;
   latency_ms: number;
+  /** Presente solo si el turno quedó guardado en el historial (ADR-028). */
+  conversation_id?: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  turns: number;
+}
+
+export interface StoredTurn {
+  id: string;
+  workspace_id: string;
+  question: string;
+  as_of: string | null;
+  created_at: string;
+  feedback: 1 | -1 | null;
+  /** El documento citado ya no es visible para esta persona: la respuesta no se muestra. */
+  redacted: boolean;
+  result: QueryResult | null;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  turns: StoredTurn[];
 }
 
 export interface Workspace {

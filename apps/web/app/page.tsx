@@ -2,13 +2,12 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/Brand";
 import { DitherField } from "@/components/DitherField";
-import { FileTile } from "@/components/FileTile";
 import { Illustration } from "@/components/Illustration";
+import { LandingDemo } from "@/components/LandingDemo";
 import { LandingViews } from "@/components/LandingViews";
-import { LogoMark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IconActivity, IconAgent, IconArrowRight, IconCheck, IconChat, IconFiles, IconShield, IconSignature, IconWorkflow } from "@/components/icons";
-import { demoCta, site } from "./(public)/site";
+import { demoCta, publicOnly, signInHref, signInLabel, site } from "./(public)/site";
 import "./(public)/public.css";
 import "./landing.css";
 
@@ -21,7 +20,7 @@ export const dynamic = "force-dynamic";
  * button then returns to the hero, so the hero is never scrolled past, only left and re-entered.
  */
 export default async function Landing() {
-  const signedIn = (await cookies()).has("ragsis_session");
+  const signedIn = !publicOnly && (await cookies()).has("ragsis_session");
 
   return (
     <main className="land-page">
@@ -55,8 +54,8 @@ export default async function Landing() {
 
                 <div className="land-actions">
                   <div className="land-buttons">
-                    <Link href={signedIn ? "/app" : "/login"} className="gate-cta land-cta">
-                      {signedIn ? "Open workspace" : "Get started"}
+                    <Link href={signedIn ? "/app" : "/waitlist#join"} className="gate-cta land-cta">
+                      {signedIn ? "Open workspace" : "Join the waitlist"}
                       <IconArrowRight size={16} />
                     </Link>
                     {!signedIn && demoCta && (
@@ -75,35 +74,7 @@ export default async function Landing() {
                   </ul>
                 </div>
 
-                <figure className="land-demo" aria-label="Sample answer">
-                  <p className="land-q">What&apos;s the lodging limit for international travel?</p>
-                  <div className="land-a">
-                    <span className="land-a-mark">
-                      <LogoMark size={13} />
-                    </span>
-                    <p>
-                      Up to $180 per night in tier-1 cities, with receipts required above $25<sup>1</sup>. Trips longer than five days need manager pre-approval<sup>2</sup>.
-                    </p>
-                  </div>
-                  <figcaption className="land-sources">
-                    <span className="land-src">
-                      <span className="land-src-n">1</span>
-                      <FileTile ext="pdf" size={16} />
-                      Travel &amp; Expense Policy
-                      <span className="land-src-loc">p. 4</span>
-                    </span>
-                    <span className="land-src">
-                      <span className="land-src-n">2</span>
-                      <FileTile ext="docx" size={16} />
-                      Travel FAQ
-                      <span className="land-src-loc">§2.3</span>
-                    </span>
-                    <span className="land-verified">
-                      <i className="land-dot" aria-hidden="true" />
-                      Verified
-                    </span>
-                  </figcaption>
-                </figure>
+                <LandingDemo />
               </div>
             </div>
 
@@ -175,8 +146,8 @@ export default async function Landing() {
                   Try it on your own <em>documents</em>.
                 </h2>
                 <div className="land-buttons">
-                  <Link href={signedIn ? "/app" : "/login"} className="gate-cta land-cta">
-                    {signedIn ? "Open workspace" : "Get started"}
+                  <Link href={signedIn ? "/app" : "/waitlist#join"} className="gate-cta land-cta">
+                    {signedIn ? "Open workspace" : "Join the waitlist"}
                     <IconArrowRight size={16} />
                   </Link>
                   {!signedIn && demoCta && (
@@ -195,6 +166,7 @@ export default async function Landing() {
               </span>
               <nav>
                 <Link href="/pricing">Pricing</Link>
+                <Link href="/waitlist">Waitlist</Link>
                 <Link href="/terms">Terms</Link>
                 <Link href="/privacy">Privacy</Link>
               </nav>
@@ -220,8 +192,8 @@ function Header({ signedIn }: { signedIn: boolean }) {
             Open workspace
           </Link>
         ) : (
-          <Link href="/login" className="land-pill">
-            Sign in
+          <Link href={signInHref} className="land-pill">
+            {signInLabel}
           </Link>
         )}
       </nav>

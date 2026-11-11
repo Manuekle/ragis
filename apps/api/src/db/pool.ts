@@ -12,7 +12,14 @@ const PRINCIPAL_RE = /^(workspace|group|user):[0-9a-f-]{36}$/;
 export type Db = pg.PoolClient;
 
 export function createPool(connectionString?: string): pg.Pool {
-  return new pg.Pool({ connectionString: connectionString || undefined, max: 20, idleTimeoutMillis: 30_000, statement_timeout: 15_000 });
+  const pool = new pg.Pool({ connectionString: connectionString || undefined, max: 20, idleTimeoutMillis: 30_000, statement_timeout: 15_000 });
+  // pg emite `error` en el pool cuando se cae una conexión INACTIVA (reinicio de Postgres, corte de red, Docker en
+  // suspensión). Sin listener Node lo trata como excepción no capturada y mata la API. El pool descarta ese cliente
+  // y abre otro en la próxima consulta.
+  pool.on("error", (err) => {
+    console.error(JSON.stringify({ level: 40, msg: "conexión inactiva de Postgres descartada", err: err.message }));
+  });
+  return pool;
 }
 
 export async function withContext<T>(pool: pg.Pool, ctx: SecurityContext, fn: (db: Db) => Promise<T>): Promise<T> {

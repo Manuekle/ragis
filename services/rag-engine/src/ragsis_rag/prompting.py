@@ -29,6 +29,16 @@ _COMPARE = re.compile(r"\b(diferencia|compar|versus|vs\.?|cambi[oó]|entre .* y 
 _EXACT = re.compile(r"\"[^\"]{3,}\"|\b[A-Z]{2,}[-_]?\d{2,}\b|\b(art[ií]culo|cl[aá]usula|numeral)\s+\d+", re.I)
 
 
+_ES_CHARS = re.compile(r"[¿¡áéíóúñ]", re.I)
+_ES_WORDS = re.compile(r"\b(el|la|los|las|de|del|que|cu[aá]l(?:es)?|qu[eé]|qui[eé]n(?:es)?|c[oó]mo|d[oó]nde|cu[aá]ndo|"
+                       r"para|por|con|una|es|son|se|en|su|sus)\b", re.I)
+
+
+def looks_spanish(question: str) -> bool:
+    """Heurística barata: los modelos pequeños contestan en inglés si solo el prompt está en inglés."""
+    return bool(_ES_CHARS.search(question)) or len(_ES_WORDS.findall(question)) >= 2
+
+
 def classify(question: str) -> str:
     if _NUMERIC.search(question):
         return "numeric"
@@ -70,6 +80,8 @@ def render_prompt(question: str, evidence: list[Evidence], meta: list[dict], que
     if attached_images:
         parts.append(f"{attached_images} figure image(s) are attached, each labelled with its source [n].")
     parts.append("Answer concisely with [n] citations.")
+    if looks_spanish(question):
+        parts.append("Responde en español.")
     return "\n".join(parts)
 
 

@@ -1,0 +1,21 @@
+# Vercel serves only the public web (apps/web, PUBLIC_SITE_ONLY=1). Upload the pnpm workspace
+# manifests so the lockfile installs, plus apps/web itself; nothing else, and never secrets.
+/*
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/apps
+/apps/*
+!/apps/web
+!/apps/api
+/apps/api/*
+!/apps/api/package.json
+!/packages
+/packages/*
+!/packages/contracts
+.env
+.env.*
+node_modules
+.next
+*.tsbuildinfo
+.DS_Store

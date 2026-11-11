@@ -1,7 +1,9 @@
 import Link from "next/link";
 import DevLoginForm from "./DevLoginForm";
+import PasswordLoginForm from "./PasswordLoginForm";
 import { AuthShell, GateChecks } from "./AuthShell";
 import { IconAlert } from "@/components/icons";
+import { cognitoPasswordLogin } from "@/lib/cognito";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,8 @@ const ERRORS: Record<string, string> = {
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   if (process.env.AUTH_MODE !== "oidc") return <DevLoginForm />;
+  // Cognito: el formulario vive en la app. Otros IdP OIDC siguen redirigiendo a su propia página (SSO).
+  if (cognitoPasswordLogin()) return <PasswordLoginForm />;
   return (
     <AuthShell title="Sign in to Ragis." lead="Use your company account." linkBrandToHome>
       <div className="gate-form">

@@ -40,6 +40,8 @@ from ragsis_core.text import estimate_tokens
 
 from .prompting import ABSTAIN_TEXT, SYSTEM_PROMPT, classify, render_prompt
 from .retrieval import Candidate, expand_parents, graph_bridges, graph_search, hybrid_search
+from .smalltalk import SmallTalk
+from .smalltalk import detect as detect_smalltalk
 from .verifier import verify
 
 logger = logging.getLogger("ragsis.rag")
@@ -90,6 +92,9 @@ class QueryOrchestrator:
         t_start = time.perf_counter()
         timings: dict[str, int] = {}
         trace_id = "qry_" + secrets.token_hex(12)
+        chat = detect_smalltalk(question)
+        if chat:
+            return self._small_talk(claims, question, chat, trace_id, t_start)
         policy = TenantAIPolicy(data_class=DataClass(claims.data_class), model_allowlist=claims.model_allowlist,
                                 max_output_tokens=1200)
         qclass = classify(question)
@@ -128,6 +133,21 @@ class QueryOrchestrator:
             self._persist(claims, question, result, cands, cost)
         log(logger, logging.INFO, "query.completed", trace_id=trace_id, org=str(claims.organization_id),
             abstained=abstained, latency_ms=latency, candidates=len(cands), cited=len(citations), strategy=strategy)
+        return result
+
+    def _small_talk(self, claims: InternalClaims, question: str, chat: SmallTalk, trace_id: str,
+                    t_start: float) -> QueryResult:
+        """Saludos y cortesías: texto fijo, sin recuperar ni llamar al modelo. Va como `abstained` (no hay respuesta
+        documental que agentes y workflows puedan usar) con motivo `smalltalk`, y no cuenta contra la cuota mensual."""
+        usage = {"embedding_tokens": 0, "llm_input_tokens": 0, "llm_output_tokens": 0, "rerank_calls": 0,
+                 "vision_images": 0}
+        latency = int((time.perf_counter() - t_start) * 1000)
+        result = QueryResult(trace_id, chat.message, True, "smalltalk", [], "smalltalk", "smalltalk", None,
+                             self.gateway.embedding_model().model_id, latency, {}, usage)
+        with stage("rag.persist"):
+            self._persist(claims, question, result, [], 0.0, billable=False)
+        log(logger, logging.INFO, "query.completed", trace_id=trace_id, org=str(claims.organization_id),
+            abstained=True, latency_ms=latency, candidates=0, cited=0, strategy="smalltalk")
         return result
 
     def _pipeline(self, claims: InternalClaims, question: str, opts: QueryOptions, policy: TenantAIPolicy,
@@ -327,7 +347,7 @@ class QueryOrchestrator:
         }
 
     def _persist(self, claims: InternalClaims, question: str, r: QueryResult, cands: list[Candidate],
-                 cost: float) -> None:
+                 cost: float, billable: bool = True) -> None:
         refs = [{"chunk_id": str(c.chunk_id), "rrf": round(c.rrf, 6), "sim": round(c.similarity or 0, 4),
                  "lex_rank": c.lex_rank, "rerank": c.rerank, "graph_local_rank": c.graph_local_rank,
                  "graph_global_rank": c.graph_global_rank, "hop": bool(c.extra.get("hop"))}
@@ -352,8 +372,9 @@ class QueryOrchestrator:
                 if r.usage[kind]:
                     execute(conn, "INSERT INTO usage_events (organization_id, kind, quantity, ref) VALUES (%s,%s,%s,%s)",
                             (claims.organization_id, kind, r.usage[kind], r.trace_id))
-            execute(conn, "INSERT INTO usage_events (organization_id, kind, quantity, ref) VALUES (%s,'query',1,%s)",
-                    (claims.organization_id, r.trace_id))
+            if billable:
+                execute(conn, "INSERT INTO usage_events (organization_id, kind, quantity, ref) VALUES (%s,'query',1,%s)",
+                        (claims.organization_id, r.trace_id))
 
 
 def estimate_question_tokens(q: str) -> int:

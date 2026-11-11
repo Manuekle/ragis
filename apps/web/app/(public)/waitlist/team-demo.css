@@ -1,0 +1,282 @@
+/* ───────────── team demo (waitlist/TeamDemo.tsx) ─────────────
+   The landing hero's story, told per team, in the hero's vocabulary (see the .ld rules in
+   app/landing.css): a printed page that stays paper-coloured in both themes, a scan beam, a pen,
+   a narration line with a working ring, pieces that rise 6px into place. The whole band is framed
+   like the hero's headline (.gate-title): dashed guides that run past the column, crosses where
+   they meet its edges, a beam travelling along them. */
+
+.gate-title.td {
+  --td-h: 288px; /* the story: the page on the desk and the answer beside it */
+  --paper: #f3f1ea;
+  --ink: #1d1d1f;
+  --ink-rule: rgba(29, 29, 31, 0.62);
+  --ink-line: rgba(29, 29, 31, 0.2);
+  --ink-soft: rgba(29, 29, 31, 0.56);
+  --ink-greek: rgba(29, 29, 31, 0.12);
+  --pen: #1d1d1f;
+  --mark: color-mix(in oklab, var(--accent) 24%, transparent);
+  /* out to the column's own guides, so the crosses sit where the lines meet */
+  margin: 0 -40px; padding: 44px 40px;
+}
+:root[data-theme="dark"] .td { --paper: #e9e6dd; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .td { --paper: #e9e6dd; } }
+
+/* ── heading: the team it names changes with the story ── */
+.wl-sec > h2.td-title { max-width: none; text-wrap: wrap; }
+/* The old word lifts away first; the gap then eases to the new width while the new letters settle in. */
+.td-word { position: relative; display: inline-block; white-space: nowrap; vertical-align: bottom; transition: width 520ms var(--ease-smooth-out) 180ms; }
+.td-word-in { display: inline-block; }
+.td-word-in > span { display: inline-block; animation: td-letter-in 620ms var(--ease-smooth-out) calc(260ms + var(--i) * 30ms) both; }
+.td-word-in.is-exit { position: absolute; left: 0; bottom: 0; pointer-events: none; }
+.td-word-in.is-exit > span { animation: td-letter-out 260ms ease-in calc(var(--i) * 14ms) both; }
+@keyframes td-letter-in { from { opacity: 0; transform: translateY(0.34em); filter: blur(6px); } }
+@keyframes td-letter-out { to { opacity: 0; transform: translateY(-0.34em); filter: blur(6px); } }
+
+/* ── the story ── */
+.td-stage { position: relative; min-width: 0; margin: 0; }
+.td-story {
+  display: grid; grid-template-columns: minmax(240px, 330px) minmax(0, 470px); justify-content: center; gap: clamp(36px, 6vw, 72px);
+  height: var(--td-h);
+  animation: td-in 650ms var(--ease-smooth-out) both;
+  transition: opacity 600ms ease, transform 700ms var(--ease-smooth-out);
+}
+.td-story[data-leaving] { opacity: 0; transform: translateY(-6px); }
+@keyframes td-in { from { opacity: 0; transform: translateY(8px); } }
+/* Motion is opacity + transform only: blur filters on dozens of moving pieces repaint every frame. */
+.td-rise { opacity: 0; transform: translateY(6px); transition: opacity 460ms var(--ease-smooth-out), transform 460ms var(--ease-smooth-out); }
+.td-rise.is-in { opacity: 1; transform: none; }
+.td .file-tile { width: 16px; height: 16px; }
+
+/* ── the desk: the team's files fanned out, the source lifted off the pile once found ── */
+.td-desk { position: relative; height: 100%; }
+.td-sheet, .td-paper {
+  position: absolute; inset: 0;
+  color: var(--ink); background: var(--paper);
+  /* a faint fibre and a little light falloff so it reads as stock, not as a div */
+  background-image:
+    radial-gradient(120% 90% at 30% 0%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(rgba(29, 29, 31, 0.035) 0.6px, transparent 0.8px);
+  background-size: auto, 3px 3px;
+  transition: transform 750ms cubic-bezier(0.32, 1.18, 0.5, 1), box-shadow 700ms var(--ease-smooth-out);
+}
+.td-sheet {
+  display: flex; flex-direction: column; gap: 12px; padding: 14px 14px;
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.06), 0 12px 26px -16px rgba(0, 0, 0, 0.55);
+}
+/* the sheets underneath sit a shade darker, in the paper's shadow */
+.td-sheet::after { content: ""; position: absolute; inset: 0; background: rgba(29, 29, 31, 0.07); pointer-events: none; }
+.td-sheet-title { font-size: 7.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.td-sheet[data-k="0"] { transform: translate(-14px, 8px) rotate(-4deg); }
+.td-sheet[data-k="1"] { transform: translate(15px, 6px) rotate(3.5deg); }
+/* searching: the pile fans out as if flipped through */
+.td-desk[data-state="search"] .td-sheet[data-k="0"] { transform: translate(-30px, 4px) rotate(-8deg); }
+.td-desk[data-state="search"] .td-sheet[data-k="1"] { transform: translate(30px, 2px) rotate(7deg); }
+.td-desk[data-state="found"] .td-sheet[data-k="0"] { transform: translate(-9px, 6px) rotate(-2.6deg); }
+.td-desk[data-state="found"] .td-sheet[data-k="1"] { transform: translate(9px, 5px) rotate(2.2deg); }
+
+.td-paper {
+  z-index: 1; display: flex; flex-direction: column; overflow: hidden;
+  transform: translateY(14px) scale(0.95);
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.05), 0 1px 2px rgba(0, 0, 0, 0.08), 0 10px 24px -16px rgba(0, 0, 0, 0.5);
+}
+.td-desk[data-state="search"] .td-paper { transform: translateY(18px) rotate(1deg) scale(0.94); }
+.td-desk[data-state="found"] .td-paper {
+  transform: none;
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.05), 0 1px 2px rgba(0, 0, 0, 0.08), 0 18px 40px -18px rgba(0, 0, 0, 0.5), 0 40px 70px -40px rgba(0, 0, 0, 0.35);
+}
+
+.td-p-head { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; height: 46px; border-bottom: 1px solid var(--ink-rule); }
+.td-p-brand { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; padding: 0 12px; border-right: 1px solid var(--ink-rule); }
+.td-p-brand span { font-size: 7px; font-weight: 600; letter-spacing: 0.1em; color: var(--ink-soft); }
+.td-p-brand strong { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-p-no { display: grid; place-items: center; min-width: 52px; padding: 0 12px; font-family: var(--mono); font-size: 19px; letter-spacing: -0.02em; }
+
+.td-p-body {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column; gap: 8px; padding: 13px 14px 0;
+  font-family: var(--serif); font-size: 10.5px; line-height: 1.5; color: var(--ink);
+}
+.td-d-h { margin: 0; font-family: var(--font); font-size: 7.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.td-d-p { margin: 0; text-wrap: pretty; }
+.td-d-p b { margin-right: 2px; font-family: var(--mono); font-size: 9.5px; font-weight: 400; }
+.td-d-list { margin: 0; padding: 0 0 0 15px; display: flex; flex-direction: column; gap: 4px; }
+.td-d-list li { padding-left: 2px; text-wrap: pretty; }
+.td-d-list li::marker { font-family: var(--mono); font-size: 9px; }
+.td-d-list .td-greek { padding-top: 5px; }
+
+.td-greek { display: flex; flex-direction: column; gap: 7px; padding-top: 4px; }
+.td-greek i { display: block; height: 4px; border-radius: 2px; background: var(--ink-greek); }
+
+.td-table { display: flex; flex-direction: column; font-family: var(--mono); font-size: 9.5px; letter-spacing: -0.01em; }
+.td-tr { position: relative; display: grid; align-items: center; height: 24px; padding: 0 6px; border-bottom: 1px solid var(--ink-line); }
+.td-table[data-cols="2"] .td-tr { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.td-table[data-cols="4"] .td-tr { grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); }
+.td-tr > span { position: relative; white-space: nowrap; }
+.td-tr > span + span { text-align: right; }
+.td-tr.is-head { height: 22px; border-top: 1px solid var(--ink-rule); border-bottom-color: var(--ink-rule); font-family: var(--font); font-size: 7px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.td-tr.is-total { border-top: 1px solid var(--ink-rule); border-bottom: 0; font-weight: 600; }
+/* a highlighted row: the marker runs along it, left to right */
+.td-tr::before {
+  content: ""; position: absolute; inset: 2px 0; border-radius: 2px; pointer-events: none;
+  background: var(--mark); transform: scaleX(0); transform-origin: left;
+  transition: transform 600ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.td-tr[data-on]::before { transform: scaleX(1); }
+
+.td-p-foot {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 26px; padding: 0 12px;
+  border-top: 1px solid var(--ink-rule);
+  font-family: var(--mono); font-size: 8px; letter-spacing: 0.02em; color: var(--ink-soft); white-space: nowrap;
+}
+/* the spreadsheet's sheet tabs */
+.td-p-tabs { display: flex; align-self: stretch; margin-left: -12px; }
+.td-p-tabs span { display: grid; place-items: center; padding: 0 10px; border-right: 1px solid var(--ink-line); }
+.td-p-tabs span[data-on] { color: var(--ink); font-weight: 600; background: rgba(255, 255, 255, 0.45); box-shadow: inset 0 2px 0 var(--accent); }
+
+/* highlighter: swept over the passage once the beam has read it, line by line */
+.td-mark {
+  padding: 1px 0; border-radius: 2px; color: inherit;
+  background: linear-gradient(var(--mark), var(--mark)) 0 0 / 0% 100% no-repeat;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  transition: background-size 750ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.td-mark[data-on] { background-size: 100% 100%; }
+
+/* pen: a loop drawn by hand around the figure the answer quotes */
+.td-circled { position: relative; display: inline-block; white-space: nowrap; }
+.td-pen { position: absolute; left: -7px; top: -4px; width: calc(100% + 14px); height: calc(100% + 8px); overflow: visible; pointer-events: none; }
+.td-pen path { fill: none; stroke: var(--pen); stroke-width: 1.3; stroke-linecap: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.td-pen[data-on] path { stroke-dashoffset: 0; transition: stroke-dashoffset 700ms cubic-bezier(0.55, 0.08, 0.35, 1); }
+
+/* scan beam: a lit edge with a soft trail, crossing the page once. It moves by transform on its
+   own layer, so the sweep never touches layout or repaints the paper. */
+.td-beam { position: absolute; left: 0; right: 0; top: 0; z-index: 3; height: 0; pointer-events: none; opacity: 0; will-change: transform; }
+.td-beam[data-on] { animation: td-sweep var(--scan, 1400ms) linear both, td-beam-fade var(--scan, 1400ms) linear both; }
+@keyframes td-sweep { from { transform: translateY(0); } to { transform: translateY(var(--td-h)); } }
+@keyframes td-beam-fade { 0% { opacity: 0; } 6%, 92% { opacity: 1; } 100% { opacity: 0; } }
+.td-beam::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
+  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent) 60%, color-mix(in oklab, var(--accent) 26%, transparent));
+}
+.td-beam::after {
+  content: ""; position: absolute; left: -10%; right: -10%; top: -1px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent) 18%, #9fd0ff 50%, var(--accent) 82%, transparent);
+  box-shadow: 0 0 10px 1px color-mix(in oklab, var(--accent) 70%, transparent), 0 0 24px 4px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+/* ── what Ragis is doing ── */
+.td-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding-top: 2px; }
+.td-narr { display: flex; align-items: center; gap: 9px; height: 22px; font-size: 13px; }
+.td-narr-mark {
+  position: relative; display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%;
+  color: var(--on-inverse); background: var(--inverse);
+}
+.td-narr-mark::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  border: 1.5px solid transparent; border-top-color: var(--accent); border-right-color: color-mix(in oklab, var(--accent) 40%, transparent);
+  animation: spin 1.1s linear infinite; opacity: 0; transition: opacity 300ms ease;
+}
+.td-narr-mark[data-state="busy"]::after { opacity: 1; }
+.td-narr-text {
+  position: relative; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--think-base); animation: td-in 380ms var(--ease-smooth-out) both;
+}
+.td-narr-text[data-state="idle"] { color: var(--faint); }
+.td-narr-text[data-state="done"] { color: var(--ok); }
+.td-narr-text[data-state="busy"]::before {
+  content: attr(data-text); position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(90deg, transparent 0%, transparent 40%, var(--think-highlight) 50%, transparent 60%, transparent 100%);
+  background-size: 400% 100%; background-repeat: no-repeat;
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  animation: t-shimmer var(--think-shimmer) linear infinite;
+}
+
+.td-q {
+  align-self: flex-end; max-width: 92%; margin: 0; padding: 9px 16px; border-radius: 20px;
+  font-size: 14px; line-height: 1.4; color: var(--text); background: var(--surface-2);
+  opacity: 0; transform: translateY(4px); transition: opacity 250ms ease, transform 400ms var(--ease-smooth-out);
+}
+.td-q[data-on] { opacity: 1; transform: none; }
+.td-q-ghost { color: transparent; }
+.td-q[data-typing] .td-q-ghost::before {
+  content: ""; display: inline-block; width: 1.5px; height: 1.05em; margin: 0 1px -0.18em -0.5px;
+  background: var(--accent); animation: td-caret 0.9s steps(1) infinite;
+}
+@keyframes td-caret { 50% { opacity: 0; } }
+
+.td-panel { position: relative; flex: 1; min-height: 0; }
+.td-phase { position: absolute; inset: 0; animation: td-in 460ms var(--ease-smooth-out) both; }
+.td-phase.is-exit { animation: td-out 340ms ease-in both; pointer-events: none; }
+@keyframes td-out { to { opacity: 0; transform: translateY(-8px); } }
+
+/* 1 · search: each file is looked at, then the one with the answer lights up */
+.td-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.td-hit {
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  height: 38px; padding: 0 12px; border-radius: 10px;
+  font-size: 13px; color: var(--text-2); background: color-mix(in oklab, var(--surface-2) 45%, transparent);
+  transition: opacity 460ms var(--ease-smooth-out), transform 460ms var(--ease-smooth-out), background-color 400ms ease, box-shadow 400ms ease, color 400ms ease;
+}
+.td-hit-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-hit-where { font-family: var(--mono); font-size: 11.5px; letter-spacing: var(--tracking-mono); color: var(--accent-text); opacity: 0; transition: opacity 300ms ease 200ms; }
+.td-hits:not([data-found]) .td-hit::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 14%, transparent), transparent);
+  transform: translateX(-100%);
+  animation: td-pass 1100ms ease-in-out calc(var(--k, 0) * 160ms) infinite;
+}
+@keyframes td-pass { to { transform: translateX(100%); } }
+.td-hit.is-match { color: var(--text); background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 45%, var(--border)); }
+.td-hit.is-match .td-hit-where { opacity: 1; }
+.td-hit.is-in.is-miss { opacity: 0.4; }
+
+/* 2 · the answer, with the page it came from */
+.td-ask { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.td-answer { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text-2); text-wrap: pretty; }
+.td-w { display: inline-block; opacity: 0; transform: translateY(3px); transition: opacity 420ms ease-out, transform 520ms var(--ease-smooth-out); }
+.td-answer.is-in .td-w { opacity: 1; transform: none; }
+.td-answer-end { white-space: nowrap; }
+.td-cite {
+  display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px;
+  vertical-align: 2px; border-radius: 5px;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1; color: var(--accent-text); background: var(--accent-soft);
+}
+.td-sources { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
+.td-src { display: inline-flex; align-items: center; gap: 7px; min-width: 0; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.td-src-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.td-src-n {
+  display: inline-grid; place-items: center; flex: none; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 5px;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1; color: var(--accent-text); background: var(--accent-soft);
+}
+.td-src-loc { flex: none; font-family: var(--mono); font-size: 11.5px; letter-spacing: var(--tracking-mono); color: var(--faint); }
+.td-verified { display: inline-flex; align-items: center; gap: 7px; flex: none; margin-left: auto; font-size: 12px; color: var(--ok); }
+.td-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--ok-dot); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok-dot) 22%, transparent);
+  animation: dot-pulse 2.4s ease-in-out infinite;
+}
+
+/* paused off screen / in a background tab; still with reduced motion */
+.td[data-paused] .td-stage *, .td[data-paused] .td-stage *::before, .td[data-paused] .td-stage *::after { animation-play-state: paused !important; }
+.td[data-still] .td-stage *, .td[data-still] .td-stage *::before, .td[data-still] .td-stage *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .td-word-in > span { animation: none !important; }
+  .td-word { transition: none; }
+  .td-stage *, .td-stage *::before, .td-stage *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; transition-delay: 0ms !important; }
+}
+
+@media (max-width: 720px) {
+  .gate-title.td { --td-h: 252px; }
+  .td-story { grid-template-columns: minmax(0, 1fr); gap: 34px; height: auto; }
+  /* the fanned sheets stay inside the column */
+  .td-desk { width: min(100% - 48px, 300px); height: var(--td-h); margin: 8px auto 0; }
+  .td-side { height: 250px; }
+  .td-answer { font-size: 15px; }
+  /* room for the longest team name to wrap without the heading changing height */
+  .wl-sec > h2.td-title { min-height: 3.3em; }
+}
+@media (max-width: 560px) {
+  .gate-title.td { margin: 0 -20px; padding: 24px 20px 24px; }
+  .td-answer { font-size: 14.5px; }
+}

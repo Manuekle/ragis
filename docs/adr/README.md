@@ -84,6 +84,9 @@ emula un IdP para desarrollo y pruebas.
 
 **Revisar cuando** se requieran sesiones largas: agregar refresh tokens cifrados server-side.
 
+**Actualización.** Con Cognito el formulario de acceso vive en la propia app; este flujo por redirección queda para
+otros IdP OIDC. Ver [ADR-026](#adr-026--login-dentro-de-la-app-con-cognito-user_password_auth).
+
 ## ADR-016 · OCR con Amazon Textract como primera ruta multimodal (F3)
 
 **Decisión.** Páginas con < 40 caracteres de texto digital se envían a Textract asíncrono sobre el objeto S3
@@ -459,3 +462,81 @@ edición ⇒ versión, borrado ⇒ reconciliación, privados por selección, pol
 **Revisar cuando** haya apps OAuth reales (validar respuestas y límites), se necesiten permisos finos por canal/espacio
 (mapear miembros del origen a usuarios ragsis), Events API/webhooks para borrados inmediatos, o más proveedores (Drive,
 SharePoint): el contrato `ProviderAdapter` + `SyncSink` es el punto de extensión.
+
+## ADR-026 · Login dentro de la app con Cognito (USER_PASSWORD_AUTH)
+
+**Contexto.** El piloto usaba la página alojada de Cognito. Esa página se sale del producto: otra marca, otro idioma y un
+dominio de terceros en medio del acceso. El estilo clásico de Cognito solo permite CSS limitado y logo (el fondo de la
+página queda fijo); el editor de marca exige otro plan de funciones. Las personas deben iniciar sesión sin salir de Ragsis.
+
+**Decisión.** Cuando `OIDC_ISSUER` es un user pool de Cognito, `/login` muestra un formulario propio (correo y clave,
+clave nueva para cuentas invitadas y recuperación por código). La ruta `POST /api/auth/password` llama desde el
+servidor a la API pública de Cognito para clientes sin secreto (`InitiateAuth` con `USER_PASSWORD_AUTH`,
+`RespondToAuthChallenge`, `ForgotPassword`, `ConfirmForgotPassword`). La sesión sigue siendo el `id_token` en una cookie
+`httpOnly` que la API revalida; el token del reto `NEW_PASSWORD_REQUIRED` viaja en una cookie `httpOnly` de 170 s.
+Otros IdP OIDC conservan la redirección de ADR-015. El cliente de Cognito pasa a permitir `ALLOW_USER_PASSWORD_AUTH`.
+
+**Consecuencias.**
+- La clave pasa por el servidor de la web (por TLS) antes de llegar a Cognito. Es el costo de controlar la pantalla; la
+  alternativa SRP evitaría ver la clave en el servidor, pero el formulario igualmente la recibe.
+- La ruta exige `Content-Type: application/json` y no distingue cuentas inexistentes de claves incorrectas.
+- Sin refresh tokens, la sesión dura lo que el `id_token` (una hora por defecto).
+- No hay página de Cognito que cerrar al salir; el logout solo borra la cookie.
+
+**Revisar cuando** se necesite MFA, inicio de sesión social o federación: ahí conviene volver al flujo por redirección o
+adoptar el login administrado de Cognito, que exige el plan Essentials.
+
+## ADR-027 · Ensayo de infraestructura en Floci antes de AWS
+
+**Contexto.** El piloto corre con créditos del plan FREE de AWS (USD 100, seis meses). Un recurso mal configurado o
+olvidado gasta créditos y cada intento en AWS real tarda más que en local.
+
+**Decisión.** Todo recurso o cambio de Terraform se aplica primero contra [Floci](https://github.com/floci-io/floci), el
+emulador local de AWS, con `scripts/aws-rehearsal.sh` (`make rehearse`). El script copia `infra/terraform` a
+`infra/terraform/.floci/`, agrega un override del proveedor que apunta al emulador y guarda un estado separado; nunca
+toca el estado de AWS real. Solo con el ensayo limpio se ejecuta `terraform plan` y `apply` en AWS. La aplicación local
+sigue usando SeaweedFS y ElasticMQ (ADR-012), no Floci.
+
+**Consecuencias.**
+- Floci valida la forma de las llamadas y las dependencias, no el comportamiento real de AWS: no comprueba precios,
+  cuotas, disponibilidad del tipo de instancia ni el `user_data`. El ensayo del piloto con Floci 2.4.0 crea los 28
+  recursos y un segundo `plan` queda sin cambios; ver [guides/floci.md](../guides/floci.md#límites-conocidos).
+- Su catálogo no incluye `m7i-flex.large`, así que el ensayo usa `m5.large` (misma forma: 2 vCPU y 8 GiB) y AWS real usa
+  el tipo de `main.tf`.
+- Con `AWS_ENDPOINT_URL` apuntando a Floci, el AWS CLI no llega a AWS real; hay que quitar la variable para operar allí.
+
+**Revisar cuando** el emulador incorpore los tipos de instancia del piloto, o cuando el piloto se convierta en producción.
+
+## ADR-028 · Historial de conversaciones de Ask
+
+**Contexto.** Ask respondía bien pero la conversación vivía solo en la memoria de la página: al recargar o salir se
+perdía y no se podía volver a una respuesta anterior. La plataforma guardaba únicamente `query_runs` (traza, tiempos y el
+hash de la pregunta; el texto no se persistía a propósito).
+
+**Decisión.** Tablas `conversations` y `conversation_turns` (migración 0014), con RLS por organización y por autor: la
+conversación es **privada de quien la escribe**, ni los admins la ven. Cada turno guarda la pregunta, la fecha «a
+fecha de» y una instantánea de la respuesta (texto, citas y métricas visibles; nunca tiempos ni costes internos). El
+cliente genera el UUID de la conversación y lo envía en `POST …/query` como `conversation_id`; la API la crea al
+guardar el primer turno, así que no hay conversaciones vacías ni una llamada previa. Guardar ocurre después de
+responder y nunca bloquea la respuesta: si falla se registra y la respuesta vuelve sin `conversation_id`.
+`GET/PATCH/DELETE /conversations` listan (paginado por cursor), reabren, renombran y borran; borrar es definitivo,
+elimina los turnos en cascada y queda auditado. Las claves de servicio no usan el historial.
+
+**Gobierno de acceso al releer.** La instantánea contiene texto generado desde documentos que la persona pudo ver *ese
+día*. Al reabrir, la API vuelve a comprobar con RLS que cada documento citado siga siendo visible y activo; si alguno no
+lo es (permiso retirado, documento borrado) el turno se devuelve con `redacted: true` y sin respuesta. El resto de la
+conversación sigue legible. Así el historial no es una vía para leer lo que la ACL ya no permite.
+
+**Consecuencias.**
+- Ahora se guarda el texto de preguntas y respuestas (antes solo un hash). Es dato de usuario: se borra al borrar la
+  conversación, al borrar al usuario o la organización (cascada) y no se registra en logs (`req.body.question` sigue
+  redactado). La política de privacidad pública ya lo cubre («your questions and the answers generated» como contenido
+  del cliente, conservado mientras la organización lo mantenga).
+- La ocultación se evalúa en cada lectura y no se guarda: si el permiso vuelve a otorgarse, el turno reaparece.
+- Las preguntas siguen siendo independientes: reabrir una conversación y seguir preguntando no envía el contexto previo
+  al modelo (igual que antes). La memoria conversacional del modelo es un cambio aparte.
+- Sin retención automática ni opción por organización para desactivarlo; ambas son extensiones directas si algún cliente
+  con datos muy sensibles lo exige.
+
+**Revisar cuando** un cliente pida retención máxima o desactivar el historial, o cuando Ask pase contexto previo al modelo
+(ahí hay que decidir qué turnos ocultados se excluyen del prompt).

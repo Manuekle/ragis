@@ -14,6 +14,7 @@ import { registerTracing } from "./lib/telemetry.js";
 import { documentRoutes } from "./routes/documents.js";
 import { orgRoutes } from "./routes/orgs.js";
 import { queryRoutes, type RagClient } from "./routes/query.js";
+import { conversationRoutes } from "./routes/conversations.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
 import { agentRoutes } from "./routes/agents.js";
 import { workflowRoutes } from "./routes/workflows.js";
@@ -126,6 +127,7 @@ export async function buildApp(
   await orgRoutes(app, full);
   await documentRoutes(app, full);
   await queryRoutes(app, full);
+  await conversationRoutes(app, full);
   await onboardingRoutes(app, full);
   await agentRoutes(app, full);
   const runner = new WorkflowRunner(full);

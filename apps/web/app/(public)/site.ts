@@ -8,8 +8,19 @@ export const site = {
   legalUpdated: "November 9, 2026",
 };
 
+/**
+ * PUBLIC_SITE_ONLY=1 serves only the public pages (landing, pricing, legal, waitlist), e.g. on
+ * Vercel without the API behind it. Sign-in buttons then lead to the waitlist and proxy.ts sends
+ * every workspace route there too.
+ */
+export const publicOnly = process.env.PUBLIC_SITE_ONLY === "1";
+
+/** Where "Sign in" and "Get started" go. */
+export const signInHref = publicOnly ? "/waitlist#join" : "/login";
+export const signInLabel = publicOnly ? "Join the waitlist" : "Sign in";
+
 /** Where "Contact sales" goes: a mailto when CONTACT_EMAIL is set, otherwise sign-in. */
-export const salesHref = site.contactEmail ? `mailto:${site.contactEmail}?subject=Ragis%20sales` : "/login";
+export const salesHref = site.contactEmail ? `mailto:${site.contactEmail}?subject=Ragis%20sales` : signInHref;
 
 const bookingUrl = URL.parse(process.env.DEMO_BOOKING_URL ?? "");
 const demoEmail = site.contactEmail?.trim();

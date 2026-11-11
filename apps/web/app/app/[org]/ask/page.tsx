@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Citation, type QueryResult } from "@/lib/api";
+import { api, type Citation, type ConversationDetail, type QueryResult } from "@/lib/api";
 import { useOrg } from "../layout";
 import {
   IconAlert,
@@ -27,6 +27,7 @@ import { ClickUpLogo, FolderGlyph, GmailLogo, SlackLogo } from "@/components/bra
 import { DatePicker } from "@/components/ui";
 import { DocViewer, type ViewerDoc } from "@/components/DocViewer";
 import { duration } from "@/lib/plain";
+import { HistoryMenu } from "./HistoryMenu";
 
 interface Turn {
   id: number;
@@ -34,6 +35,22 @@ interface Turn {
   result?: QueryResult;
   error?: string;
   feedback?: 1 | -1;
+  /** Restored from history, but a cited document is no longer visible to this person: the answer stays hidden. */
+  redacted?: boolean;
+}
+
+/** UUID v4 for a new conversation; `randomUUID` only exists in secure contexts (https / localhost). */
+function newConversationId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ (crypto.getRandomValues(new Uint8Array(1))[0]! & (15 >> (Number(c) / 4)))).toString(16));
+}
+
+/** Keeps `?c=<id>` in the address bar so a reload (or a bookmark) reopens the same conversation. */
+function syncUrl(id: string | null) {
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set("c", id);
+  else url.searchParams.delete("c");
+  window.history.replaceState(window.history.state, "", url);
 }
 
 const STATES = ["Searching the documents", "Finding the best passages", "Checking the sources", "Writing the answer"];
@@ -135,7 +152,7 @@ function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; o
       <div className="q-bubble">{t.question}</div>
 
       <div className="steps">
-        {!r && !t.error && (
+        {!r && !t.error && !t.redacted && (
           <div className="step">
             <ThinkingStates states={STATES} />
           </div>
@@ -157,7 +174,7 @@ function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; o
         )}
       </div>
 
-      {!r && !t.error && (
+      {!r && !t.error && !t.redacted && (
         <SkeletonStatus label="Loading answer…">
           <div className="stack" style={{ gap: 10 }}>
             <Skel h={12} />
@@ -174,8 +191,21 @@ function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; o
         </div>
       )}
 
+      {t.redacted && (
+        <div className="abstain">
+          <IconAlert size={18} variant="duotone" />
+          <div>
+            This answer used a document you can no longer open, so it is hidden.
+            <div className="hint">Ask the question again to get an answer based on what you can see today.</div>
+          </div>
+        </div>
+      )}
+
       {r &&
-        (r.abstained ? (
+        (r.abstain_reason === "smalltalk" ? (
+          // Saludos y cortesías: respuesta fija del asistente, no es una abstención por falta de evidencia.
+          <StreamText text={r.answer} animate={fresh} onCite={cite} />
+        ) : r.abstained ? (
           <div className="abstain">
             <IconAlert size={18} variant="duotone" />
             <div>
@@ -223,6 +253,29 @@ export default function AskPage() {
   const nextId = useRef(1);
   const wsName = workspaces.find((w) => w.id === workspaceId)?.name;
 
+  // History (ADR-028). The id is made here, on the first question, and the API creates the conversation when it
+  // saves that turn. `activeId` only turns on once a turn really was saved.
+  const conversationId = useRef<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [loadingConv, setLoadingConv] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const loadSeq = useRef(0);
+  const pendingWs = useRef<string | null>(null);
+  const orgRef = useRef({ workspaces, setWorkspaceId });
+  useEffect(() => {
+    orgRef.current = { workspaces, setWorkspaceId };
+  });
+
+  // A restored conversation can belong to another workspace; the workspace list may still be loading when it opens.
+  useEffect(() => {
+    const want = pendingWs.current;
+    if (want && workspaces.some((w) => w.id === want)) {
+      pendingWs.current = null;
+      if (want !== workspaceId) setWorkspaceId(want);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setWorkspaceId changes identity every render
+  }, [workspaces]);
+
   useEffect(() => {
     if (!turns.length) return;
     endRef.current?.scrollIntoView({ block: "end", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -239,8 +292,12 @@ export default function AskPage() {
     try {
       const result = await api<QueryResult>(`organizations/${orgId}/workspaces/${workspaceId}/query`, {
         method: "POST",
-        body: { question: q, ...(asOf ? { as_of: asOf } : {}) },
+        body: { question: q, conversation_id: (conversationId.current ??= newConversationId()), ...(asOf ? { as_of: asOf } : {}) },
       });
+      if (result.conversation_id && result.conversation_id === conversationId.current) {
+        setActiveId(result.conversation_id);
+        syncUrl(result.conversation_id);
+      }
       setFreshId(id);
       setTurns((t) => t.map((x) => (x.id === id ? { ...x, result } : x)));
     } catch (err) {
@@ -280,10 +337,68 @@ export default function AskPage() {
 
   function reset() {
     if (busy) return;
+    loadSeq.current++;
+    conversationId.current = null;
+    setActiveId(null);
+    setLoadingConv(false);
+    setNotice(null);
+    syncUrl(null);
     setTurns([]);
     setFreshId(null);
     setQuestion("");
     inputRef.current?.focus();
+  }
+
+  const openConversation = useCallback(
+    async (id: string) => {
+      const mine = ++loadSeq.current;
+      setLoadingConv(true);
+      setNotice(null);
+      try {
+        const c = await api<ConversationDetail>(`organizations/${orgId}/conversations/${id}`);
+        if (mine !== loadSeq.current) return;
+        conversationId.current = c.id;
+        setActiveId(c.id);
+        setFreshId(null);
+        setQuestion("");
+        setTurns(
+          c.turns.map((x) => ({
+            id: nextId.current++,
+            question: x.question,
+            ...(x.result ? { result: x.result } : {}),
+            ...(x.redacted ? { redacted: true } : {}),
+            ...(x.feedback ? { feedback: x.feedback } : {}),
+          })),
+        );
+        const last = c.turns[c.turns.length - 1];
+        if (last) {
+          const { workspaces: known, setWorkspaceId: pick } = orgRef.current;
+          if (known.some((w) => w.id === last.workspace_id)) pick(last.workspace_id);
+          else pendingWs.current = last.workspace_id; // the list is still loading, or the person lost access to it
+        }
+        syncUrl(c.id);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      } catch (err) {
+        if (mine !== loadSeq.current) return;
+        syncUrl(null);
+        conversationId.current = null;
+        setActiveId(null);
+        setNotice((err as { status?: number }).status === 404 ? "That conversation no longer exists." : "Couldn't open that conversation. Try again in a moment.");
+      } finally {
+        if (mine === loadSeq.current) setLoadingConv(false);
+      }
+    },
+    [orgId],
+  );
+
+  // Opened from a link or after a reload: /ask?c=<id>.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("c");
+    if (id) void openConversation(id);
+  }, [openConversation]);
+
+  function conversationDeleted(id: string) {
+    if (id === conversationId.current) reset();
   }
 
   return (
@@ -301,16 +416,34 @@ export default function AskPage() {
             </>
           )}
         </div>
-        {!empty && (
-          <button type="button" className="ghost small" onClick={reset} disabled={busy}>
-            <IconNewChat size={15} />
-            New conversation
-          </button>
-        )}
+        <div className="row page-bar-actions">
+          <HistoryMenu orgId={orgId} activeId={activeId} disabled={busy || loadingConv} onOpen={openConversation} onDeleted={conversationDeleted} />
+          {!empty && (
+            <button type="button" className="ghost small" onClick={reset} disabled={busy}>
+              <IconNewChat size={15} />
+              New conversation
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="chat-scroll">
-        {empty ? (
+        {notice && (
+          <div className="alert" role="status">
+            <IconAlert size={16} />
+            {notice}
+          </div>
+        )}
+        {loadingConv && empty ? (
+          <SkeletonStatus label="Opening conversation…">
+            <div className="stack" style={{ gap: 10 }}>
+              <Skel w="40%" h={14} />
+              <Skel h={12} />
+              <Skel w="92%" h={12} />
+              <Skel w="65%" h={12} />
+            </div>
+          </SkeletonStatus>
+        ) : empty ? (
           <div className="chat-intro">
             <h1>What do you need to know?</h1>
             <p>

@@ -44,7 +44,7 @@ const usd = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
 });
 
-export function PricingPlans({ salesHref }: { salesHref: string }) {
+export function PricingPlans({ salesHref, startHref }: { salesHref: string; startHref: string }) {
   const [billingPeriod, setBillingPeriod] = useState<(typeof BILLING_PERIODS)[number]>("Monthly");
   const annual = billingPeriod === "Annual";
 
@@ -92,7 +92,7 @@ export function PricingPlans({ salesHref }: { salesHref: string }) {
                   <SoftText text={`/ ${annual ? "year" : "month"} + ${plan.additionalCost}`} />
                 </span>
               </p>
-              <Link href={contactSales ? salesHref : "/login"} className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`}>
+              <Link href={contactSales ? salesHref : startHref} className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`}>
                 {contactSales ? "Contact sales" : "Get started"}
                 <IconArrowRight size={16} />
               </Link>

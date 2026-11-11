@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/Brand";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { demoCta, site } from "./site";
+import { demoCta, publicOnly, signInHref, signInLabel, site } from "./site";
 import "../landing.css";
 import "./public.css";
 
@@ -11,7 +11,7 @@ import "./public.css";
  * guides as the sign-in gate and landing, but the page scrolls.
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
-  const signedIn = (await cookies()).has("ragsis_session");
+  const signedIn = !publicOnly && (await cookies()).has("ragsis_session");
 
   return (
     <main className="gate pub">
@@ -29,8 +29,8 @@ export default async function PublicLayout({ children }: { children: React.React
             </a>
           )}
           <ThemeToggle />
-          <Link href={signedIn ? "/app" : "/login"} className="land-pill">
-            {signedIn ? "Open workspace" : "Sign in"}
+          <Link href={signedIn ? "/app" : signInHref} className="land-pill">
+            {signedIn ? "Open workspace" : signInLabel}
           </Link>
         </nav>
       </header>
@@ -43,6 +43,7 @@ export default async function PublicLayout({ children }: { children: React.React
         </span>
         <nav>
           <Link href="/pricing">Pricing</Link>
+          <Link href="/waitlist">Waitlist</Link>
           <Link href="/terms">Terms</Link>
           <Link href="/privacy">Privacy</Link>
         </nav>

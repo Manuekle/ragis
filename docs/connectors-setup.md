@@ -1,5 +1,11 @@
 # Conectores: cómo crear las apps de Google, Slack y ClickUp
 
+<p>
+  <img alt="Gmail" src="assets/icons/tech/gmail.svg" height="32">&nbsp;
+  <img alt="Slack" src="assets/icons/tech/slack.svg" height="32">&nbsp;
+  <img alt="ClickUp" src="assets/icons/tech/clickup.svg" height="32">
+</p>
+
 Guía para activar los conectores de CON-01 (ADR-025). Sin estas credenciales la página **Connected apps** muestra cada
 app como "Not available yet". Para probar sin cuentas reales usa `CONNECTORS_DEMO=1` (solo desarrollo).
 

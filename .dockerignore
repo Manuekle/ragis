@@ -1,7 +1,6 @@
 .git
 .env*
 **/.env*
-apps/web/app/fonts
 **/node_modules
 **/.venv
 **/.next

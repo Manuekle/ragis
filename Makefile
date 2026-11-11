@@ -1,6 +1,6 @@
 DC = docker compose -f infra/docker/compose.yml --env-file .env
 
-.PHONY: env up up-obs down logs test test-py test-api eval build-web tf-validate mock-oidc reindex
+.PHONY: env up up-obs down logs test test-py test-api eval build-web tf-validate mock-oidc reindex rehearse-plan rehearse rehearse-destroy diagrams seed
 
 env:            ## Genera .env con secretos aleatorios (no sobrescribe)
 	@test -f .env || ./scripts/dev-env.sh
@@ -43,3 +43,18 @@ eval:           ## Golden set contra el stack levantado
 tf-validate:
 	docker run --rm -v $(PWD)/infra/terraform:/tf -w /tf/envs/dev hashicorp/terraform:1.9.8 init -backend=false -input=false
 	docker run --rm -v $(PWD)/infra/terraform:/tf -w /tf/envs/dev hashicorp/terraform:1.9.8 validate
+
+rehearse-plan:  ## Ensayo en Floci: qué crearía Terraform (docs/guides/floci.md)
+	./scripts/aws-rehearsal.sh plan
+
+rehearse:       ## Ensayo en Floci: crea la infraestructura del piloto en el emulador, antes de AWS real
+	./scripts/aws-rehearsal.sh apply
+
+rehearse-destroy: ## Ensayo en Floci: borra lo creado en el emulador
+	./scripts/aws-rehearsal.sh destroy
+
+diagrams:       ## Regenera los SVG de docs/diagrams
+	python3 docs/diagrams/build.py
+
+seed:           ## Usuario y datos de prueba locales (org ACME Demo + 9 documentos); idempotente
+	uv run python scripts/seed-dev.py

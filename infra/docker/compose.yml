@@ -94,6 +94,7 @@ services:
       seaweedfs: { condition: service_healthy }
 
   api:
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
@@ -133,6 +134,7 @@ services:
       retries: 20
 
   rag-engine:
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: services/rag-engine/Dockerfile
@@ -144,6 +146,7 @@ services:
       migrate: { condition: service_completed_successfully }
 
   ingest-worker:
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: services/ingest-worker/Dockerfile
@@ -161,6 +164,7 @@ services:
       elasticmq: { condition: service_started }
 
   web:
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
@@ -170,6 +174,11 @@ services:
       PUBLIC_BASE_URL: http://localhost:3000
       DEMO_BOOKING_URL: ${DEMO_BOOKING_URL:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      TURSO_DATABASE_URL: ${TURSO_DATABASE_URL:-}
+      TURSO_AUTH_TOKEN: ${TURSO_AUTH_TOKEN:-}
+      # Confirmación de correo de /waitlist. En local no se envía nada: el enlace sale en la página y en el log.
+      WAITLIST_EMAIL_FROM: ${WAITLIST_EMAIL_FROM:-}
+      WAITLIST_EMAIL_TEST: ${WAITLIST_EMAIL_TEST:-1}
       AUTH_MODE: ${AUTH_MODE:-dev}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_AUDIENCE:-}

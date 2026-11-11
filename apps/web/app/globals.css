@@ -2,6 +2,25 @@
    Surfaces: off-white panels on a quiet gray canvas, concentric radii, pill controls.
    Motion: transitions.dev tokens + better-ui values (press 0.96, enter 300ms, exit 150ms). */
 
+/* Brand fonts (Universal Sans Display, Lanterne, Basier Square Mono).
+   Trial files live in public/fonts/ (git-ignored, NOT docker-ignored): every image built from this checkout —
+   local compose and the pilot — bakes them in, so local and prod render the same type.
+   Absolute /fonts/ URLs are not resolved by the bundler: on a clean clone without the files they just 404 and
+   the system stacks in --font / --serif / --mono take over, instead of breaking `next build`. */
+@font-face { font-family: "Universal Sans"; src: url("/fonts/UniversalSans-Display-450-Trial.ttf") format("truetype"); font-weight: 450; font-style: normal; font-display: swap; }
+
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Light-Trial.woff2") format("woff2"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-LightItalic-Trial.woff2") format("woff2"); font-weight: 300; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Regular-Trial.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Italic-Trial.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Medium-Trial.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-MediumItalic-Trial.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Bold-Trial.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-BoldItalic-Trial.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Heavy-Trial.woff2") format("woff2"); font-weight: 900; font-style: normal; font-display: swap; }
+
+@font-face { font-family: "Basier Square Mono"; src: url("/fonts/BasierSquareMono-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+
 :root {
   /* color */
   /* No pure #fff / #000 anywhere: off-white surfaces, near-black ink, tinted shadows.
@@ -59,9 +78,9 @@
   --r-pill: 999px;
 
   /* type */
-  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --serif: Baskerville, Georgia, "Times New Roman", serif;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font: "Universal Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --serif: "Lanterne", Baskerville, Georgia, "Times New Roman", serif;
+  --mono: "Basier Square Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   --tracking-mono: -0.02em;
   --tracking-tight: -0.02em;
   --tracking-tighter: -0.04em;
@@ -227,9 +246,12 @@
 *::before,
 *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-/* No rubber-band: the page never moves when there is nothing (more) to scroll, on either axis. */
+/* No rubber-band: the page never moves when there is nothing (more) to scroll, on either axis.
+   Only the root scroll surfaces opt out (html/body here, .panel and the chat scrollers below).
+   Never put this on `*`: a nested scroller that cannot scroll in the wheel's direction (a tab strip,
+   a table wrapper, a code block with overflow-x: auto, a short list) would then swallow the wheel
+   instead of passing it to the page, so hovering it froze scrolling. */
 html, body { overscroll-behavior: none; }
-* { overscroll-behavior: none; }
 body {
   background: var(--bg);
   color: var(--text);
@@ -266,6 +288,7 @@ p.sub { color: var(--muted); margin-top: 6px; max-width: 62ch; }
   border-radius: 20px;
   box-shadow: var(--shadow-sm);
   overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior: none;
   min-height: 0;
 }
 .main { padding: 44px 48px 56px; max-width: 1100px; margin: 0 auto; width: 100%; }
@@ -1124,6 +1147,7 @@ tbody tr { transition: background-color var(--duration-quick, 150ms) ease; }
   position: relative;
   display: flex; flex-direction: column;
   flex: 1; min-height: 0; overflow-x: clip; isolation: isolate;
+  overscroll-behavior: none;
 }
 .panel-chat { overflow: hidden; }
 .panel-chat { background: var(--surface); }
@@ -1164,7 +1188,7 @@ tbody tr { transition: background-color var(--duration-quick, 150ms) ease; }
 @media (prefers-reduced-motion: reduce) { .page-bar > button { animation-name: fade-in; } }
 
 .chat-scroll {
-  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: none;
   width: 100%; padding: 28px max(32px, calc((100% - 716px) / 2)) 24px;
   display: flex; flex-direction: column; gap: 40px;
   /* soft edges where messages meet the bar and the composer, instead of a hard cut */
@@ -1317,6 +1341,32 @@ tbody tr { transition: background-color var(--duration-quick, 150ms) ease; }
 
 .turn-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .turn-foot .mono { color: var(--muted); font-size: 11.5px; }
+
+/* ───────────── conversation history (Ask) ───────────── */
+.page-bar-actions > .hist, .page-bar-actions > button { animation: enter 300ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { .page-bar-actions > .hist, .page-bar-actions > button { animation-name: fade-in; } }
+.hist { position: relative; }
+.hist .menu { left: auto; right: 0; width: min(380px, calc(100vw - 32px)); }
+/* On phones the actions wrap onto their own row, so History sits at the left: anchor the list to the bar instead. */
+@media (max-width: 640px) {
+  .hist { position: static; }
+  .hist .menu { left: 12px; right: 12px; width: auto; }
+}
+.hist-list { max-height: min(420px, 60vh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 2px; }
+.hist-row { display: flex; align-items: center; gap: 2px; border-radius: var(--r-md); transition: background-color var(--duration-quick, 150ms) ease; }
+@media (hover: hover) { .hist-row:hover { background: var(--surface-2); } }
+.hist-row[data-active="true"] { background: var(--accent-soft); }
+.menu-item.hist-open { flex: 1; min-width: 0; width: auto; flex-direction: column; align-items: flex-start; gap: 1px; background: transparent; }
+.hist-open:disabled { cursor: default; opacity: .55; }
+.hist-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+.hist-meta { font-size: 12px; font-weight: 400; color: var(--muted); }
+.hist-actions { display: flex; flex: none; gap: 2px; padding-right: 4px; opacity: 0; transition: opacity var(--duration-quick, 150ms) ease; }
+.hist-row:hover .hist-actions, .hist-row:focus-within .hist-actions { opacity: 1; }
+@media (hover: none) { .hist-actions { opacity: 1; } }
+.hist-rename { flex: 1; min-width: 0; margin: 4px 6px; height: 36px; padding: 0 10px; font-size: 14px; }
+.hist-more { align-self: center; margin: 6px 0 2px; }
+.hist-empty { margin: 0; padding: 16px 12px; text-align: center; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.hist-error { color: var(--err); }
 .fb { display: flex; gap: 2px; }
 /* chosen vote: duotone glyph, blue for helpful, red for not helpful */
 .fb button[aria-pressed="true"] { opacity: 1; }

@@ -1,0 +1,135 @@
+/* ───────────── also included (waitlist/Included.tsx) ─────────────
+   An expanding slider: the open feature takes the room, the rest fold into slices of a fixed
+   width. Every drawing is drawn at the open card's size and only slides inside its frame, so
+   opening a card reveals more of the same picture instead of rescaling it. */
+
+/* heading on the left, counter and arrows on the right, the slider under both */
+.wl-sec.inc-sec { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 24px; }
+/* the demo above already closes with its own ruled frame, so this section skips the dashed rule on top */
+.wl-sec.inc-sec { border-top: 0; }
+/* and that frame's bottom rule is the divider: the demo's section ends on it, so only this
+   section's top padding sits between the rule and the heading, as under every other section rule */
+.wl-sec:has(+ .inc-sec) { padding-bottom: 0; }
+.inc-sec > h2 { grid-column: 1; }
+
+.inc-nav { grid-column: 2; display: flex; align-items: center; gap: 8px; margin-bottom: clamp(24px, 3.4vw, 34px); }
+.inc-count { margin-right: 8px; font-family: var(--serif); font-size: 16px; letter-spacing: 0; color: var(--faint); font-variant-numeric: tabular-nums lining-nums; }
+.inc-count b { display: inline-block; font-weight: 400; color: var(--text); animation: inc-tick 420ms var(--ease-smooth-out) both; }
+@keyframes inc-tick { from { opacity: 0; transform: translateY(5px); filter: blur(3px); } }
+.inc-arrow {
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  color: var(--text); background: var(--surface); box-shadow: var(--shadow-sm);
+}
+@media (hover: hover) { .inc-arrow:hover { background: var(--surface-2); } }
+
+.inc {
+  --slice: 84px;
+  --gap: 10px;
+  --art-h: 268px;
+  /* width of the open card's drawing: the row minus the folded slices and the frame's inset */
+  --open: calc(100cqw - (var(--n) - 1) * (var(--slice) + var(--gap)) - 16px);
+  grid-column: 1 / -1;
+  container-type: inline-size;
+  display: flex; gap: var(--gap); height: 412px;
+}
+
+.inc-card {
+  position: relative; overflow: hidden; display: block;
+  flex: 0 0 var(--slice); min-width: 0; height: 100%; padding: 0;
+  border: 1px solid var(--border); border-radius: var(--r-xl);
+  font-weight: 400; text-align: left; white-space: normal;
+  color: var(--muted); background: var(--surface);
+  transition:
+    flex-basis 700ms var(--ease-smooth-out),
+    background-color 300ms ease, border-color 300ms ease, box-shadow 500ms var(--ease-smooth-out), color 300ms ease;
+}
+.inc-card:not(:disabled):active { transform: none; }
+.inc-card[aria-current] {
+  flex-basis: calc(100% - (var(--n) - 1) * (var(--slice) + var(--gap)));
+  color: var(--text); border-color: var(--border-strong); box-shadow: var(--shadow-md); cursor: default;
+}
+@media (hover: hover) {
+  .inc-card:not([aria-current]):hover { color: var(--text); background: color-mix(in oklab, var(--surface) 70%, var(--surface-2)); }
+  .inc-card:not([aria-current]):hover .inc-art img { opacity: 0.85; }
+}
+.inc-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* the drawing: a frame along the top; the picture inside slides from its middle strip to centred */
+.inc-art {
+  position: absolute; left: 8px; right: 8px; top: 8px; height: var(--art-h); overflow: hidden;
+  border-radius: calc(var(--r-xl) - 6px);
+  background: radial-gradient(120% 90% at 50% 100%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%), var(--surface-2);
+}
+.inc-art.ill img {
+  position: absolute; left: 50%; bottom: -6px; width: var(--open); max-width: none; height: auto;
+  transform: translateX(-38%); transform-origin: 50% 100%;
+  opacity: 0.55;
+  transition: transform 700ms var(--ease-smooth-out), opacity 400ms ease;
+}
+.inc-card[aria-current] .inc-art.ill img { transform: translateX(-50%); opacity: 1; }
+.inc-card[aria-current] .inc-art { background: radial-gradient(120% 90% at 50% 100%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 70%), var(--surface-2); }
+
+/* the number sits centred in a column as wide as a folded slice, under the drawing. Folded it is
+   all the slice shows; open it turns accent and grows (Included.tsx springs its scale) without
+   moving sideways, and the name and line sit beside it. */
+.inc-n {
+  --n-size: 44px;
+  position: absolute; left: 0; width: calc(var(--slice) - 2px); top: calc(var(--art-h) + 8px); bottom: 0;
+  display: grid; place-items: center;
+  font-family: var(--serif); font-size: var(--n-size); font-weight: 400; line-height: 1; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums; color: var(--faint);
+  transition: color 300ms ease;
+}
+.inc-n-num { display: block; transform-origin: 50% 50%; }
+.inc-card[aria-current] .inc-n { color: var(--accent-text); }
+
+/* the name only shows on phones, where folded features are rows (see below) */
+.inc-label { display: none; }
+
+/* open: name and line beside the number, set at the open width so the text never reflows while the card grows */
+.inc-body {
+  position: absolute; left: calc(var(--slice) - 4px); top: calc(var(--art-h) + 8px); bottom: 0; width: calc(var(--open) - var(--slice) - 4px);
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  opacity: 0; transform: translateY(6px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.inc-body strong { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; color: var(--text); }
+.inc-body span { max-width: 30em; font-size: 15px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.inc-card[aria-current] .inc-body { opacity: 1; transform: none; transition: opacity 450ms ease 320ms, transform 550ms var(--ease-smooth-out) 320ms; }
+
+/* narrower rows: thinner slices */
+@media (max-width: 900px) {
+  .inc { --slice: 64px; --gap: 8px; --art-h: 236px; height: 384px; }
+  .inc-n { --n-size: 40px; }
+}
+
+/* phones: the slider stands up; folded features become rows with their name across */
+@media (max-width: 640px) {
+  .wl-sec.inc-sec { grid-template-columns: minmax(0, 1fr); }
+  .inc-nav { display: none; }
+  .inc { --art-h: 196px; flex-direction: column; gap: 8px; height: auto; }
+  .inc-card, .inc-card[aria-current] { flex: none; }
+  .inc-card { height: 56px; transition: height 600ms var(--ease-smooth-out), background-color 300ms ease, border-color 300ms ease, box-shadow 500ms var(--ease-smooth-out), color 300ms ease; }
+  .inc-card[aria-current] { height: 344px; }
+  .inc-art { opacity: 0; transition: opacity 300ms ease; }
+  .inc-card[aria-current] .inc-art { opacity: 1; transition-delay: 150ms; }
+  .inc-art.ill img, .inc-card[aria-current] .inc-art.ill img { left: 0; width: 100%; transform: none; }
+  /* folded rows: the number in a square at the start of the row, the name beside it; opening
+     carries the number down under the drawing, in step with the row growing */
+  .inc-n { --n-size: 36px; width: 56px; top: 0; bottom: auto; height: 54px; transition: top 600ms var(--ease-smooth-out), height 600ms var(--ease-smooth-out), color 300ms ease; }
+  .inc-card[aria-current] .inc-n { top: calc(var(--art-h) + 8px); height: calc(342px - var(--art-h) - 8px); }
+  .inc-label {
+    display: block; position: absolute; left: 56px; top: 17px;
+    font-size: 14.5px; letter-spacing: -0.01em; white-space: nowrap;
+    transition: opacity 250ms ease 250ms;
+  }
+  .inc-card[aria-current] .inc-label { opacity: 0; transition-delay: 0ms; }
+  .inc-body { left: 60px; width: calc(100% - 76px); }
+  .inc-body strong { font-size: 18px; }
+  .inc-body span { font-size: 14.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inc-card, .inc-art, .inc-art.ill img, .inc-label, .inc-body, .inc-n { transition-duration: 1ms !important; transition-delay: 0ms !important; }
+  .inc-count b { animation: none; }
+}

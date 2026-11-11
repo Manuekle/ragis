@@ -23,9 +23,13 @@ eval/reports/
 /.agents/
 /.claude/
 /.gstack/
-/apps/web/app/fonts/
+/apps/web/public/fonts/
 /system-design/
 /transitions/
 /skills-lock.json
 /Especificacion_Claude_Onboarding_Agentes_RAG.md
 /Plan_Maestro_Plataforma_RAG_Empresarial_AWS.docx
+
+# Ensayo local de Terraform contra Floci
+infra/terraform/.floci/
+.vercel

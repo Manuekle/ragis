@@ -44,12 +44,13 @@ export async function discovery() {
   return cached;
 }
 
-/** Verifica firma, issuer, audiencia (client_id), expiración y nonce del id_token. */
-export async function verifyIdToken(idToken: string, nonce: string) {
+/** Verifica firma, issuer, audiencia (client_id), expiración y, si hubo redirección al IdP, el nonce del id_token. */
+export async function verifyIdToken(idToken: string, nonce?: string) {
   const { issuer, clientId } = oidcConfig();
   const { jwks } = await discovery();
   const { payload } = await jwtVerify(idToken, jwks, { issuer, audience: clientId });
-  if (payload.nonce !== nonce) throw new Error("invalid nonce");
+  if (nonce !== undefined && payload.nonce !== nonce) throw new Error("invalid nonce");
+  if (payload.token_use !== undefined && payload.token_use !== "id") throw new Error("se requiere id_token");
   return payload;
 }
 

@@ -5,6 +5,7 @@
 //   solid   – shapes filled with currentColor; use it on glyphs without inner detail (thumbs, bubbles, shields)
 import { createElement, type SVGProps } from "react";
 import {
+  Edit02Icon,
   Plug01Icon,
   RefreshIcon,
   Alert02Icon,
@@ -71,6 +72,9 @@ import {
   HourglassIcon,
   StopIcon,
   Flag02Icon,
+  Download04Icon,
+  Link01Icon,
+  NewTwitterIcon,
 } from "@hugeicons/core-free-icons";
 
 type IconData = readonly (readonly [string, { readonly [key: string]: string | number }])[];
@@ -165,8 +169,25 @@ export const IconX = make(Cancel01Icon);
 export const IconSearch = make(Search01Icon);
 export const IconUpload = make(CloudUploadIcon);
 export const IconTrash = make(Delete02Icon);
+export const IconEdit = make(Edit02Icon);
 export const IconCopy = make(Copy01Icon);
 export const IconCopyCheck = make(CopyCheckIcon);
+export const IconDownload = make(Download04Icon);
+export const IconLink = make(Link01Icon);
+
+// Social networks (share buttons)
+export const IconXSocial = make(NewTwitterIcon);
+/**
+ * LinkedIn's own mark: the square with "in" cut out of it, as one solid shape. It takes the text
+ * color like every other icon, so it is ink in the light app and near-white in the dark one.
+ */
+export function IconLinkedIn({ size = 16, className, strokeWidth: _strokeWidth, variant: _variant, ...rest }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 382 382" fill="currentColor" aria-hidden="true" className={className ? `svg-icon ${className}` : "svg-icon"} {...rest}>
+      <path d="M347.445 0H34.555C15.471 0 0 15.471 0 34.555v312.889C0 366.529 15.471 382 34.555 382h312.889C366.529 382 382 366.529 382 347.444V34.555C382 15.471 366.529 0 347.445 0zM118.207 329.844c0 5.554-4.502 10.056-10.056 10.056H65.345c-5.554 0-10.056-4.502-10.056-10.056V150.403c0-5.554 4.502-10.056 10.056-10.056h42.806c5.554 0 10.056 4.502 10.056 10.056v179.441zM86.748 123.432c-22.459 0-40.666-18.207-40.666-40.666S64.289 42.1 86.748 42.1s40.666 18.207 40.666 40.666-18.206 40.666-40.666 40.666zM341.91 330.654c0 5.106-4.14 9.246-9.246 9.246H286.73c-5.106 0-9.246-4.14-9.246-9.246v-84.168c0-12.556 3.683-55.021-32.813-55.021-28.309 0-34.051 29.066-35.204 42.11v97.079c0 5.106-4.139 9.246-9.246 9.246h-44.426c-5.106 0-9.246-4.14-9.246-9.246V149.593c0-5.106 4.14-9.246 9.246-9.246h44.426c5.106 0 9.246 4.14 9.246 9.246v15.655c10.497-15.753 26.097-27.912 59.312-27.912 73.552 0 73.131 68.716 73.131 106.472L341.91 330.654z" />
+    </svg>
+  );
+}
 export const IconThumbUp = make(ThumbsUpIcon);
 export const IconThumbDown = make(ThumbsDownIcon);
 export const IconNewChat = make(BubbleChatAddIcon);

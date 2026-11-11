@@ -71,10 +71,12 @@ def login(api: str, email: str) -> Session:
 
 
 def provision(api: str, key: str, spec: dict, corpus: Path, run_id: str) -> TenantState:
+    """`run_id` vacío usa los correos y el nombre tal cual (semilla local: scripts/seed-dev.py)."""
     users_spec = spec["users"]
-    sessions = {name: login(api, u["email"].replace("@", f"+{run_id}@")) for name, u in users_spec.items()}
+    tag = f"+{run_id}" if run_id else ""
+    sessions = {name: login(api, u["email"].replace("@", f"{tag}@")) for name, u in users_spec.items()}
     owner = sessions["owner"]
-    org = owner.req("POST", "organizations", json={"name": f"{spec['name']} {run_id}"}).json()
+    org = owner.req("POST", "organizations", json={"name": f"{spec['name']} {run_id}".strip()}).json()
     st = TenantState(org["id"], org["default_workspace_id"], sessions)
     if spec.get("graph"):
         owner.req("PATCH", f"organizations/{st.org}/settings", json={"graph_mode": "on"})
@@ -85,7 +87,7 @@ def provision(api: str, key: str, spec: dict, corpus: Path, run_id: str) -> Tena
         s = sessions[name]
         if name != "owner":
             owner.req("POST", f"organizations/{st.org}/members",
-                      json={"email": u["email"].replace("@", f"+{run_id}@"), "role": u.get("role", "member")})
+                      json={"email": u["email"].replace("@", f"{tag}@"), "role": u.get("role", "member")})
             owner.req("POST", f"organizations/{st.org}/workspaces/{st.ws}/members",
                       json={"user_id": s.user_id, "role": u.get("workspace_role", "reader")})
         for g in u.get("groups", []):

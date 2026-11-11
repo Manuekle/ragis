@@ -2,9 +2,10 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Deps } from "../app.js";
 import { issueInternalToken } from "../lib/auth.js";
-import { ApiError, notFound, quotaExceeded } from "../lib/errors.js";
+import { ApiError, badRequest, notFound, quotaExceeded } from "../lib/errors.js";
 import { audit, requireWorkspaceRead, tx, type TenantContext } from "../lib/tenant.js";
 import { childSpan } from "../lib/telemetry.js";
+import { saveConversationTurn } from "./conversations.js";
 
 const QueryBody = z.object({
   question: z.string().trim().min(2).max(2000),
@@ -12,22 +13,33 @@ const QueryBody = z.object({
   top_k: z.number().int().min(1).max(8).optional(),
   // RAG-05: modo de recuperación por grafo; solo tiene efecto si el tenant tiene el grafo habilitado.
   mode: z.enum(["auto", "off", "local", "global", "hybrid"]).optional(),
+  // Historial (ADR-028): uuid generado por el cliente; si viene, el turno se guarda en esa conversación.
+  conversation_id: z.string().uuid().optional(),
 });
 
 export interface RagClient {
   query(token: string, body: Record<string, unknown>, headers?: Record<string, string>): Promise<{ status: number; body: unknown }>;
 }
 
-export function httpRagClient(baseUrl: string): RagClient {
+/** `timeoutMs`: un modelo local (Ollama) en una máquina cargada puede tardar más de un minuto en generar. */
+export function httpRagClient(baseUrl: string, timeoutMs = 120_000): RagClient {
   return {
     async query(token, body, extra) {
-      const res = await fetch(`${baseUrl}/internal/query`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(extra ?? {}) },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
-      });
-      return { status: res.status, body: await res.json().catch(() => ({})) };
+      try {
+        const res = await fetch(`${baseUrl}/internal/query`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(extra ?? {}) },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        return { status: res.status, body: await res.json().catch(() => ({})) };
+      } catch (err) {
+        // Sin esto el tiempo agotado salía como «error interno» (500) sin explicación.
+        if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+          throw new ApiError(504, "rag_timeout", "The answer is taking too long. Try again in a moment.");
+        }
+        throw err;
+      }
     },
   };
 }
@@ -90,8 +102,21 @@ export async function queryRoutes(app: FastifyInstance, deps: Deps) {
     const t = req.tenant!;
     const ws = (req.params as { ws: string }).ws;
     requireWorkspaceRead(t, ws);
-    const body = QueryBody.parse(req.body);
-    return runRagQuery(deps, t, ws, body, req);
+    const { conversation_id: conversationId, ...body } = QueryBody.parse(req.body);
+    if (conversationId && t.apiKeyId) throw badRequest("conversation history is not available for service keys");
+    const result = await runRagQuery(deps, t, ws, body, req);
+    if (!conversationId) return result;
+
+    // Guardar nunca debe costarle la respuesta al usuario: si falla, se devuelve igual (sin conversation_id).
+    try {
+      const saved = await tx(pool, t, (db) =>
+        saveConversationTurn(db, t, { conversationId, workspaceId: ws, question: body.question, asOf: body.as_of, result: result as Record<string, unknown> }),
+      );
+      return saved ? { ...(result as object), conversation_id: conversationId } : result;
+    } catch (err) {
+      req.log.error({ err }, "could not save conversation turn");
+      return result;
+    }
   });
 
   app.get("/v1/organizations/:org/query-runs/:trace", { config: { scopes: ["query"] } }, async (req) => {

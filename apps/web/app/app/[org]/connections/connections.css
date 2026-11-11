@@ -1,44 +1,78 @@
 /* Connected apps (CON-01). Tokens del sistema; sin colores nuevos. */
-.conn-section { margin-bottom: 28px; }
-.conn-section-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 12px; letter-spacing: 0; }
-.conn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 16px; align-items: start; }
-.conn-card { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.conn-head { display: flex; gap: 14px; align-items: flex-start; }
-.conn-logo { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); }
+
+/* sections: title + one line saying who sees what */
+.conn-section { margin-bottom: 36px; }
+.conn-section-head { margin-bottom: 14px; }
+.conn-section-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--text); margin: 0; letter-spacing: 0; }
+.conn-section-title .svg-icon { color: var(--muted); }
+.conn-section-head p { font-size: 13.5px; margin-top: 2px; padding-left: 23px; /* icon + gap: lines up with the title text */ }
+
+/* one app per row: who it is on the left, its account(s) and actions on the right */
+.conn-list { display: flex; flex-direction: column; gap: 12px; container-type: inline-size; }
+.conn-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; min-width: 0; padding: 22px; }
+.conn-card.is-editing { box-shadow: var(--shadow-sm), 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent); }
+
+.conn-head { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
+.conn-logo { flex: none; width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
 .conn-title { min-width: 0; }
-.conn-title h2 { font-size: 16px; font-weight: 500; margin: 2px 0 4px; }
-.conn-title p { font-size: 13.5px; line-height: 1.45; }
-.conn-account { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line, color-mix(in oklab, var(--text) 8%, transparent)); }
-.conn-account-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-.conn-account-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.conn-account-meta strong { font-weight: 500; overflow-wrap: anywhere; }
-.conn-account-meta small { font-size: 12.5px; line-height: 1.45; }
+.conn-title h2 { font-size: 16px; font-weight: 500; margin: 1px 0 4px; }
+.conn-title p { font-size: 13.5px; line-height: 1.5; max-width: 46ch; }
+
+.conn-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.conn-card:not(.is-idle) .conn-body { padding-top: 16px; border-top: 1px solid var(--border); }
+
+/* wide enough: two columns with a hairline between them */
+@container (min-width: 720px) {
+  .conn-card { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); column-gap: 32px; }
+  .conn-card.is-idle { align-items: center; }
+  .conn-body { padding-left: 32px; }
+  .conn-card:not(.is-idle) .conn-body { padding-top: 0; border-top: 0; border-left: 1px solid var(--border); }
+}
+
+/* an account on an app */
+.conn-account { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.conn-account + .conn-account { padding-top: 14px; border-top: 1px solid var(--border); }
+.conn-account-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.conn-account-row .badge { flex: none; }
+.conn-account-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.conn-account-meta strong { font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
+.conn-meta { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: 12.5px; line-height: 1.5; }
+.conn-meta span + span::before { content: "·"; margin-right: 6px; color: var(--faint); }
 .conn-note { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.45; color: var(--text-2); background: var(--surface-2); border-radius: var(--r-md); padding: 8px 10px; }
 .conn-note .svg-icon { flex: none; margin-top: 2px; color: var(--muted); }
 .conn-note.err { background: var(--err-soft); color: var(--err); }
 .conn-note.err .svg-icon { color: var(--err); }
 .conn-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .conn-disconnect { margin-left: auto; }
-.conn-connect { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-.conn-folder { display: flex; flex-direction: column; gap: 4px; min-width: 180px; flex: 1; max-width: 260px; }
-.conn-hint { font-size: 13px; }
-.conn-demo { margin-bottom: 16px; }
 
-.conn-editor { display: flex; flex-direction: column; gap: 16px; padding: 14px; border-radius: var(--r-md); background: color-mix(in oklab, var(--surface-2) 60%, transparent); }
+/* connect: first account is the call to action; extra accounts are a quiet line under a hairline */
+.conn-connect { display: flex; gap: 10px 12px; align-items: center; flex-wrap: wrap; }
+.conn-connect.is-extra { padding-top: 14px; border-top: 1px solid var(--border); }
+.conn-account + .conn-connect.is-extra { margin-top: 2px; }
+.conn-folder { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.conn-folder > span { white-space: nowrap; }
+.conn-hint { font-size: 13px; }
+.conn-demo { margin-bottom: 24px; }
+.conn-alert { grid-column: 1 / -1; }
+
+/* settings: full width under the app, fields separated by hairlines */
+.conn-editor { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; border-radius: var(--r-md); background: color-mix(in oklab, var(--surface-2) 60%, transparent); }
 .conn-field { display: flex; flex-direction: column; gap: 8px; }
+.conn-field + .conn-field { padding-top: 16px; border-top: 1px solid var(--border); }
 .conn-field > strong { font-weight: 500; font-size: 13.5px; }
 .conn-field > small { font-size: 12.5px; line-height: 1.45; }
 .conn-editor .disclosure { background: var(--surface); }
-.conn-editor-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.conn-editor-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
 .conn-options { display: flex; flex-direction: column; gap: 8px; }
 .conn-filter { height: 32px; font-size: 13px; }
-.conn-option-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; padding: 4px; margin: -4px; }
-.conn-option { padding: 5px 2px; }
+.conn-option-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 2px 16px; align-content: start; max-height: 260px; overflow-y: auto; padding: 4px; margin: -4px; }
+.conn-option { padding: 5px 2px; min-width: 0; }
 .conn-option-label { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text); }
 .conn-option-label small { font-size: 12px; }
 .conn-private { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 1px 8px; }
 
 @media (max-width: 560px) {
+  .conn-card { padding: 18px; }
   .conn-disconnect { margin-left: 0; }
-  .conn-folder { max-width: none; }
+  .conn-editor { padding: 16px; }
 }

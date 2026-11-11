@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { IconArrowRight, IconCheck } from "@/components/icons";
 import { PubTitle } from "../PubTitle";
-import { demoCta, salesHref } from "../site";
+import { demoCta, salesHref, signInHref } from "../site";
 import { PricingPlans } from "./PricingPlans";
 
 export const metadata: Metadata = {
@@ -31,7 +31,7 @@ export default function PricingPage() {
       />
 
       <div className="pub-body">
-        <PricingPlans salesHref={salesHref} />
+        <PricingPlans salesHref={salesHref} startHref={signInHref} />
 
         <section className="plan-wide">
           <div>

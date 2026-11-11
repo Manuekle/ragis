@@ -105,10 +105,10 @@ components:
         trace_id: { type: string, pattern: '^qry_[0-9a-f]{24}$' }
         answer: { type: string }
         abstained: { type: boolean }
-        abstain_reason: { type: [string, "null"], enum: [insufficient_evidence, no_verified_citations, model_abstained, null] }
+        abstain_reason: { type: [string, "null"], enum: [insufficient_evidence, no_verified_citations, model_abstained, smalltalk, null] }
         citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
-        retrieval_strategy: { type: string, enum: [hybrid, hybrid_rerank] }
-        question_class: { type: string, enum: [factual, numeric, comparative, exact_lookup] }
+        retrieval_strategy: { type: string, enum: [hybrid, hybrid_rerank, smalltalk] }
+        question_class: { type: string, enum: [factual, numeric, comparative, exact_lookup, smalltalk] }
         generation_model: { type: [string, "null"] }
         embedding_model: { type: string }
         latency_ms: { type: integer }
@@ -245,10 +245,45 @@ paths:
                 question: { type: string, maxLength: 2000 }
                 as_of: { type: string, format: date, description: Filtrar por vigencia }
                 top_k: { type: integer, minimum: 1, maximum: 8 }
+                conversation_id:
+                  type: string
+                  format: uuid
+                  description: >-
+                    Historial (ADR-028). UUID generado por el cliente; si viene, el turno se guarda en esa conversación
+                    (se crea con el primer turno). No disponible para claves de servicio (400).
       responses:
-        "200": { description: Respuesta, content: { application/json: { schema: { $ref: '#/components/schemas/QueryResponse' } } } }
+        "200":
+          description: >-
+            Respuesta. Incluye conversation_id solo si el turno quedó guardado; guardar nunca bloquea la respuesta.
+          content: { application/json: { schema: { $ref: '#/components/schemas/QueryResponse' } } }
+        "400": { description: conversation_id inválido o enviado con una clave de servicio }
         "403": { description: Política de modelos del tenant no permite ningún modelo }
         "429": { description: Rate limit / cuota mensual }
+  /v1/organizations/{org}/conversations:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get:
+      summary: Historial propio de conversaciones (privado; más reciente primero). Sin acceso con claves de servicio
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+        - { name: before, in: query, description: Cursor next_before de la página anterior, schema: { type: string } }
+      responses:
+        "200":
+          description: "{ conversations: [{ id, title, created_at, updated_at, turns }], next_before: string | null }"
+  /v1/organizations/{org}/conversations/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get:
+      summary: >-
+        Conversación con sus turnos. Los documentos citados se vuelven a comprobar contra la ACL actual: si alguno
+        ya no es visible el turno vuelve con redacted=true y result=null
+      responses: { "200": { description: OK }, "404": { description: No existe o no es del usuario } }
+    patch:
+      summary: Renombra (no cambia el orden de la lista)
+      requestBody:
+        content: { application/json: { schema: { type: object, required: [title], properties: { title: { type: string, minLength: 1, maxLength: 120 } } } } }
+      responses: { "200": { description: "{ id, title }" }, "404": { description: No existe o no es del usuario } }
+    delete:
+      summary: Borra la conversación y todos sus turnos (auditado)
+      responses: { "204": { description: Borrada }, "404": { description: No existe o no es del usuario } }
   /v1/organizations/{org}/query-runs/{trace}:
     x-api-key-scopes: [query]
     parameters: [{ $ref: '#/components/parameters/org' }, { name: trace, in: path, required: true, schema: { type: string } }]
