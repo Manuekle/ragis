@@ -124,14 +124,14 @@ apps/
   web/                Next.js 16: UI and BFF (login, session, /api/auth/* routes)
   api/                Fastify: routes, authZ, uploads, agents, workflows, signatures, connectors
 services/
-  rag-engine/         FastAPI: query (retrieval, fusion, generation, verifier)
-  ingest-worker/      SQS consumer: validation, parsing, OCR, chunking, embeddings, index
+  rag-engine/         FastAPI: query (full text + vectors + graph, fusion, generation, verifier)
+  ingest-worker/      SQS consumer: validation, parsing, OCR, speech to text, chunking, graph, embeddings, index
   ai-gateway/         Model registry, residency policy, providers (local, bedrock, ollama)
 packages/
   ragsis-core/        Settings, DB with RLS context, internal token, telemetry
   contracts/          OpenAPI v1
   policy/             Authorization test index
-db/migrations/        0001…0013: schema, forced RLS, bounded functions
+db/migrations/        0001…0017: schema, forced RLS, bounded functions
 infra/
   docker/             compose.yml (local), compose.pilot.yml (pilot), Caddyfile.pilot
   terraform/
@@ -142,15 +142,15 @@ ops/runbooks/         Operational procedures
 eval/                 Golden set, sample corpus and metrics harness
 docs/                 This documentation, ADRs, diagrams and icons
 scripts/              dev-env.sh, e2e.py, aws-rehearsal.sh
-tests/python/         pytest: isolation, ingestion, RAG, multimodal, graph, traces
+tests/python/         pytest: isolation, ingestion, RAG, multimodal, audio, graph, traces
 ```
 
 ## Tests
 
 | Suite | Where | Covers |
 |---|---|---|
-| Python | `tests/python/` | RLS isolation, ACL in retrieval, RAG flow, multimodal, graph, reindex and OCR, traces |
-| API | `apps/api/test/` | Tenancy and roles, OIDC, signatures, Agent Studio, workflows, connectors |
+| Python | `tests/python/` | RLS isolation, ACL in retrieval, RAG flow, multimodal, audio, cross-modal graph, reindex and OCR, traces |
+| API | `apps/api/test/` | Tenancy and roles, OIDC, signatures, Agent Studio, workflows, connectors, conversations, folders and transcripts |
 | Web types | `pnpm --filter @ragsis/web lint` (`tsc --noEmit`) | The web has no test suite; it is validated with types |
 | E2E | `make e2e` | Full stack with the golden set (`eval/golden/sample.yaml`) |
 

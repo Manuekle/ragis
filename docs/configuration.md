@@ -92,7 +92,7 @@ Each field is an uppercase variable (`ai_embedding_model` → `AI_EMBEDDING_MODE
 | `AI_GENERATION_MODEL` | `local-extractive@v1` | Answer generation model. |
 | `AI_RERANK_MODEL` | `local-lexical-rerank@v1` | Rerank. |
 | `AI_VISION_MODEL` | empty | VLM that describes figures during ingestion. Empty: captions only. |
-| `AI_GRAPH_MODEL` | empty | Entity and relation extraction. Empty: no graph even if the tenant has it enabled. |
+| `AI_GRAPH_MODEL` | empty (`local-graph-heuristic@v1` in local Compose) | Entity and relation extraction. Empty: no graph even if the tenant has it enabled. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. |
 
 For Bedrock: `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
@@ -118,7 +118,15 @@ the account).
 | `VISION_MIN_IMAGE_BYTES` / `VISION_MIN_IMAGE_SIDE` | `2048` / `64` | Discards icons and bullets. |
 | `VISION_MAX_IMAGE_BYTES` / `VISION_MAX_IMAGE_PIXELS` | `3750000` / `40000000` | Per-image limits (Bedrock Converse and defense against decompression bombs). |
 | `INGEST_TABLE_SUMMARIES` | `false` | Summarizes tables with the generation model, verifying figures. |
+| `INGEST_EQUATION_ANALYSIS` | `false` | Explains equations with the generation model and nearby text, verifying figures. |
 | `GRAPH_MAX_CHUNKS_PER_DOC` | `200` | Cap on chunks that feed the graph. |
+| `TRANSCRIPTION_PROVIDER` | `none` | `none` or `transcribe` (Amazon Transcribe). With `none`, recordings fail with `transcription_required` (ADR-030). |
+| `TRANSCRIPTION_LANGUAGE` | empty | Fixed language code (e.g. `es-US`). Empty: automatic detection. |
+| `TRANSCRIPTION_LANGUAGE_OPTIONS` | `es-US,es-ES,en-US,pt-BR` | Candidates for automatic language detection. |
+| `TRANSCRIPTION_MAX_SPEAKERS` | `10` | Speaker separation; below `2` turns it off. |
+| `TRANSCRIPTION_MIN_WORD_CONFIDENCE` | `0.4` | Words below this confidence are dropped from the transcript. |
+| `TRANSCRIPTION_TIMEOUT_SECONDS` | `3600` | Limit to wait for a transcription job. |
+| `AUDIO_MAX_SECONDS` | `14400` | Longest recording accepted (4 h); longer ones fail with `audio_too_long`. |
 
 ### Query
 
@@ -126,6 +134,7 @@ the account).
 |---|---|---|
 | `RAG_VLM_ENHANCED` | `auto` | Attaches images of cited figures if the generator has vision (`auto`, `on`, `off`). |
 | `RAG_VLM_MAX_IMAGES` | `3` | Maximum images per query. |
+| `RAG_GRAPH_CONTEXT_TOKENS` | `500` | Budget for graph facts of the selected evidence added to the prompt; `0` turns it off. |
 | `INTERNAL_TOKEN_AUDIENCE`, `INTERNAL_TOKEN_ISSUER` | `ragsis-rag`, `ragsis-api` | Claims of the internal token. |
 
 ### Operations
@@ -135,7 +144,7 @@ the account).
 | `LOG_LEVEL` | `INFO` | Log level (JSON). |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Empty: no traces. With `make up-obs`: `http://jaeger:4318`. |
 | `OTEL_SERVICE_NAME` | per service | For example `ragsis-api`. |
-| `PIPELINE_VERSION` | `ingest-2026.11.2` | Pipeline version; stored with each chunk. |
+| `PIPELINE_VERSION` | `ingest-2026.11.3` | Pipeline version; stored with each chunk. |
 
 ## AWS pilot (`/opt/ragsis/.env.pilot`)
 
@@ -149,7 +158,7 @@ Template: [`infra/docker/.env.pilot.example`](../infra/docker/.env.pilot.example
 | `API_IMAGE`, `WEB_IMAGE`, `RAG_ENGINE_IMAGE`, `INGEST_WORKER_IMAGE` | ECR references by digest (`repo@sha256:…`) |
 | `POSTGRES_PASSWORD`, `RAGSIS_APP_DB_PASSWORD`, `RAGSIS_WORKER_DB_PASSWORD`, `INTERNAL_SERVICE_SECRET` | A different value per variable: `openssl rand -hex 32` on the host. Keep them when updating images. |
 
-The pilot fixes `AUTH_MODE=oidc`, `SESSION_COOKIE_SECURE=true`, `MALWARE_SCANNER=clamav`, `OCR_PROVIDER=none` and local
+The pilot fixes `AUTH_MODE=oidc`, `SESSION_COOKIE_SECURE=true`, `MALWARE_SCANNER=clamav`, `OCR_PROVIDER=none`, `TRANSCRIPTION_PROVIDER=none` and local
 models (`local-extractive@v1`, `local-hash-1024@v1`).
 
 ## Terraform

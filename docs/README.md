@@ -1,10 +1,12 @@
-# Ragsis documentation
+# Ragis documentation
 
 Start with what you need:
 
 | I want to… | Read |
 |---|---|
+| Understand how a question is answered | [architecture.md#how-a-question-is-answered](architecture.md#how-a-question-is-answered) |
 | Understand how it is built | [architecture.md](architecture.md) |
+| Call the API | [../packages/contracts/openapi.yaml](../packages/contracts/openapi.yaml) and [features.md#api-integrations](features.md#api-integrations) |
 | Run it and develop | [development.md](development.md) |
 | Know where each environment runs and what it costs | [environments.md](environments.md) |
 | Try AWS infrastructure without touching AWS | [guides/floci.md](guides/floci.md) |
@@ -30,7 +32,8 @@ Start with what you need:
 | `docs/adr/` | Architecture decision records (ADRs) |
 | `docs/guides/` | Practical guides (Floci) |
 | `docs/diagrams/` | SVG diagrams generated with `make diagrams` |
-| `docs/assets/icons/` | AWS and technology icons used in the diagrams |
+| `docs/assets/icons/` | AWS icons, technology logos and the Ragis content glyphs used in the diagrams |
+| `docs/assets/brand/` | Ragis logo (light and dark) |
 | `../ops/runbooks/` | Operational procedures |
 
 ## How to maintain the documentation

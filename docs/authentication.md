@@ -5,7 +5,7 @@
   <img alt="In-app sign-in: browser, web, Cognito and API" src="diagrams/auth.svg">
 </picture>
 
-Sign-in **happens inside the app** (`/login`), in Ragsis's own style. Cognito only stores the accounts and validates the
+Sign-in **happens inside the app** (`/login`), in Ragis's own style. Cognito only stores the accounts and validates the
 password; the browser never leaves the site and never sees the Cognito page.
 
 ## Modes

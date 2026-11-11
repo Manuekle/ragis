@@ -1,13 +1,28 @@
-# Ragsis
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/ragis-logo-dark.svg">
+    <img alt="Ragis logo" src="docs/assets/brand/ragis-logo.svg" height="72">
+  </picture>
+</p>
 
-Enterprise B2B RAG platform: turns internal documents into **verifiable answers with citations**, respecting
-permissions per tenant, workspace, group and document. It implements phases **F1 (Core SaaS)**, the technical part of
-**F2 (quality)** and **F3 multimodal (OCR, figures, tables and equations, RAG-04)** of the *Master Plan — Enterprise RAG
-Platform on AWS* v1.0.
+<h1 align="center">Ragis</h1>
+
+<p align="center"><strong>Answers cited to the page, from your company's documents.</strong></p>
+
+Enterprise B2B RAG platform: turns internal documents, spreadsheets, slides, images and recordings into **verifiable
+answers with citations**, respecting permissions per tenant, workspace, group and document. It implements phases
+**F1 (Core SaaS)**, the technical part of **F2 (quality)** and **F3 multimodal (OCR, figures, tables, equations and
+audio)** of the *Master Plan — Enterprise RAG Platform on AWS* v1.0. The code name of the repository, packages, database
+roles and environment variables is `ragsis`.
 
 <p>
   <img alt="TypeScript" src="docs/assets/icons/tech/typescript.svg" height="30">
   <img alt="Node.js" src="docs/assets/icons/tech/node-js.svg" height="30">
+  <img alt="Next.js" src="docs/assets/icons/tech/next-js.svg" height="30">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/icons/tech/fastify-dark.svg">
+    <img alt="Fastify" src="docs/assets/icons/tech/fastify.svg" height="30">
+  </picture>
   <img alt="Python" src="docs/assets/icons/tech/python.svg" height="30">
   <img alt="FastAPI" src="docs/assets/icons/tech/fastapi.svg" height="30">
   <img alt="PostgreSQL" src="docs/assets/icons/tech/postgresql.svg" height="30">
@@ -21,9 +36,31 @@ Platform on AWS* v1.0.
   <img alt="Amazon Bedrock" src="docs/assets/icons/aws/bedrock.svg" height="30">
 </p>
 
+## How it answers
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/rag-pipeline-dark.svg">
+  <img alt="How Ragis answers: multimodal parsing into typed units, a dual text and cross-modal knowledge graph with a vector index, and cross-modal hybrid retrieval with verified citations" src="docs/diagrams/rag-pipeline.svg">
+</picture>
+
+1. **Multimodal content parsing.** Each file is validated and scanned, then split into typed units that keep where they
+   came from: text with its section and page, figures (caption plus a description written by a vision model), equations,
+   tables and recording transcripts with their time range.
+2. **Dual-graph grounding and index.** Text chunks feed a text knowledge graph; every figure, table and equation becomes an
+   anchor node linked to the entities found in it. Both graphs merge by entity name into one workspace graph. Chunks,
+   entities and relations are embedded in the same vector space, next to Spanish full-text search, all in PostgreSQL.
+3. **Cross-modal hybrid retrieval.** The question is checked against the person's permissions, read for modality cues
+   ("the table", "the figure", "the recording"), and searched three ways (full text, vectors, graph). Results are fused
+   with RRF, the requested modality gets a bonus, and the model answers only from that evidence. A verifier checks every
+   citation; without evidence the system abstains.
+
+The structure follows the RAG-Anything paper (Guo et al., 2025), implemented inside PostgreSQL instead of with that
+library ([ADR-004](docs/adr/README.md), [ADR-029](docs/adr/README.md#adr-029--cross-modal-graph-and-modality-aware-retrieval-ideas-from-rag-anything)).
+Step by step: [docs/architecture.md](docs/architecture.md).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/containers-dark.svg">
-  <img alt="Ragsis containers: web, api, rag-engine, ingest-worker, Postgres, S3, SQS and model providers" src="docs/diagrams/containers.svg">
+  <img alt="Ragis containers: web, api, rag-engine, ingest-worker, Postgres, S3, SQS and model providers" src="docs/diagrams/containers.svg">
 </picture>
 
 ## What it does
@@ -32,7 +69,9 @@ Platform on AWS* v1.0.
   missing, the system abstains.
 - **Real permissions.** The tenant is resolved by membership, RLS is forced in the database and the document ACL is
   applied in SQL before anything is retrieved.
-- **Real documents.** PDF, DOCX, PPTX, XLSX, images, HTML, Markdown, TXT and CSV, with OCR, tables, equations and figures.
+- **Real documents.** PDF, DOCX, PPTX, XLSX, images, HTML, Markdown, TXT, CSV and audio recordings, with OCR, tables,
+  equations, figures and transcripts with timestamps. A citation can open a recording at the cited second.
+- **An organized library.** Folders with content-based suggestions; folders never change who can see a document.
 - **More than search.** GraphRAG, agents with a deny-by-default policy, workflows with human review, e-signature and
   connectors to Gmail, Slack and ClickUp. See [docs/features.md](docs/features.md).
 - **Works offline.** The local model provider is deterministic; Bedrock and Ollama are optional.
@@ -77,8 +116,8 @@ apps/
   web/              Next.js 16: UI and BFF with an httpOnly cookie; login lives here
   api/              TypeScript/Fastify: control plane, authZ, uploads, queries
 services/
-  rag-engine/       Python/FastAPI: query (hybrid + RRF + rerank + citation verification)
-  ingest-worker/    Python: SQS → validation → antimalware → parsing (+OCR, multimodal) → chunking → PII → embeddings → index
+  rag-engine/       Python/FastAPI: query (full text + vectors + graph, RRF, rerank, citation verification)
+  ingest-worker/    Python: SQS → validation → antimalware → parsing (+OCR, audio, multimodal) → chunking → PII → graph → embeddings → index
   ai-gateway/       Python: ModelRegistry, residency policy, bounded fallback, budgets
 packages/
   ragsis-core/      Python: settings, DB with RLS context, internal token, text utilities
@@ -100,15 +139,16 @@ How a document and a question flow through the system, with step-by-step diagram
 | Topic | Document |
 |---|---|
 | Index of everything | [docs/README.md](docs/README.md) |
-| Architecture, data model, ingestion and query | [docs/architecture.md](docs/architecture.md) |
+| Architecture, RAG pipeline, data model, ingestion and query | [docs/architecture.md](docs/architecture.md) |
+| Public API v1 (OpenAPI) | [packages/contracts/openapi.yaml](packages/contracts/openapi.yaml) |
 | Environments, AWS pilot and costs | [docs/environments.md](docs/environments.md) |
 | Rehearsing infrastructure in Floci | [docs/guides/floci.md](docs/guides/floci.md) |
 | Environment variables and secrets | [docs/configuration.md](docs/configuration.md) |
 | Sign-in (inside the app, with Cognito) | [docs/authentication.md](docs/authentication.md) |
 | Security | [docs/security.md](docs/security.md) |
-| Features: multimodal, GraphRAG, agents, workflows, e-signature, connectors | [docs/features.md](docs/features.md) |
+| Features: multimodal, audio, GraphRAG, folders, agents, workflows, e-signature, connectors | [docs/features.md](docs/features.md) |
 | Development, tests and CI | [docs/development.md](docs/development.md) |
-| Decisions (ADR-001 to ADR-028) | [docs/adr/README.md](docs/adr/README.md) |
+| Decisions (ADR-001 to ADR-031) | [docs/adr/README.md](docs/adr/README.md) |
 | Operational runbooks | [ops/runbooks/README.md](ops/runbooks/README.md) |
 
 ## Tests
@@ -138,6 +178,8 @@ The sample golden set is synthetic and small; targets must be measured with 100 
 - RLS **forced** on every customer table; document ACL applied in the database before retrieval (ADR-008).
 - Roles `ragsis_app` and `ragsis_worker` without `BYPASSRLS`; internal API → rag-engine token with a 60 s lifetime (ADR-009).
 - Direct upload to S3 with a presigned URL; quarantine, magic bytes, MIME, encryption, macros, ZIP bomb and ClamAV checks.
+- Graph rows, graph vectors, document summary vectors and transcripts inherit the source document's ACL; folders never
+  grant access.
 - Prompt with delimited and escaped document content; citation and figure verifier; abstention by default.
 - Model policy by data classification: `restricted` never calls external APIs; no silent fallback to the cloud.
 - Audit log with a per-tenant hash chain; JSON logs with redaction; questions stored only as SHA-256.
@@ -166,10 +208,13 @@ Details and infrastructure controls: [docs/security.md](docs/security.md).
 | P2-01/02 | E-signature and controlled sharing | ✅ Ragsis Sign, approvals, SES invitations, final PDF, sealed certificate and public verification (ADR-024) |
 | CON-01 | Connectors | ✅ Gmail (personal, owner only), Slack and ClickUp (company → workspace); OAuth+PKCE, AES-GCM tokens, delta sync with cursor/lease/backoff, tombstones and deletion on disconnect (ADR-025). Open: validate with real OAuth apps |
 | HIST-01 | Conversation history | ✅ Ask saves each turn in a private conversation owned by its author (RLS), with a list, reopening via the `?c=` link, rename and delete; on reload, any turn whose cited document is no longer visible is hidden (ADR-028). Open: configurable retention and passing prior context to the model |
+| — | Cross-modal graph (RAG-Anything ideas) | ✅ Anchor nodes for figures, tables and equations, intra-table graph, dense graph seeds, modality-aware fusion, graph facts in the prompt (ADR-029) |
+| — | Audio recordings | ✅ MP3/WAV/M4A/OGG/FLAC, Amazon Transcribe provider, chunks with time ranges and speakers, player with transcript (ADR-030). Open: Transcribe IAM in Terraform and a local transcriber for restricted tenants |
+| — | Library folders | ✅ Nested folders, move, upload into a folder, suggestions by content or name under RLS (ADR-031) |
 | INFRA-PILOT | Low-cost pilot on AWS | ✅ Terraform and Compose on one EC2 (us-east-2); prior rehearsal in Floci (ADR-027). Open: redeploy with the new login |
 | ENT-01/02, AGT-01 | Dedicated, offline, agentic | ⏳ P2/P3 |
 
-Known open items before production: validate Textract and Bedrock (including Nova and Claude vision) in the real account
+Known open items before production: validate Textract, Transcribe and Bedrock (including Nova and Claude vision) in the real account
 and Region (here they were tested with test doubles), validate Docling and its local OCR in the worker image, measure the
 contribution of VLM descriptions with the real golden set, session refresh tokens, ADOT collector on ECS, CloudFront,
 permissions pentest, and the legal and privacy gates of the checklist (section 20).

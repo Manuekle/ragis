@@ -1,0 +1,291 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 776" width="1440" height="776" font-family="ui-sans-serif, system-ui, -apple-system, &#x27;Segoe UI&#x27;, Roboto, &#x27;Helvetica Neue&#x27;, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">How Ragis answers</title><desc id="d">Multimodal parsing into typed content units, a dual text and cross-modal knowledge graph with a vector index, and cross-modal hybrid retrieval with verified citations.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#71717a"/></marker><marker id="arrow-s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#71717a"/></marker></defs>
+<rect width="1440" height="776" rx="12" fill="#ffffff"/>
+<svg x="24.0" y="16.0" width="30.0" height="30.0" viewBox="180 160 894 894" preserveAspectRatio="xMidYMid meet"><path fill="#18181b" d="M626 210 L232 603 L579 572 L720 563 L778 563 L329 642 L329 699 L478 664 L775 600 L820 601 L424 734 L425 798 L817 639 L859 640 L521 822 L521 897 L858 678 L898 679 L618 911 L618 999 L1018 602 Z"/></svg>
+<text x="64.0" y="37.0" font-size="17" font-weight="700" fill="#18181b" text-anchor="start">How Ragis answers: multimodal RAG over a cross-modal knowledge graph</text>
+<text x="64.0" y="57.0" font-size="11.5" font-weight="400" fill="#52525b" text-anchor="start">Each file becomes typed content units, a dual knowledge graph and one vector space; a question is answered only from evidence the person is allowed to read.</text>
+<rect x="20" y="84" width="156" height="640" rx="8" fill="#fbfbfc" stroke="#a1a1aa" stroke-width="1.4" stroke-dasharray="6 4"/>
+<text x="32.0" y="103.0" font-size="12.5" font-weight="600" fill="#52525b" text-anchor="start">Sources</text>
+<rect x="34.0" y="112.0" width="128.0" height="30.0" rx="6" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="98.0" y="131.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="middle">PDF</text>
+<rect x="34.0" y="152.0" width="128.0" height="30.0" rx="6" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="98.0" y="171.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="middle">DOCX</text>
+<rect x="34.0" y="192.0" width="128.0" height="30.0" rx="6" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="98.0" y="211.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="middle">PPTX</text>
+<rect x="34.0" y="232.0" width="128.0" height="30.0" rx="6" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="98.0" y="251.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="middle">XLSX</text>
+<rect x="34.0" y="272.0" width="128.0" height="30.0" rx="6" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.3"/>
+<text x="98.0" y="291.0" font-size="11.5" font-weight="600" fill="#1d4ed8" text-anchor="middle">PNG · JPEG</text>
+<rect x="34.0" y="312.0" width="128.0" height="30.0" rx="6" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="98.0" y="331.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="middle">HTML · Markdown</text>
+<rect x="34.0" y="352.0" width="128.0" height="30.0" rx="6" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="98.0" y="371.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="middle">TXT · CSV</text>
+<rect x="34.0" y="392.0" width="128.0" height="30.0" rx="6" fill="#fce7f3" stroke="#be185d" stroke-width="1.3"/>
+<text x="98.0" y="411.0" font-size="11.5" font-weight="600" fill="#be185d" text-anchor="middle">MP3 · WAV</text>
+<rect x="34.0" y="432.0" width="128.0" height="30.0" rx="6" fill="#fce7f3" stroke="#be185d" stroke-width="1.3"/>
+<text x="98.0" y="451.0" font-size="11.5" font-weight="600" fill="#be185d" text-anchor="middle">M4A · OGG · FLAC</text>
+<text x="34.0" y="494.0" font-size="11.5" font-weight="600" fill="#52525b" text-anchor="start">Connectors</text>
+<svg x="36.0" y="506.0" width="26.0" height="26.0" viewBox="0 49.4 512 399.42" preserveAspectRatio="xMidYMid meet">
+  <g fill="none" fill-rule="evenodd">
+    <g fill-rule="nonzero">
+      <path fill="#4285f4" d="M34.91 448.818h81.454V251L0 163.727V413.91c0 19.287 15.622 34.91 34.91 34.91z"/>
+      <path fill="#34a853" d="M395.636 448.818h81.455c19.287 0 34.909-15.622 34.909-34.909V163.727L395.636 251z"/>
+      <path fill="#fbbc04" d="M395.636 99.727V251L512 163.727v-46.545c0-43.142-49.25-67.782-83.782-41.891z"/>
+    </g>
+    <path fill="#ea4335" d="M116.364 251V99.727L256 204.455 395.636 99.727V251L256 355.727z"/>
+    <path fill="#c5221f" fill-rule="nonzero" d="M0 117.182v46.545L116.364 251V99.727L83.782 75.291C49.25 49.4 0 74.04 0 117.18z"/>
+  </g>
+</svg>
+<svg x="76.0" y="506.0" width="26.0" height="26.0" viewBox="0 0 2447.6 2452.5" preserveAspectRatio="xMidYMid meet">
+  <g clip-rule="evenodd" fill-rule="evenodd">
+    <path
+      d="m897.4 0c-135.3.1-244.8 109.9-244.7 245.2-.1 135.3 109.5 245.1 244.8 245.2h244.8v-245.1c.1-135.3-109.5-245.1-244.9-245.3.1 0 .1 0 0 0m0 654h-652.6c-135.3.1-244.9 109.9-244.8 245.2-.2 135.3 109.4 245.1 244.7 245.3h652.7c135.3-.1 244.9-109.9 244.8-245.2.1-135.4-109.5-245.2-244.8-245.3z"
+      fill="#36c5f0"
+    />
+    <path
+      d="m2447.6 899.2c.1-135.3-109.5-245.1-244.8-245.2-135.3.1-244.9 109.9-244.8 245.2v245.3h244.8c135.3-.1 244.9-109.9 244.8-245.3zm-652.7 0v-654c.1-135.2-109.4-245-244.7-245.2-135.3.1-244.9 109.9-244.8 245.2v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.3z"
+      fill="#2eb67d"
+    />
+    <path
+      d="m1550.1 2452.5c135.3-.1 244.9-109.9 244.8-245.2.1-135.3-109.5-245.1-244.8-245.2h-244.8v245.2c-.1 135.2 109.5 245 244.8 245.2zm0-654.1h652.7c135.3-.1 244.9-109.9 244.8-245.2.2-135.3-109.4-245.1-244.7-245.3h-652.7c-135.3.1-244.9 109.9-244.8 245.2-.1 135.4 109.4 245.2 244.7 245.3z"
+      fill="#ecb22e"
+    />
+    <path
+      d="m0 1553.2c-.1 135.3 109.5 245.1 244.8 245.2 135.3-.1 244.9-109.9 244.8-245.2v-245.2h-244.8c-135.3.1-244.9 109.9-244.8 245.2zm652.7 0v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.2v-653.9c.2-135.3-109.4-245.1-244.7-245.3-135.4 0-244.9 109.8-244.8 245.1 0 0 0 .1 0 0"
+      fill="#e01e5a"
+    />
+  </g>
+</svg>
+<svg x="116.0" y="506.0" width="26.0" height="26.0" viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet"><g fill="none">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M6.43828 50.2095C5.81176 49.4456 5.94882 48.3212 6.71918 47.7027L14.0169 41.8433C14.6535 41.3322 15.5841 41.4476 16.1032 42.0777C21.06 48.0956 26.32 50.8815 32.142 50.8815C37.9238 50.8815 43.0403 48.135 47.7801 42.1839C48.2888 41.5452 49.2172 41.4131 49.8629 41.9129L57.2604 47.6377C58.0415 48.2422 58.1989 49.3637 57.5855 50.1379C50.5775 58.9839 41.9971 63.6446 32.142 63.6446C22.3156 63.6446 13.6586 59.013 6.43828 50.2095Z" fill="url(#i4-paint0_linear_8_569)"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M32.4953 17.1804C32.2202 16.9368 31.8067 16.9367 31.5314 17.1801L15.663 31.2116C15.0564 31.748 14.1285 31.6857 13.599 31.0731L7.40986 23.9122C6.88774 23.3082 6.95019 22.3961 7.54979 21.8688L31.0527 1.20062C31.6021 0.717503 32.4248 0.717611 32.9741 1.20088L56.4822 21.8847C57.0822 22.4125 57.1439 23.3256 56.6205 23.9294L50.4164 31.0866C49.8862 31.6982 48.9589 31.7594 48.353 31.2229L32.4953 17.1804Z" fill="url(#i4-paint1_linear_8_569)"/>
+<defs>
+<linearGradient id="i4-paint0_linear_8_569" x1="5.3335" y1="32.1624" x2="58.6653" y2="32.1624" gradientUnits="userSpaceOnUse">
+<stop offset="0.225962" stop-color="#6647F0"/>
+<stop offset="0.793269" stop-color="#0091FF"/>
+</linearGradient>
+<linearGradient id="i4-paint1_linear_8_569" x1="5.3335" y1="31.6447" x2="58.6653" y2="31.6447" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FF02F0"/>
+<stop offset="0.778846" stop-color="#F76808"/>
+</linearGradient>
+</defs>
+</g></svg>
+<text x="34.0" y="562.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">Presigned upload</text>
+<text x="34.0" y="576.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">straight to S3,</text>
+<text x="34.0" y="590.6" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">in quarantine.</text>
+<text x="34.0" y="626.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">Folders only</text>
+<text x="34.0" y="640.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">organize; access</text>
+<text x="34.0" y="654.6" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">is the document ACL.</text>
+<rect x="196" y="84" width="384" height="640" rx="8" fill="#fbfbfc" stroke="#0a84ff" stroke-width="1.4"/>
+<text x="208.0" y="103.0" font-size="12.5" font-weight="600" fill="#52525b" text-anchor="start">1 · Multimodal content parsing</text>
+<rect x="210" y="108" width="274" height="48" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="119.0" width="26.0" height="26.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#15803d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 20 5.5v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6Z" fill="#dcfce7"/><path d="m8.5 12 2.5 2.5 4.5-5"/></g></svg>
+<text x="258.0" y="130.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Validate and scan</text>
+<text x="258.0" y="145.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">magic bytes, MIME, macros, ClamAV</text>
+<rect x="210" y="170" width="274" height="78" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="194.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#c2410c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2.5" width="16" height="19" rx="2.5" fill="#ffedd5"/><path d="M8 8h8M8 12h8M8 16h5"/></g></svg>
+<text x="262.0" y="201.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Hierarchical text</text>
+<text x="262.0" y="216.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">sections and pages,</text>
+<text x="262.0" y="230.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">PII redacted</text>
+<polyline points="484.0,209.0 506.0,209.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="510.0" y="182.0" width="26.0" height="24.0" rx="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.3"/>
+<rect x="510.0" y="210.0" width="26.0" height="24.0" rx="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.3"/>
+<rect x="210" y="262" width="274" height="78" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="286.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#1d4ed8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill="#dbeafe"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="m3 18 5.5-5 4 3.5 3-2.5L21 18"/></g></svg>
+<text x="262.0" y="293.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Figures</text>
+<text x="262.0" y="308.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">caption + VLM description</text>
+<text x="262.0" y="322.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">with context, S3 asset, bbox</text>
+<polyline points="484.0,301.0 506.0,301.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="510.0" y="274.0" width="26.0" height="24.0" rx="5" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.3"/>
+<rect x="510.0" y="302.0" width="26.0" height="24.0" rx="5" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.3"/>
+<rect x="210" y="354" width="274" height="78" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="378.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#7c3aed" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="2.5" fill="#ede9fe"/><path d="M16 7H8l4.5 5L8 17h8"/></g></svg>
+<text x="262.0" y="385.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Equations</text>
+<text x="262.0" y="400.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">LaTeX + optional AI analysis</text>
+<text x="262.0" y="414.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">of what it computes</text>
+<polyline points="484.0,393.0 506.0,393.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="510.0" y="366.0" width="26.0" height="24.0" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.3"/>
+<rect x="510.0" y="394.0" width="26.0" height="24.0" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.3"/>
+<rect x="210" y="446" width="274" height="78" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="470.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#047857" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill="#d1fae5"/><path d="M2.5 9.5h19M2.5 14.8h19M9 4v16M15 4v16"/></g></svg>
+<text x="262.0" y="477.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Tables</text>
+<text x="262.0" y="492.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">cells as Markdown,</text>
+<text x="262.0" y="506.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">verified AI summary</text>
+<polyline points="484.0,485.0 506.0,485.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="510.0" y="458.0" width="26.0" height="24.0" rx="5" fill="#d1fae5" stroke="#047857" stroke-width="1.3"/>
+<rect x="510.0" y="486.0" width="26.0" height="24.0" rx="5" fill="#d1fae5" stroke="#047857" stroke-width="1.3"/>
+<rect x="210" y="538" width="274" height="78" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="562.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#be185d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="9.5" fill="#fce7f3"/><path d="M7 10v4M10 7.5v9M13 9v6M16 10.5v3"/></g></svg>
+<text x="262.0" y="569.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Recordings</text>
+<text x="262.0" y="584.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">speech to text with [mm:ss]</text>
+<text x="262.0" y="598.3" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">and speaker labels</text>
+<polyline points="484.0,577.0 506.0,577.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="510.0" y="550.0" width="26.0" height="24.0" rx="5" fill="#fce7f3" stroke="#be185d" stroke-width="1.3"/>
+<rect x="510.0" y="578.0" width="26.0" height="24.0" rx="5" fill="#fce7f3" stroke="#be185d" stroke-width="1.3"/>
+<text x="523.0" y="162.0" font-size="10.5" font-weight="600" fill="#52525b" text-anchor="middle">units</text>
+<rect x="210" y="640" width="274" height="60" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="222.0" y="656.0" width="28.0" height="28.0" viewBox="0 0 80 80" preserveAspectRatio="xMidYMid meet">
+    
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g fill="#01A88D">
+            <rect x="0" y="0" width="80" height="80"></rect>
+        </g>
+        <path d="M22.0624102,50 C24.3763895,53.603 28.4103535,56 33.0003125,56 C40.1672485,56 45.9991964,50.168 45.9991964,43 C45.9991964,35.832 40.1672485,30 33.0003125,30 C27.6033607,30 22.9664021,33.307 21.0024196,38 L23.2143999,38 C25.0393836,34.444 28.7363506,32 33.0003125,32 C39.0652583,32 43.9992143,36.935 43.9992143,43 C43.9992143,49.065 39.0652583,54 33.0003125,54 C29.5913429,54 26.5413702,52.441 24.5213882,50 L22.0624102,50 Z M37.0002768,45 L37.0002768,43 L41.9992321,43 C41.9992321,38.038 37.9622682,34 33.0003125,34 C28.0373568,34 23.9993929,38.038 23.9993929,43 L28.9993482,43 L28.9993482,45 L24.2313908,45 C25.1443826,49.002 28.7253507,52 33.0003125,52 C35.1362934,52 37.0992759,51.249 38.6442621,50 L34.0003036,50 L34.0003036,48 L40.4782457,48 C41.0812403,47.102 41.5202364,46.087 41.7682342,45 L37.0002768,45 Z M21.0024196,48 L23.2143999,48 C22.4434068,46.498 22.0004107,44.801 22.0004107,43 C22.0004107,41.959 22.1554093,40.955 22.4264069,40 L20.3634253,40 C20.1344274,40.965 19.9994286,41.966 19.9994286,43 C19.9994286,44.771 20.3584254,46.46 21.0024196,48 L21.0024196,48 Z M19.7434309,50 L17.0004554,50 L17.0004554,48 L18.8744386,48 C18.5344417,47.04 18.2894438,46.038 18.1494451,45 L15.4144695,45 L16.707458,46.293 L15.2924706,47.707 L12.2924974,44.707 C11.9025009,44.316 11.9025009,43.684 12.2924974,43.293 L15.2924706,40.293 L16.707458,41.707 L15.4144695,43 L18.0004464,43 C18.0004464,41.973 18.1044455,40.97 18.3024437,40 L17.0004554,40 L17.0004554,38 L18.8744386,38 C20.9404202,32.184 26.4833707,28 33.0003125,28 C37.427273,28 41.4002375,29.939 44.148213,33 L59.0000804,33 L59.0000804,35 L45.6661994,35 C47.1351863,37.318 47.9991786,40.058 47.9991786,43 L59.0000804,43 L59.0000804,45 L47.8501799,45 C46.8681887,52.327 40.5912447,58 33.0003125,58 C27.2563638,58 22.2624084,54.752 19.7434309,50 L19.7434309,50 Z M37.0002768,39 C37.0002768,38.448 36.5522808,38 36.0002857,38 L29.9993482,38 C29.4473442,38 28.9993482,38.448 28.9993482,39 L28.9993482,41 L31.0003304,41 L31.0003304,40 L32.0003214,40 L32.0003214,43 L31.0003304,43 L31.0003304,45 L35.0002946,45 L35.0002946,43 L34.0003036,43 L34.0003036,40 L35.0002946,40 L35.0002946,41 L37.0002768,41 L37.0002768,39 Z M49.0001696,40 L59.0000804,40 L59.0000804,38 L49.0001696,38 L49.0001696,40 Z M49.0001696,50 L59.0000804,50 L59.0000804,48 L49.0001696,48 L49.0001696,50 Z M57.0000982,27 L60.5850662,27 L57.0000982,23.414 L57.0000982,27 Z M63.7070383,27.293 C63.8940367,27.48 64.0000357,27.735 64.0000357,28 L64.0000357,63 C64.0000357,63.552 63.5520397,64 63.0000446,64 L32.0003304,64 C31.4473264,64 31.0003304,63.552 31.0003304,63 L31.0003304,59 L33.0003125,59 L33.0003125,62 L62.0000536,62 L62.0000536,29 L56.0001071,29 C55.4471121,29 55.0001161,28.552 55.0001161,28 L55.0001161,22 L33.0003125,22 L33.0003125,27 L31.0003304,27 L31.0003304,21 C31.0003304,20.448 31.4473264,20 32.0003304,20 L56.0001071,20 C56.2651048,20 56.5191025,20.105 56.7071008,20.293 L63.7070383,27.293 Z M68,24.166 L68,61 C68,61.552 67.552004,62 67.0000089,62 L65.0000268,62 L65.0000268,60 L66.0000179,60 L66.0000179,24.612 L58.6170838,18 L36.0002857,18 L36.0002857,19 L34.0003036,19 L34.0003036,17 C34.0003036,16.448 34.4472996,16 35.0003036,16 L59.0000804,16 C59.2460782,16 59.483076,16.091 59.6660744,16.255 L67.666003,23.42 C67.8780011,23.61 68,23.881 68,24.166 L68,24.166 Z" fill="#FFFFFF"></path>
+    </g>
+</svg>
+<text x="260.0" y="668.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Scans: OCR</text>
+<text x="260.0" y="683.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">Textract, or local Docling</text>
+<text x="523.0" y="676.0" font-size="10" font-weight="400" fill="#52525b" text-anchor="middle">page</text>
+<text x="523.0" y="689.0" font-size="10" font-weight="400" fill="#52525b" text-anchor="middle">bbox</text>
+<text x="523.0" y="702.0" font-size="10" font-weight="400" fill="#52525b" text-anchor="middle">t_start</text>
+<polyline points="347.0,156.0 347.0,170.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="600" y="84" width="470" height="640" rx="8" fill="#fbfbfc" stroke="#0a84ff" stroke-width="1.4"/>
+<text x="612.0" y="103.0" font-size="12.5" font-weight="600" fill="#52525b" text-anchor="start">2 · Dual-graph grounding and index</text>
+<rect x="614.0" y="108.0" width="442.0" height="336.0" rx="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="626.0" y="128.0" font-size="12" font-weight="600" fill="#18181b" text-anchor="start">Knowledge graph</text>
+<rect x="626.0" y="140.0" width="206.0" height="132.0" rx="8" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="638.0" y="158.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="start">Text graph</text>
+<text x="638.0" y="172.0" font-size="10" font-weight="400" fill="#52525b" text-anchor="start">entities and relations per chunk</text>
+<line x1="660.0" y1="212.0" x2="712.0" y2="196.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="712.0" y1="196.0" x2="760.0" y2="226.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="660.0" y1="212.0" x2="700.0" y2="246.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="700.0" y1="246.0" x2="760.0" y2="226.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="760.0" y1="226.0" x2="804.0" y2="200.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="660.0" y1="212.0" x2="648.0" y2="252.0" stroke="#71717a" stroke-width="1.2"/>
+<circle cx="660.0" cy="212.0" r="8" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="712.0" cy="196.0" r="7" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="760.0" cy="226.0" r="8" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="700.0" cy="246.0" r="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="804.0" cy="200.0" r="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="648.0" cy="252.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<rect x="626.0" y="284.0" width="206.0" height="148.0" rx="8" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="638.0" y="302.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="start">Cross-modal graph</text>
+<text x="638.0" y="316.0" font-size="10" font-weight="400" fill="#52525b" text-anchor="start">anchor per figure, table, equation</text>
+<line x1="650.0" y1="344.0" x2="676.0" y2="372.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="642.0" y1="392.0" x2="676.0" y2="372.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="700.0" y1="412.0" x2="676.0" y2="372.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="750.0" y1="336.0" x2="770.0" y2="366.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="806.0" y1="344.0" x2="770.0" y2="366.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="808.0" y1="402.0" x2="770.0" y2="366.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="700.0" y1="412.0" x2="738.0" y2="414.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="676.0" y1="372.0" x2="770.0" y2="366.0" stroke="#71717a" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="676.0" cy="372.0" r="12" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.4"/>
+<circle cx="650.0" cy="344.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="642.0" cy="392.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="700.0" cy="412.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="770.0" cy="366.0" r="12" fill="#d1fae5" stroke="#047857" stroke-width="1.4"/>
+<circle cx="750.0" cy="336.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="806.0" cy="344.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="808.0" cy="402.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="738.0" cy="414.0" r="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="729.0" y="428.0" font-size="9.5" font-weight="400" fill="#52525b" text-anchor="middle">belongs_to · row / column / cell</text>
+<polyline points="832,206 872,206 872,358 832,358" fill="none" stroke="#71717a" stroke-width="1.5"/>
+<polyline points="872.0,286.0 892.0,286.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="892.0" y="140.0" width="152.0" height="292.0" rx="8" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="904.0" y="158.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="start">Workspace graph</text>
+<text x="904.0" y="172.0" font-size="10" font-weight="400" fill="#52525b" text-anchor="start">merged by entity name</text>
+<line x1="968.0" y1="232.0" x2="930.0" y2="206.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="968.0" y1="232.0" x2="1012.0" y2="204.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="968.0" y1="232.0" x2="928.0" y2="268.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="968.0" y1="232.0" x2="1000.0" y2="272.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="1000.0" y1="272.0" x2="1020.0" y2="320.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="928.0" y1="268.0" x2="950.0" y2="320.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="950.0" y1="320.0" x2="912.0" y2="350.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="950.0" y1="320.0" x2="978.0" y2="372.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="1020.0" y1="320.0" x2="1024.0" y2="380.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="978.0" y1="372.0" x2="1024.0" y2="380.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="912.0" y1="350.0" x2="944.0" y2="402.0" stroke="#71717a" stroke-width="1.2"/>
+<line x1="1000.0" y1="272.0" x2="950.0" y2="320.0" stroke="#71717a" stroke-width="1.2"/>
+<circle cx="968.0" cy="232.0" r="10" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="930.0" cy="206.0" r="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="1012.0" cy="204.0" r="7" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="928.0" cy="268.0" r="11" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.4"/>
+<circle cx="1000.0" cy="272.0" r="9" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="1020.0" cy="320.0" r="11" fill="#d1fae5" stroke="#047857" stroke-width="1.4"/>
+<circle cx="950.0" cy="320.0" r="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="912.0" cy="350.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="978.0" cy="372.0" r="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.4"/>
+<circle cx="1024.0" cy="380.0" r="5" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+<circle cx="944.0" cy="402.0" r="9" fill="#fce7f3" stroke="#be185d" stroke-width="1.4"/>
+<rect x="614.0" y="456.0" width="442.0" height="178.0" rx="8" fill="#ffffff" stroke="#a1a1aa" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="626.0" y="476.0" font-size="12" font-weight="600" fill="#18181b" text-anchor="start">Vector index · pgvector + Spanish full-text</text>
+<path d="M640 552 l50 -14 l50 14 l-50 14 Z" fill="#ffedd5" stroke="#c2410c" stroke-width="1.2"/>
+<path d="M640 543 l50 -14 l50 14 l-50 14 Z" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.2"/>
+<path d="M640 534 l50 -14 l50 14 l-50 14 Z" fill="#d1fae5" stroke="#047857" stroke-width="1.2"/>
+<path d="M640 525 l50 -14 l50 14 l-50 14 Z" fill="#fce7f3" stroke="#be185d" stroke-width="1.2"/>
+<text x="690.0" y="594.0" font-size="11" font-weight="500" fill="#18181b" text-anchor="middle">Chunk vectors</text>
+<path d="M810 552 l50 -14 l50 14 l-50 14 Z" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.2"/>
+<path d="M810 543 l50 -14 l50 14 l-50 14 Z" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.2"/>
+<path d="M810 534 l50 -14 l50 14 l-50 14 Z" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.2"/>
+<text x="860.0" y="594.0" font-size="11" font-weight="500" fill="#18181b" text-anchor="middle">Entity and relation</text>
+<text x="860.0" y="608.3" font-size="11" font-weight="500" fill="#18181b" text-anchor="middle">vectors</text>
+<svg x="958.0" y="516.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#4338ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 7.5 12 12 3 7.5Z" fill="#e0e7ff"/><path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5"/></g></svg>
+<text x="973.0" y="566.0" font-size="10.5" font-weight="600" fill="#18181b" text-anchor="middle">one space</text>
+<text x="973.0" y="580.0" font-size="10.5" font-weight="400" fill="#52525b" text-anchor="middle">per model</text>
+<rect x="614.0" y="646.0" width="442.0" height="64.0" rx="8" fill="#e6f2ff" stroke="#0a84ff" stroke-width="1.3"/>
+<svg x="626.0" y="662.0" width="30.0" height="30.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#15803d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 20 5.5v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6Z" fill="#dcfce7"/><path d="m8.5 12 2.5 2.5 4.5-5"/></g></svg>
+<text x="666.0" y="670.0" font-size="11.5" font-weight="600" fill="#18181b" text-anchor="start">Every chunk, entity, relation and vector keeps its source</text>
+<text x="666.0" y="686.0" font-size="11.5" font-weight="400" fill="#52525b" text-anchor="start">chunk; the document ACL decides who sees it (RLS forced).</text>
+<polyline points="536.0,314.0 600.0,314.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="538.3" y="291.0" width="39.4" height="18" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="558.0" y="304.0" font-size="10.5" font-weight="500" fill="#52525b" text-anchor="middle">graph</text>
+<polyline points="536.0,546.0 600.0,546.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="538.3" y="523.0" width="39.4" height="18" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="558.0" y="536.0" font-size="10.5" font-weight="500" fill="#52525b" text-anchor="middle">embed</text>
+<rect x="1090" y="84" width="330" height="640" rx="8" fill="#fbfbfc" stroke="#0a84ff" stroke-width="1.4"/>
+<text x="1102.0" y="103.0" font-size="12.5" font-weight="600" fill="#52525b" text-anchor="start">3 · Cross-modal hybrid retrieval</text>
+<rect x="1104.0" y="108.0" width="302.0" height="46.0" rx="10" fill="#fff7ed" stroke="#b54708" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="1255.0" y="128.0" font-size="11.5" font-weight="500" fill="#b54708" text-anchor="middle">“What does the 2024 margin table</text>
+<text x="1255.0" y="144.0" font-size="11.5" font-weight="500" fill="#b54708" text-anchor="middle">say about the north region?”</text>
+<rect x="1104" y="166" width="302" height="46" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="1116.0" y="177.0" width="24.0" height="24.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#15803d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 20 5.5v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6Z" fill="#dcfce7"/><path d="m8.5 12 2.5 2.5 4.5-5"/></g></svg>
+<text x="1150.0" y="187.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Tenant and permissions</text>
+<text x="1150.0" y="202.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">membership, ACL applied in SQL</text>
+<rect x="1104" y="222" width="302" height="46" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="1116.0" y="233.0" width="24.0" height="24.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#3f3f46" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5" fill="#f4f4f5"/><path d="m15.5 15.5 5 5"/></g></svg>
+<text x="1150.0" y="243.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Modality cues</text>
+<text x="1150.0" y="258.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">table · figure · formula · recording</text>
+<rect x="1104" y="280" width="98" height="40" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="1118.0" y="305.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Full-text</text>
+<rect x="1206" y="280" width="98" height="40" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="1220.0" y="305.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Vectors</text>
+<rect x="1308" y="280" width="98" height="40" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<text x="1322.0" y="305.0" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Graph seeds</text>
+<rect x="1104" y="334" width="302" height="46" rx="10" fill="#e6f2ff" stroke="#0a84ff" stroke-width="1.3"/>
+<text x="1118.0" y="355.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">RRF fusion + rerank</text>
+<text x="1118.0" y="370.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">bonus for the asked modality</text>
+<rect x="1104" y="392" width="302" height="50" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="1116.0" y="405.0" width="24.0" height="24.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#c2410c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2.5" width="16" height="19" rx="2.5" fill="#ffedd5"/><path d="M8 8h8M8 12h8M8 16h5"/></g></svg>
+<text x="1150.0" y="415.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Evidence + graph facts</text>
+<text x="1150.0" y="430.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">selected chunks [n] and their cells</text>
+<rect x="1104" y="454" width="302" height="46" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="1116.0" y="465.0" width="24.0" height="24.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#a16207" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5Z" fill="#fef9c3"/><path d="M19 16.5v4M17 18.5h4"/></g></svg>
+<text x="1150.0" y="475.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Language model</text>
+<text x="1150.0" y="490.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">chosen by data classification</text>
+<rect x="1104" y="512" width="302" height="46" rx="10" fill="#f6f6f8" stroke="#d4d4d8" stroke-width="1.3"/>
+<svg x="1116.0" y="523.0" width="24.0" height="24.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="none" stroke="#15803d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 20 5.5v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6Z" fill="#dcfce7"/><path d="m8.5 12 2.5 2.5 4.5-5"/></g></svg>
+<text x="1150.0" y="533.5" font-size="13" font-weight="600" fill="#18181b" text-anchor="start">Citation verifier</text>
+<text x="1150.0" y="548.5" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">every [n] and figure in the evidence</text>
+<rect x="1104.0" y="572.0" width="302.0" height="70.0" rx="10" fill="#e6f2ff" stroke="#0a84ff" stroke-width="1.3"/>
+<text x="1255.0" y="596.0" font-size="12.5" font-weight="700" fill="#18181b" text-anchor="middle">Answer with citations [1] [2]</text>
+<text x="1255.0" y="614.0" font-size="11" font-weight="500" fill="#0a84ff" text-anchor="middle">p. 7 · Table 3 · Listen from 04:12</text>
+<text x="1255.0" y="630.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="middle">or an explicit abstention</text>
+<text x="1104.0" y="664.0" font-size="10.5" font-weight="400" fill="#52525b" text-anchor="start">restricted data never leaves the network;</text>
+<text x="1104.0" y="677.6" font-size="10.5" font-weight="400" fill="#52525b" text-anchor="start">no silent fallback to the cloud.</text>
+<polyline points="1255.0,154.0 1255.0,166.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,212.0 1255.0,222.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1153.0,268.0 1153.0,280.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1153.0,320.0 1153.0,334.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,268.0 1255.0,280.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,320.0 1255.0,334.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1357.0,268.0 1357.0,280.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1357.0,320.0 1357.0,334.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,380.0 1255.0,392.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,442.0 1255.0,454.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,500.0 1255.0,512.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1255.0,558.0 1255.0,572.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1056,286 1078,286 1078,560 1056,560" fill="none" stroke="#71717a" stroke-width="1.5" stroke-dasharray="5 4"/>
+<polyline points="1078.0,300.0 1104.0,300.0" fill="none" stroke="#71717a" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="24.0" y="752.0" font-size="11" font-weight="400" fill="#52525b" text-anchor="start">Structure inspired by RAG-Anything (Guo et al., 2025), implemented inside PostgreSQL. Decisions: ADR-018 (multimodal), ADR-019 (graph), ADR-029 (cross-modal graph), ADR-030 (audio).</text>
+</svg>

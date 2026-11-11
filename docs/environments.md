@@ -1,6 +1,6 @@
 # Environments
 
-Ragsis runs in three places. The rule that ties them together: **all AWS infrastructure is created first in Floci and
+Ragis runs in three places. The rule that ties them together: **all AWS infrastructure is created first in Floci and
 only then in real AWS.**
 
 <picture>

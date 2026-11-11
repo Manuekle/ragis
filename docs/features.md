@@ -1,6 +1,6 @@
 # Features
 
-What Ragsis does today and how each capability is turned on. For how it is built, see
+What Ragis does today and how each capability is turned on. For how it is built, see
 [architecture.md](architecture.md); for the variables, [configuration.md](configuration.md).
 
 ## AI models
@@ -10,6 +10,8 @@ By default everything runs **with no network or credentials** using the local de
 - **Bedrock:** `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
   `bedrock-claude-sonnet-5-5@v1`) and AWS credentials in the containers' environment.
 - **On-premises or offline:** `ollama-*` models with `OLLAMA_BASE_URL`.
+- **OCR and speech to text:** `OCR_PROVIDER=textract` and `TRANSCRIPTION_PROVIDER=transcribe` (both cloud, so not for
+  `restricted` tenants). The full list of models by kind is in [architecture.md](architecture.md#model-providers).
 
 ## API integrations
 
@@ -38,7 +40,7 @@ send the previous context to the model. Details and limits: ADR-028.
 
 ## Multimodal (RAG-04, ADR-018)
 
-Formats: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT and CSV.
+Formats: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT, CSV and audio (MP3, WAV, M4A, OGG, FLAC).
 
 - **Tables** (including native Office charts converted to a table with their figures) and **equations** are chunks of
   their own with page, bbox and caption. They work without any extra model.
@@ -49,6 +51,30 @@ Formats: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT and CSV.
   `DOCLING_OCR=true` gives local OCR with no network.
 - **Query:** with a vision-capable generator, the images of cited figures are attached to the model
   (`RAG_VLM_ENHANCED`). The citation verifier still requires every figure to be in the evidence text.
+
+## Audio recordings (ADR-030)
+
+Meetings, calls and voice notes are transcribed during ingestion and indexed like any other document.
+
+- `TRANSCRIPTION_PROVIDER=transcribe` uses Amazon Transcribe on the stored file and respects the tenant's data policy.
+  With `none` (the default, also in local development and the pilot), recordings show "turning speech into text isn't
+  switched on".
+- Each chunk keeps its time range and speakers ("Speaker 1", "Speaker 2"; never names). Words with low confidence are
+  dropped, and the transcript is saved so a reindex does not pay for it again.
+- Answers cite the moment: the source says "Listen from 04:12" and opens the viewer there. The viewer plays the
+  recording next to its transcript; clicking a line plays from that point.
+- Questions that mention a recording, a call or a voice note prefer audio sources.
+
+## Library folders (ADR-031)
+
+Folders organize the library; they do not change who can see a document (the document's access list still decides).
+
+- Nested up to 6 levels, renamed and deleted in place. Deleting a folder never deletes documents: they go back to
+  "No folder". Files dropped while inside a folder are uploaded into it.
+- For documents without a folder, the library suggests one: by content (the document compared with the documents
+  already in each folder) or by name (the folder name appears in the document). People accept or dismiss it; nothing is
+  filed automatically.
+- Answers search every readable document regardless of folder.
 
 ## GraphRAG (RAG-05, ADR-019)
 
@@ -62,7 +88,22 @@ Ingestion extracts entities and relations per chunk with `AI_GRAPH_MODEL` (defau
 or an LLM allowed by the tenant's policy). Every entity or relation is visible only if the person can read at least one
 source chunk, and its descriptions are built only from visible sources.
 
-At query time, `mode` can be `auto`, `off`, `local`, `global` or `hybrid`; citations are still chunks.
+Figures, tables and equations are nodes of the same graph (ADR-029): each one gets an anchor entity named after its
+caption and document, and every entity found in it is linked to that anchor. An entity named both in a figure and in a
+paragraph is a single node, so a question about the text can reach the figure and the other way round.
+
+- **Tables:** row headers, column headers, units and cells are part of the graph (`row / column = value`), so a question
+  about one row and one column finds that cell and not the similar row next to it.
+- **Equations:** `INGEST_EQUATION_ANALYSIS=true` adds an explanation written by the generation model from the nearby
+  text (what it computes, what each variable means). Numbers that are not in the equation or its context are removed.
+- **Search by meaning:** entities and relations are embedded with the same model as the chunks, so the graph is also
+  reached by questions that share no words with it.
+- **Prompt:** the entities, relations and table cells of the evidence already selected are added to the prompt, each
+  tied to its source `[n]` (`RAG_GRAPH_CONTEXT_TOKENS`).
+
+At query time, `mode` can be `auto`, `off`, `local`, `global` or `hybrid`; citations are still chunks. When the question
+names a kind of content ("according to the figure…", "in the table…", "which formula…"), chunks of that kind are
+preferred among the candidates that already pass the evidence threshold; this works with the graph on or off.
 To populate the graph after enabling it: `make reindex ARGS="--org <uuid> --mode graph"`.
 
 ## Reindex

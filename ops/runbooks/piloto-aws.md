@@ -1,4 +1,4 @@
-# Ragsis pilot on AWS Ohio
+# Ragis pilot on AWS Ohio
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../../docs/diagrams/aws-pilot-dark.svg">
@@ -27,7 +27,7 @@ The rehearsal uses its own state in `infra/terraform/.floci/` and never reads or
 
 1. Define a subdomain that you control, for example `pilot.yourdomain.com`. The value is used in the certificate, the Cognito callback and the S3 CORS.
 2. Start a temporary `ragsis-pilot` profile for the **Rubber Ducking** project from your console account. Follow the profile's initial connection or renew it with `aws login --profile ragsis-pilot`. Select that project in the browser. [Temporary access to the AWS project](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html)
-3. From the Ragsis root, run a real plan with that profile. Replace `ACCOUNT_ID` and `PILOT_HOSTNAME` with the project's data. Save the plan locally to review the resources and the expected consumption of EC2, EBS, IPv4, KMS, S3, SQS and ECR before approving the creation.
+3. From the repository root, run a real plan with that profile. Replace `ACCOUNT_ID` and `PILOT_HOSTNAME` with the project's data. Save the plan locally to review the resources and the expected consumption of EC2, EBS, IPv4, KMS, S3, SQS and ECR before approving the creation.
 
 ```bash
 (

@@ -1,15 +1,19 @@
 openapi: 3.1.0
 info:
-  title: ragsis API
-  version: 1.0.0
+  title: Ragis API
+  version: 1.1.0
   description: |
-    API pública v1 de ragsis. Toda ruta bajo `/v1/organizations/{org}` resuelve el tenant
-    exclusivamente por membresía verificada en servidor; si el usuario no es miembro se responde 404.
-    Autenticación:
-    - Usuarios: `Authorization: Bearer <id_token OIDC>` (Cognito u otro IdP; el BFF web lo gestiona).
-      En entornos locales, `POST /v1/auth/dev-login` emite un token de prueba (prohibido en producción).
-    - Integraciones: `Authorization: Bearer rsk_<prefijo>_<secreto>` (clave de servicio). Solo las rutas
-      marcadas con `x-api-key-scopes` aceptan claves; el resto responde 403.
+    Public API v1 of Ragis (code name `ragsis`). Every route under `/v1/organizations/{org}` resolves the tenant
+    only through membership verified on the server; a non-member gets 404, never 403.
+
+    Authentication:
+    - People: `Authorization: Bearer <OIDC id_token>` (Cognito or another IdP; the web BFF handles it).
+      In local environments, `POST /v1/auth/dev-login` issues a test token (forbidden in production).
+    - Integrations: `Authorization: Bearer rsk_<prefix>_<secret>` (service key). Only routes marked with
+      `x-api-key-scopes` accept keys; every other route answers 403 to a key.
+
+    Errors use the `Error` schema. Document content (snippets, transcripts, figure descriptions) is only returned to
+    someone who can read the document under its ACL.
 servers:
   - url: http://localhost:4000
 security:
@@ -27,7 +31,7 @@ components:
     SignatureImage:
       type: string
       contentEncoding: base64
-      description: Imagen PNG o JPEG de hasta 448 KiB antes de codificar.
+      description: PNG or JPEG image of up to 448 KiB before encoding.
     SignatureAppearance:
       oneOf:
         - { type: object, required: [type, image], properties: { type: { const: image }, image: { $ref: '#/components/schemas/SignatureImage' } } }
@@ -55,10 +59,13 @@ components:
         filename: { type: string, maxLength: 200 }
         content_type:
           type: string
+          description: The worker checks it again against the file's signature (magic bytes).
           enum: [application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document,
                  application/vnd.openxmlformats-officedocument.presentationml.presentation,
                  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, image/png, image/jpeg,
-                 text/plain, text/markdown, text/html, text/csv]
+                 text/plain, text/markdown, text/html, text/csv,
+                 audio/mpeg, audio/mp3, audio/wav, audio/x-wav, audio/wave, audio/flac, audio/x-flac, audio/ogg,
+                 audio/mp4, audio/x-m4a, audio/m4a]
         size_bytes: { type: integer, minimum: 1 }
         effective_from: { type: string, format: date }
         effective_to: { type: string, format: date }
@@ -71,13 +78,61 @@ components:
           type: object
           properties:
             method: { const: PUT }
-            url: { type: string, description: URL prefirmada S3 de vida corta }
+            url: { type: string, description: Short-lived presigned S3 URL }
             headers: { type: object, additionalProperties: { type: string } }
             expires_in: { type: integer }
+    Document:
+      type: object
+      description: One row of the document list (latest version).
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        classification: { type: string, enum: [public, internal, confidential, restricted] }
+        status: { type: string }
+        latest_version_id: { type: string, format: uuid }
+        version_no: { type: integer }
+        latest_status: { type: string, examples: [uploaded, parsing, embedding, indexed, failed, rejected] }
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: [integer, "null"] }
+        page_count: { type: [integer, "null"] }
+        chunk_count: { type: [integer, "null"] }
+        duration_seconds: { type: [number, "null"], description: Recordings only (ADR-030) }
+        error_code:
+          type: [string, "null"]
+          examples: [no_extractable_text, ocr_required, model_policy_violation, transcription_required, no_speech_detected, audio_too_long]
+        folder_id: { type: [string, "null"], format: uuid, description: Folders only organize; access is the ACL (ADR-031) }
+        source_provider: { type: [string, "null"], enum: [gmail, slack, clickup, null] }
+        indexed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Folder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 120, description: No slashes; unique among siblings, ignoring case }
+        parent_id: { type: [string, "null"], format: uuid }
+        document_count: { type: integer, description: Only documents the caller can read }
+    FolderSuggestion:
+      type: object
+      properties:
+        document_id: { type: string, format: uuid }
+        folder_id: { type: string, format: uuid }
+        folder_name: { type: string }
+        score: { type: number }
+        reason: { type: string, enum: [similar_content, name_match] }
+    TranscriptSegment:
+      type: object
+      properties:
+        chunk_id: { type: string, format: uuid }
+        text: { type: string, description: 'One line per segment: "[mm:ss] Hablante N: …"' }
+        t_start: { type: number, description: Seconds from the start of the recording }
+        t_end: { type: number }
+        speakers: { type: array, items: { type: string }, description: Speaker labels, never names }
     Citation:
       type: object
       properties:
-        n: { type: integer, description: "Índice citado en la respuesta como [n]" }
+        n: { type: integer, description: "Index cited in the answer as [n]" }
         document_id: { type: string, format: uuid }
         version_id: { type: string, format: uuid }
         version_no: { type: integer }
@@ -88,17 +143,19 @@ components:
         page: { type: [integer, "null"] }
         effective_from: { type: [string, "null"], format: date }
         snippet: { type: string }
-        display_url: { const: signed-on-demand, description: Pedir URL firmada a /download }
-        kind: { type: string, enum: [text, table, figure, equation] }
+        display_url: { const: signed-on-demand, description: Request a signed URL from /download }
+        kind: { type: string, enum: [text, table, figure, equation, audio] }
+        t_start: { type: [number, "null"], description: "Recordings: second where the cited span starts" }
+        t_end: { type: [number, "null"] }
         bbox:
           type: [array, "null"]
           items: { type: number, minimum: 0, maximum: 1 }
           minItems: 4
           maxItems: 4
-          description: "[x0, y0, x1, y1] normalizado a la página `page`, origen arriba-izquierda"
+          description: "[x0, y0, x1, y1] normalized to page `page`, origin at the top left"
         caption: { type: [string, "null"] }
-        has_asset: { type: boolean, description: "Hay imagen de la figura: pedir URL a /chunks/{chunk}/asset" }
-        ai_generated: { type: boolean, description: "La evidencia incluye texto generado por IA (descripción de figura o resumen de tabla)" }
+        has_asset: { type: boolean, description: "There is a figure image: request its URL from /chunks/{chunk}/asset" }
+        ai_generated: { type: boolean, description: "The evidence includes AI-written text (figure description, table summary or equation analysis)" }
     QueryResponse:
       type: object
       properties:
@@ -115,9 +172,14 @@ components:
         timings: { type: object }
         usage: { type: object }
 paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      security: []
+      responses: { "200": { description: OK } }
   /v1/auth/dev-login:
     post:
-      summary: Token de desarrollo (solo AUTH_MODE=dev)
+      summary: Development token (AUTH_MODE=dev only)
       security: []
       requestBody:
         content:
@@ -127,49 +189,65 @@ paths:
         "200": { description: Token, content: { application/json: { schema: { type: object, properties: { token: { type: string } } } } } }
   /v1/me:
     get:
-      summary: Usuario actual y organizaciones donde es miembro
+      summary: Current user and the organizations where they are a member
       responses: { "200": { description: OK } }
   /v1/me/signatures:
-    get: { summary: Firmas privadas de la cuenta, responses: { "200": { description: Firmas guardadas con imagen PNG en base64 } } }
+    get: { summary: Private signatures of the account, responses: { "200": { description: Saved signatures with a base64 PNG image } } }
     post:
-      summary: Guarda una imagen de firma en la cuenta verificada
+      summary: Saves a signature image in the verified account
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [label, image], properties: { label: { type: string, minLength: 1, maxLength: 60 }, image: { $ref: '#/components/schemas/SignatureImage' } } } } } }
-      responses: { "201": { description: Firma guardada }, "409": { description: Límite de seis firmas guardadas } }
+      responses: { "201": { description: Signature saved }, "409": { description: Limit of six saved signatures } }
   /v1/me/signatures/{id}:
     parameters: [{ $ref: '#/components/parameters/id' }]
-    delete: { summary: Elimina una firma guardada de la cuenta, responses: { "204": { description: Firma eliminada }, "404": { description: Firma no disponible } } }
+    delete: { summary: Deletes a saved signature from the account, responses: { "204": { description: Signature deleted }, "404": { description: Signature not available } } }
+  /v1/onboarding/catalog:
+    get:
+      summary: Sector catalog for the sign-up screen (before an organization exists)
+      responses: { "200": { description: "{ sectors: [{ code, label, approach, deployment }] }" } }
   /v1/organizations:
     post:
-      summary: Crea organización (el creador queda como owner con workspace General)
+      summary: Creates an organization (the creator becomes owner, with a General workspace)
       requestBody:
         content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string }, slug: { type: string } } } } }
-      responses: { "201": { description: Creada } }
+      responses: { "201": { description: Created } }
   /v1/organizations/{org}:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Detalle, rol y límites del plan, responses: { "200": { description: OK }, "404": { description: No miembro } } }
+    get: { summary: "Details, role and plan limits", responses: { "200": { description: OK }, "404": { description: Not a member } } }
+  /v1/organizations/{org}/settings:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    patch:
+      summary: Organization settings (admin, audited). Turning the graph on does not reprocess existing documents
+      description: Backfill with `make reindex ARGS="--org <uuid> --mode graph"`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [graph_mode], additionalProperties: false, properties: { graph_mode: { type: string, enum: [inherit, "on", "off"], description: inherit = the plan's default } } } } }
+      responses:
+        "200": { description: "{ graph_mode, graph_enabled }" }
+        "403": { description: Requires admin }
   /v1/organizations/{org}/workspaces:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Workspaces visibles, responses: { "200": { description: OK } } }
-    post: { summary: Crear workspace (admin), responses: { "201": { description: Creado } } }
+    get: { summary: Visible workspaces, responses: { "200": { description: OK } } }
+    post: { summary: Creates a workspace (admin), responses: { "201": { description: Created } } }
   /v1/organizations/{org}/workspaces/{ws}/members:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/ws' }]
-    post: { summary: Asignar miembro a workspace (editor|reader), responses: { "204": { description: OK } } }
+    post: { summary: Assigns a member to a workspace (editor | reader), responses: { "204": { description: OK } } }
   /v1/organizations/{org}/members:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Miembros (admin), responses: { "200": { description: OK } } }
-    post: { summary: Agregar miembro existente por email (admin), responses: { "201": { description: OK } } }
+    get: { summary: Members (admin), responses: { "200": { description: OK } } }
+    post: { summary: Adds an existing member by email (admin), responses: { "201": { description: OK } } }
   /v1/organizations/{org}/groups:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Grupos (principals ACL), responses: { "200": { description: OK } } }
-    post: { summary: Crear grupo (admin), responses: { "201": { description: OK } } }
+    get: { summary: Groups (ACL principals), responses: { "200": { description: OK } } }
+    post: { summary: Creates a group (admin), responses: { "201": { description: OK } } }
   /v1/organizations/{org}/groups/{group}/members:
     parameters: [{ $ref: '#/components/parameters/org' }, { name: group, in: path, required: true, schema: { type: string, format: uuid } }]
-    post: { summary: Agregar miembro al grupo (admin), responses: { "204": { description: OK } } }
+    post: { summary: Adds a member to the group (admin), responses: { "204": { description: OK } } }
+  # ---------------------------------------------------------------- Documents
   /v1/organizations/{org}/documents/uploads:
     x-api-key-scopes: [documents:write]
     parameters: [{ $ref: '#/components/parameters/org' }]
     post:
-      summary: Inicia upload (documento + versión 1) y devuelve URL prefirmada
+      summary: Starts an upload (document + version 1) and returns a presigned URL
       requestBody:
         content:
           application/json:
@@ -183,58 +261,145 @@ paths:
                     title: { type: string }
                     source_id: { type: string }
                     classification: { type: string, enum: [public, internal, confidential, restricted] }
-                    acl: { type: array, items: { $ref: '#/components/schemas/Principal' }, description: 'Por defecto workspace:<id>' }
+                    acl: { type: array, items: { $ref: '#/components/schemas/Principal' }, description: 'Defaults to workspace:<id>' }
+                    folder_id: { type: [string, "null"], format: uuid, description: Folder of the same workspace (ADR-031) }
       responses:
         "201": { description: Ticket, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicket' } } } }
-        "429": { description: Cuota del plan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "400": { description: "Unsupported type, or the folder is not in this workspace" }
+        "429": { description: Plan quota, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /v1/organizations/{org}/documents/{id}/versions:
     x-api-key-scopes: [documents:write]
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Nueva versión de un documento existente
+      summary: New version of an existing document
       requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/FileSpec' } } } }
       responses: { "201": { description: Ticket, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicket' } } } } }
   /v1/organizations/{org}/documents/{id}/versions/{ver}/complete:
     x-api-key-scopes: [documents:write]
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { $ref: '#/components/parameters/ver' }]
     post:
-      summary: Confirma upload, verifica tamaño en S3 y encola ingesta (idempotente)
-      responses: { "202": { description: Job encolado } }
+      summary: Confirms the upload, checks the size in S3 and enqueues ingestion (idempotent)
+      responses: { "202": { description: Job enqueued } }
   /v1/organizations/{org}/documents:
     x-api-key-scopes: [documents:read]
     parameters: [{ $ref: '#/components/parameters/org' }]
     get:
-      summary: Lista documentos visibles del workspace
+      summary: Lists the visible documents of a workspace
       parameters:
         - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
-        - { name: q, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
-      responses: { "200": { description: OK } }
+        - { name: q, in: query, description: Words of the title, schema: { type: string, maxLength: 200 } }
+        - { name: folder_id, in: query, description: 'A folder id, or "none" for documents without a folder. Omitted: all', schema: { oneOf: [{ type: string, format: uuid }, { const: none }] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { documents: { type: array, items: { $ref: '#/components/schemas/Document' } } } } } }
   /v1/organizations/{org}/documents/{id}/status:
     x-api-key-scopes: [documents:read]
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: Estado de versiones e ingesta, responses: { "200": { description: OK } } }
+    get: { summary: Status of versions and ingestion, responses: { "200": { description: OK } } }
   /v1/organizations/{org}/documents/{id}/versions/{ver}/download:
     x-api-key-scopes: [documents:read]
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { $ref: '#/components/parameters/ver' }]
-    get: { summary: URL firmada corta (auditada), responses: { "200": { description: OK } } }
+    get: { summary: Short-lived signed URL (audited); also used to play recordings, responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/documents/{id}/versions/{ver}/transcript:
+    x-api-key-scopes: [documents:read]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { $ref: '#/components/parameters/ver' }]
+    get:
+      summary: Transcript of a recording, by timed spans (ADR-030). Rows are chunks under RLS + document ACL
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  duration_seconds: { type: [number, "null"] }
+                  language: { type: [string, "null"], examples: [es-US] }
+                  segments: { type: array, items: { $ref: '#/components/schemas/TranscriptSegment' } }
+        "404": { description: "Version not indexed, not visible or not found" }
   /v1/organizations/{org}/chunks/{chunk}/asset:
     x-api-key-scopes: [documents:read]
     parameters:
       - { $ref: '#/components/parameters/org' }
       - { name: chunk, in: path, required: true, schema: { type: string, format: uuid } }
     get:
-      summary: URL firmada corta (inline, auditada) de la imagen de una figura citada; 404 si no es visible por ACL
-      responses: { "200": { description: "{ url, expires_in }" }, "404": { description: No existe o no autorizado } }
+      summary: Short-lived signed URL (inline, audited) of the image of a cited figure; 404 if the ACL hides it
+      responses: { "200": { description: "{ url, expires_in }" }, "404": { description: Not found or not authorized } }
   /v1/organizations/{org}/documents/{id}:
     x-api-key-scopes: [documents:write]
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    delete: { summary: Borrado (invisible inmediato + purga asíncrona), responses: { "202": { description: Job de purga } } }
+    delete: { summary: Deletion (invisible at once + asynchronous purge), responses: { "202": { description: Purge job } } }
+  # ---------------------------------------------------------------- Library folders (ADR-031)
+  /v1/organizations/{org}/folders:
+    x-api-key-scopes: [documents:read, documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get:
+      summary: Folders of a workspace, with counts of the documents the caller can read
+      parameters: [{ name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { folders: { type: array, items: { $ref: '#/components/schemas/Folder' } }, unfiled_count: { type: integer } } } } }
+    post:
+      summary: Creates a folder (workspace editor). Up to 6 levels
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [workspace_id, name], properties: { workspace_id: { type: string, format: uuid }, name: { type: string, minLength: 1, maxLength: 120 }, parent_id: { type: [string, "null"], format: uuid } } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Folder' } } } }
+        "400": { description: "Invalid name, depth over 6, or parent in another workspace" }
+        "409": { description: A folder with that name already exists here }
+  /v1/organizations/{org}/folders/{id}:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    patch:
+      summary: Renames or moves a folder (workspace editor). A folder cannot go inside itself
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, minProperties: 1, properties: { name: { type: string, minLength: 1, maxLength: 120 }, parent_id: { type: [string, "null"], format: uuid } } } } }
+      responses: { "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Folder' } } } }, "400": { description: "Cycle, depth or invalid name" }, "409": { description: Name already used by a sibling } }
+    delete:
+      summary: Deletes the folder and its subfolders. No document is deleted; they go back to "No folder"
+      responses: { "204": { description: Deleted } }
+  /v1/organizations/{org}/documents/move:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    post:
+      summary: Moves documents to a folder of their workspace, or out of any folder (audited). Never changes who can see them
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [document_ids, folder_id], properties: { document_ids: { type: array, minItems: 1, maxItems: 200, items: { type: string, format: uuid } }, folder_id: { type: [string, "null"], format: uuid } } } } }
+      responses: { "200": { description: "{ moved, folder_id }" }, "400": { description: Folder of another workspace }, "404": { description: Folder not found } }
+  /v1/organizations/{org}/documents/folder-suggestions:
+    x-api-key-scopes: [documents:read]
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get:
+      summary: Suggested folder for documents without one, by similar content or by name. Computed under RLS
+      parameters:
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: document_id, in: query, description: Only this document, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: At most one suggestion per document; none when the evidence is weak
+          content: { application/json: { schema: { type: object, properties: { suggestions: { type: array, items: { $ref: '#/components/schemas/FolderSuggestion' } } } } } }
+  /v1/organizations/{org}/documents/{id}/folder-suggestion/dismiss:
+    x-api-key-scopes: [documents:write]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: Stops suggesting a folder for this document until it is moved
+      responses: { "204": { description: Dismissed }, "404": { description: Document not found } }
+  # ---------------------------------------------------------------- Query and history
   /v1/organizations/{org}/workspaces/{ws}/query:
     x-api-key-scopes: [query]
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/ws' }]
     post:
-      summary: Consulta con evidencia, citas verificadas y abstención
+      summary: Query with evidence, verified citations and abstention
+      description: |
+        Retrieval combines Spanish full-text search, vectors and, when the organization has the graph on, graph seeds.
+        Questions that name a kind of content ("the table", "the figure", "the recording") prefer that kind among
+        candidates that already pass the evidence threshold.
       requestBody:
         content:
           application/json:
@@ -243,29 +408,29 @@ paths:
               required: [question]
               properties:
                 question: { type: string, maxLength: 2000 }
-                as_of: { type: string, format: date, description: Filtrar por vigencia }
+                as_of: { type: string, format: date, description: Filter by effective date }
                 top_k: { type: integer, minimum: 1, maximum: 8 }
                 conversation_id:
                   type: string
                   format: uuid
                   description: >-
-                    Historial (ADR-028). UUID generado por el cliente; si viene, el turno se guarda en esa conversación
-                    (se crea con el primer turno). No disponible para claves de servicio (400).
+                    History (ADR-028). Client-generated UUID; when present, the turn is saved in that conversation
+                    (created with its first turn). Not available to service keys (400).
       responses:
         "200":
           description: >-
-            Respuesta. Incluye conversation_id solo si el turno quedó guardado; guardar nunca bloquea la respuesta.
+            Answer. Includes conversation_id only if the turn was saved; saving never blocks the answer.
           content: { application/json: { schema: { $ref: '#/components/schemas/QueryResponse' } } }
-        "400": { description: conversation_id inválido o enviado con una clave de servicio }
-        "403": { description: Política de modelos del tenant no permite ningún modelo }
-        "429": { description: Rate limit / cuota mensual }
+        "400": { description: "Invalid conversation_id, or sent with a service key" }
+        "403": { description: The tenant's model policy allows no model }
+        "429": { description: Rate limit or monthly quota }
   /v1/organizations/{org}/conversations:
     parameters: [{ $ref: '#/components/parameters/org' }]
     get:
-      summary: Historial propio de conversaciones (privado; más reciente primero). Sin acceso con claves de servicio
+      summary: The caller's own conversation history (private; newest first). Not available to service keys
       parameters:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
-        - { name: before, in: query, description: Cursor next_before de la página anterior, schema: { type: string } }
+        - { name: before, in: query, description: next_before cursor of the previous page, schema: { type: string } }
       responses:
         "200":
           description: "{ conversations: [{ id, title, created_at, updated_at, turns }], next_before: string | null }"
@@ -273,30 +438,31 @@ paths:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     get:
       summary: >-
-        Conversación con sus turnos. Los documentos citados se vuelven a comprobar contra la ACL actual: si alguno
-        ya no es visible el turno vuelve con redacted=true y result=null
-      responses: { "200": { description: OK }, "404": { description: No existe o no es del usuario } }
+        Conversation with its turns. Cited documents are checked again against the current ACL: if one is no longer
+        visible, the turn comes back with redacted=true and result=null
+      responses: { "200": { description: OK }, "404": { description: Not found or not the caller's } }
     patch:
-      summary: Renombra (no cambia el orden de la lista)
+      summary: Renames (does not change the order of the list)
       requestBody:
         content: { application/json: { schema: { type: object, required: [title], properties: { title: { type: string, minLength: 1, maxLength: 120 } } } } }
-      responses: { "200": { description: "{ id, title }" }, "404": { description: No existe o no es del usuario } }
+      responses: { "200": { description: "{ id, title }" }, "404": { description: Not found or not the caller's } }
     delete:
-      summary: Borra la conversación y todos sus turnos (auditado)
-      responses: { "204": { description: Borrada }, "404": { description: No existe o no es del usuario } }
+      summary: Deletes the conversation and all its turns (audited)
+      responses: { "204": { description: Deleted }, "404": { description: Not found or not the caller's } }
   /v1/organizations/{org}/query-runs/{trace}:
     x-api-key-scopes: [query]
     parameters: [{ $ref: '#/components/parameters/org' }, { name: trace, in: path, required: true, schema: { type: string } }]
-    get: { summary: Traza de una consulta propia, responses: { "200": { description: OK } } }
+    get: { summary: Trace of one of the caller's queries, responses: { "200": { description: OK } } }
   /v1/organizations/{org}/query-runs/{trace}/feedback:
     x-api-key-scopes: [query]
     parameters: [{ $ref: '#/components/parameters/org' }, { name: trace, in: path, required: true, schema: { type: string } }]
     post: { summary: Feedback +1/-1, responses: { "204": { description: OK } } }
+  # ---------------------------------------------------------------- Governance
   /v1/organizations/{org}/api-keys:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Lista claves de servicio (admin; nunca devuelve secretos), responses: { "200": { description: OK } } }
+    get: { summary: Lists service keys (admin; never returns secrets), responses: { "200": { description: OK } } }
     post:
-      summary: Crea clave de servicio (admin). El token se devuelve una sola vez
+      summary: Creates a service key (admin). The token is returned only once
       requestBody:
         content:
           application/json:
@@ -310,53 +476,53 @@ paths:
                 expires_in_days: { type: integer, minimum: 1, maximum: 365, default: 90 }
       responses:
         "201":
-          description: Creada
+          description: Created
           content: { application/json: { schema: { type: object, properties: { id: { type: string }, token: { type: string, pattern: '^rsk_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$' }, expires_at: { type: string, format: date-time } } } } }
   /v1/organizations/{org}/api-keys/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    delete: { summary: Revoca la clave de inmediato (admin), responses: { "204": { description: Revocada } } }
+    delete: { summary: Revokes the key at once (admin), responses: { "204": { description: Revoked } } }
   /v1/organizations/{org}/usage:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Uso del mes y límites del plan (admin), responses: { "200": { description: OK } } }
+    get: { summary: Usage of the month and plan limits (admin), responses: { "200": { description: OK } } }
   /v1/organizations/{org}/audit:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Últimos eventos de auditoría con hash encadenado (admin), responses: { "200": { description: OK } } }
-  # ---------------------------------------------------------------- Conectores CON-01 (ADR-025)
+    get: { summary: Latest audit events with a hash chain (admin), responses: { "200": { description: OK } } }
+  # ---------------------------------------------------------------- Connectors CON-01 (ADR-025)
   /v1/organizations/{org}/connectors:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: "Proveedores (disponibles/permitidos) y conexiones visibles: las de empresa y las personales propias", responses: { "200": { description: OK } } }
+    get: { summary: "Providers (available / allowed) and visible connections: company ones and the caller's personal ones", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/connectors/policy:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    put: { summary: "Apps que la organización permite conectar (admin). Quitar una pausa sus conexiones", responses: { "200": { description: OK } } }
+    put: { summary: "Apps the organization allows to connect (admin). Removing one pauses its connections", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/connectors/{provider}/authorize:
     parameters: [{ $ref: '#/components/parameters/org' }, { name: provider, in: path, required: true, schema: { type: string, enum: [gmail, slack, clickup] } }]
-    post: { summary: "Inicia OAuth (PKCE + state de un solo uso, 10 min). Gmail = personal; Slack/ClickUp = admin", responses: { "200": { description: "{ authorize_url }" } } }
+    post: { summary: "Starts OAuth (PKCE + single-use state, 10 min). Gmail = personal; Slack / ClickUp = admin", responses: { "200": { description: "{ authorize_url }" } } }
   /v1/connectors/oauth/complete:
-    post: { summary: "Completa OAuth con {state, code} desde /connect/callback; solo la persona que lo inició", responses: { "200": { description: "{ organization_id, connector_id, provider, status }" }, "400": { description: connect_expired | connect_failed } } }
+    post: { summary: "Completes OAuth with {state, code} from /connect/callback; only the person who started it", responses: { "200": { description: "{ organization_id, connector_id, provider, status }" }, "400": { description: connect_expired | connect_failed } } }
   /v1/organizations/{org}/connectors/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    put: { summary: "Ajustes (canales, espacios, etiquetas, alcance temporal) y pausa/reanudación", responses: { "200": { description: OK } } }
-    delete: { summary: "Desconecta: revoca el token y retira del corpus todo lo sincronizado", responses: { "202": { description: "{ removed_items }" } } }
+    put: { summary: "Settings (channels, spaces, labels, time range) and pause / resume", responses: { "200": { description: OK } } }
+    delete: { summary: "Disconnects: revokes the token and removes everything synced from the corpus", responses: { "202": { description: "{ removed_items }" } } }
   /v1/organizations/{org}/connectors/{id}/options:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: "Opciones en vivo del proveedor (canales, espacios, etiquetas)", responses: { "200": { description: OK }, "409": { description: reconnect_needed } } }
+    get: { summary: "Live options from the provider (channels, spaces, labels)", responses: { "200": { description: OK }, "409": { description: reconnect_needed } } }
   /v1/organizations/{org}/connectors/{id}/sync:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: "Sincronizar ahora (scope documents:write para claves de servicio)", responses: { "202": { description: Encolado }, "409": { description: setup_needed | paused | reconnect_needed } } }
-  # ---------------------------------------------------------------- Onboarding sectorial (ADR-020)
+    post: { summary: "Sync now (scope documents:write for service keys)", responses: { "202": { description: Enqueued }, "409": { description: setup_needed | paused | reconnect_needed } } }
+  # ---------------------------------------------------------------- Sector onboarding (ADR-020)
   /v1/organizations/{org}/onboarding:
     parameters: [{ $ref: '#/components/parameters/org' }]
     get:
-      summary: Estado del onboarding (máquina de estados), perfil, recomendación vigente, catálogo sectorial y checklist piloto
+      summary: Onboarding status (state machine), profile, current recommendation, sector catalog and pilot checklist
       responses: { "200": { description: OK } }
   /v1/organizations/{org}/onboarding/steps/{step}:
     parameters: [{ $ref: '#/components/parameters/org' }, { name: step, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 9 } }]
     put:
-      summary: Completa u omite un paso (admin). 1 guarda comprador y canal de origen; 2 usuarios iniciales; 4 fuentes, señales y volumen (calificación interna, ADR-021). 6 aprovisiona espacios; 7 crea agentes draft; 9 activa sin publicar agentes
+      summary: Completes or skips a step (admin). 1 saves buyer and source channel; 2 first users; 4 sources, signals and volume (internal qualification, ADR-021); 6 provisions spaces; 7 creates draft agents; 9 activates without publishing agents
       description: |
-        Pasos obligatorios (no omitibles): 2 sector, 3 objetivos, 5 privacidad, 9 activar. El paso 9 exige 2, 3 y 5.
-        Nunca sobrescribe espacios ni agentes existentes. El paso 5 solo endurece `organizations.data_class`, nunca la relaja;
-        `restricted` + `cloud_allowed` se rechaza.
+        Mandatory steps (cannot be skipped): 2 sector, 3 goals, 5 privacy, 9 activate. Step 9 requires 2, 3 and 5.
+        It never overwrites existing spaces or agents. Step 5 only tightens `organizations.data_class`, never relaxes it;
+        `restricted` + `cloud_allowed` is rejected.
       requestBody:
         content:
           application/json:
@@ -365,29 +531,29 @@ paths:
               required: [action]
               properties:
                 action: { type: string, enum: [complete, skip] }
-                data: { type: object, description: "Campos del paso (ver apps/api/src/routes/onboarding.ts)" }
-      responses: { "200": { description: Estado actualizado + result }, "400": { description: Validación / paso no omitible }, "403": { description: Requiere admin } }
+                data: { type: object, description: "Fields of the step (see apps/api/src/routes/onboarding.ts)" }
+      responses: { "200": { description: Updated state + result }, "400": { description: "Validation, or the step cannot be skipped" }, "403": { description: Requires admin } }
   /v1/organizations/{org}/onboarding/profile:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    put: { summary: Edita el perfil después del alta (admin). Cambio de sector/objetivos tras completar ⇒ NEEDS_REVIEW, sin borrar nada, responses: { "200": { description: OK } } }
+    put: { summary: "Edits the profile after sign-up (admin). Changing sector or goals after completion ⇒ NEEDS_REVIEW, deleting nothing", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/onboarding/recommendations:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    post: { summary: Recalcula presets deterministas (sector + objetivos + sensibilidad + tipos + plan), responses: { "200": { description: Recomendación versionada (template_version) } } }
+    post: { summary: Recomputes deterministic presets (sector + goals + sensitivity + types + plan), responses: { "200": { description: Versioned recommendation (template_version) } } }
   /v1/organizations/{org}/onboarding/complete:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    post: { summary: Alias del paso 9. No habilita herramientas críticas ni publica agentes, responses: { "200": { description: COMPLETED } } }
+    post: { summary: Alias of step 9. Does not enable critical tools or publish agents, responses: { "200": { description: COMPLETED } } }
   /v1/organizations/{org}/onboarding/pause:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    post: { summary: Pausa el onboarding (PAUSED); se reanuda en cualquier paso, responses: { "200": { description: OK } } }
+    post: { summary: Pauses onboarding (PAUSED); it resumes at any step, responses: { "200": { description: OK } } }
   # ---------------------------------------------------------------- Agent Studio (ADR-020)
   /v1/organizations/{org}/agents/catalog:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Catálogo de herramientas (riesgo, disponibilidad, sandbox), plantillas, autonomías, perfiles de modelo y límites del tenant, responses: { "200": { description: OK } } }
+    get: { summary: "Tool catalog (risk, availability, sandbox), templates, autonomy levels, model profiles and tenant limits", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/agents:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Agentes visibles (publicados + drafts propios; admin ve todos), responses: { "200": { description: OK } } }
+    get: { summary: Visible agents (published + own drafts; admin sees all), responses: { "200": { description: OK } } }
     post:
-      summary: Crea un agente draft desde plantilla o en blanco (member+; viewer 403)
+      summary: Creates a draft agent from a template or blank (member+; viewer 403)
       requestBody:
         content:
           application/json:
@@ -398,59 +564,59 @@ paths:
                 slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,60}$' }
                 name: { type: string }
                 space_ids: { type: array, items: { type: string, format: uuid } }
-      responses: { "201": { description: Creado + validación de política } }
+      responses: { "201": { description: Created + policy validation } }
   /v1/organizations/{org}/agents/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: Draft, versión activa, diff de permisos, validación, versiones, último test y condiciones de publicación, responses: { "200": { description: OK }, "404": { description: No existe o draft ajeno } } }
+    get: { summary: "Draft, active version, permission diff, validation, versions, last test and publishing conditions", responses: { "200": { description: OK }, "404": { description: Not found or someone else's draft } } }
   /v1/organizations/{org}/agents/{id}/draft:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    put: { summary: Guarda la definición declarativa (owner del agente o admin). Devuelve validación y diff, responses: { "200": { description: OK }, "403": { description: Sin permiso de edición } } }
+    put: { summary: Saves the declarative definition (agent owner or admin). Returns validation and diff, responses: { "200": { description: OK }, "403": { description: No edit permission } } }
   /v1/organizations/{org}/agents/{id}/test:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Ejecuta el draft en sandbox (search_documents real con ACL del usuario; escrituras simuladas)
+      summary: Runs the draft in the sandbox (real search_documents with the user's ACL; simulated writes)
       requestBody: { content: { application/json: { schema: { type: object, properties: { input: { type: string, minLength: 2, maxLength: 2000 } } } } } }
-      responses: { "201": { description: Traza por paso, citas y checks; persistido como agent_test_run (pregunta solo como hash) } }
+      responses: { "201": { description: "Trace per step, citations and checks; stored as an agent_test_run (question only as a hash)" } }
   /v1/organizations/{org}/agents/{id}/test-runs:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: Últimas pruebas (propias; admin ve todas), responses: { "200": { description: OK } } }
+    get: { summary: Latest tests (own; admin sees all), responses: { "200": { description: OK } } }
   /v1/organizations/{org}/agents/{id}/publish:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Publica versión semántica inmutable. Exige validación OK y test pasado sobre el hash exacto del draft
+      summary: Publishes an immutable semantic version. Requires a valid policy and a passed test on the exact hash of the draft
       requestBody:
         content:
           application/json:
             schema: { type: object, required: [changelog], properties: { bump: { type: string, enum: [major, minor, patch], default: minor }, changelog: { type: string } } }
-      responses: { "201": { description: Versión creada }, "400": { description: Sin test/errores de política (auditado como deny) }, "403": { description: Sin permiso }, "409": { description: Sin cambios / archivado } }
+      responses: { "201": { description: Version created }, "400": { description: "No test, or policy errors (audited as deny)" }, "403": { description: No permission }, "409": { description: "No changes, or archived" } }
   /v1/organizations/{org}/agents/{id}/rollback:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: Activa una versión anterior (revalidada contra la política vigente), responses: { "200": { description: OK } } }
+    post: { summary: Activates an earlier version (validated again against the current policy), responses: { "200": { description: OK } } }
   /v1/organizations/{org}/agents/{id}/status:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: "published | paused | archived. Nunca borra versiones ni pruebas", responses: { "200": { description: OK } } }
+    post: { summary: "published | paused | archived. Never deletes versions or tests", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/agents/{id}/versions/{vid}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: vid, in: path, required: true, schema: { type: string, format: uuid } }]
-    get: { summary: Configuración inmutable de una versión publicada, responses: { "200": { description: OK } } }
-  # ---------------------------------------------------------------- Workflows + human-in-the-loop (ADR-022)
+    get: { summary: Immutable configuration of a published version, responses: { "200": { description: OK } } }
+  # ---------------------------------------------------------------- Workflows + human in the loop (ADR-022)
   /v1/organizations/{org}/workflows/catalog:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Tipos de nodo (y disponibilidad por fase), roles humanos, plantillas y agentes publicables, responses: { "200": { description: OK } } }
+    get: { summary: "Node types (and availability by phase), human roles, templates and publishable agents", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/workflows:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Workflows visibles (publicados + drafts propios; admin ve todos), responses: { "200": { description: OK } } }
-    post: { summary: Crea workflow draft desde plantilla o vacío (member+), responses: { "201": { description: Creado + validación del grafo } } }
+    get: { summary: Visible workflows (published + own drafts; admin sees all), responses: { "200": { description: OK } } }
+    post: { summary: Creates a draft workflow from a template or empty (member+), responses: { "201": { description: Created + graph validation } } }
   /v1/organizations/{org}/workflows/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: Grafo draft, validación (DAG, hops, gates, agentes publicados), versiones y condiciones de publicación, responses: { "200": { description: OK } } }
+    get: { summary: "Draft graph, validation (DAG, hops, gates, published agents), versions and publishing conditions", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/workflows/{id}/draft:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     put:
-      summary: Guarda el grafo declarativo (nodes, edges, policies). deny_on_reject y no_external_action_without_approval son literales true
-      responses: { "200": { description: Hash + validación } }
+      summary: Saves the declarative graph (nodes, edges, policies). deny_on_reject and no_external_action_without_approval are literal true
+      responses: { "200": { description: Hash + validation } }
   /v1/organizations/{org}/workflows/{id}/publish:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: Publica versión inmutable fijando cada agente a su versión publicada vigente, responses: { "201": { description: OK }, "400": { description: Grafo inválido (auditado como deny) } } }
+    post: { summary: "Publishes an immutable version, pinning each agent to its current published version", responses: { "201": { description: OK }, "400": { description: Invalid graph (audited as deny) } } }
   /v1/organizations/{org}/workflows/{id}/status:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post: { summary: "published | paused | archived", responses: { "200": { description: OK } } }
@@ -460,48 +626,48 @@ paths:
       - { $ref: '#/components/parameters/id' }
       - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 200 } }
     post:
-      summary: Inicia un run (asíncrono). Reintentar con la misma clave devuelve el mismo run (200); otra clave reutilizada en otro workflow → 409
+      summary: Starts a run (asynchronous). Retrying with the same key returns the same run (200); a key reused on another workflow → 409
       requestBody: { content: { application/json: { schema: { type: object, required: [task], properties: { task: { type: string, minLength: 2, maxLength: 2000 } } } } } }
-      responses: { "202": { description: QUEUED }, "200": { description: Replay idempotente } }
+      responses: { "202": { description: QUEUED }, "200": { description: Idempotent replay } }
   /v1/organizations/{org}/runs:
     parameters: [{ $ref: '#/components/parameters/org' }, { name: state, in: query, schema: { type: string } }, { name: workflow_id, in: query, schema: { type: string, format: uuid } }]
-    get: { summary: Runs visibles (iniciador, admin, auditor o rol con aprobación asignada), responses: { "200": { description: OK } } }
+    get: { summary: "Visible runs (initiator, admin, auditor or a role with an assigned approval)", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/runs/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: Timeline (pasos, salidas redactadas según la ACL de quien mira, aprobaciones con binding y hash, eventos outbox), responses: { "200": { description: OK }, "404": { description: Sin relación con el run } } }
+    get: { summary: "Timeline (steps, outputs redacted by the viewer's ACL, approvals with binding and hash, outbox events)", responses: { "200": { description: OK }, "404": { description: No relation to the run } } }
   /v1/organizations/{org}/runs/{id}/cancel:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: Cancela (iniciador o admin); revoca aprobaciones pendientes, responses: { "200": { description: CANCELLED } } }
+    post: { summary: Cancels (initiator or admin); revokes pending approvals, responses: { "200": { description: CANCELLED } } }
   /v1/organizations/{org}/inbox:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Aprobaciones pendientes para mis roles (con invalidated y blocked_by_sod) y mis runs que requieren atención, responses: { "200": { description: OK } } }
+    get: { summary: Pending approvals for my roles (with invalidated and blocked_by_sod) and my runs that need attention, responses: { "200": { description: OK } } }
   /v1/organizations/{org}/approvals/{id}/decision:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Aprobar/rechazar. Exige rol asignado, hash exacto mostrado, vigencia, versiones de documento sin cambios y separación de funciones
+      summary: Approve or reject. Requires the assigned role, the exact hash shown, validity, unchanged document versions and separation of duties
       requestBody:
         content:
           application/json:
             schema: { type: object, required: [decision, action_hash], properties: { decision: { type: string, enum: [approve, reject] }, action_hash: { type: string, pattern: '^[0-9a-f]{64}$' }, comment: { type: string } } }
       responses:
-        "200": { description: Decidida; aprobar reanuda el run, rechazar lo cancela }
-        "403": { description: Sin rol o auto-aprobación (auditado) }
-        "409": { description: "stale_action_hash | approval_invalidated | approval_expired | no pendiente" }
+        "200": { description: "Decided; approving resumes the run, rejecting cancels it" }
+        "403": { description: "No role, or self-approval (audited)" }
+        "409": { description: "stale_action_hash | approval_invalidated | approval_expired | not pending" }
   /v1/organizations/{org}/functional-roles:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Miembros con roles funcionales (admin), responses: { "200": { description: OK } } }
+    get: { summary: Members with functional roles (admin), responses: { "200": { description: OK } } }
   /v1/organizations/{org}/members/{user}/functional-roles:
     parameters: [{ $ref: '#/components/parameters/org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid } }]
     put:
-      summary: Reemplaza los roles funcionales del miembro (admin, auditado)
+      summary: Replaces the member's functional roles (admin, audited)
       requestBody: { content: { application/json: { schema: { type: object, required: [roles], properties: { roles: { type: array, items: { type: string, enum: [reviewer, approver, signatory, auditor, agent_designer, knowledge_manager] } } } } } } }
       responses: { "200": { description: OK } }
-  # ---------------------------------------------------------------- Firma y compartición (ADR-023)
+  # ---------------------------------------------------------------- Signatures and sharing (ADR-023)
   /v1/organizations/{org}/external-policy:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Política de dominios y enlaces, vigencia de aprobaciones y MFA para aprobar envíos, responses: { "200": { description: OK } } }
+    get: { summary: "Domain and link policy, approval validity and MFA to approve sending", responses: { "200": { description: OK } } }
     put:
-      summary: Actualiza la política externa (admin, auditado). Lista vacía bloquea toda compartición
+      summary: Updates the external policy (admin, audited). An empty list blocks all sharing
       requestBody:
         content:
           application/json:
@@ -516,9 +682,9 @@ paths:
       responses: { "200": { description: OK } }
   /v1/organizations/{org}/signatures:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Sobres visibles (admin, auditor, signatory, iniciador o firmante) con awaiting_me, responses: { "200": { description: OK } } }
+    get: { summary: "Visible envelopes (admin, auditor, signatory, initiator or signer) with awaiting_me", responses: { "200": { description: OK } } }
     post:
-      summary: Crea un borrador nativo con copias de las versiones PDF seleccionadas
+      summary: Creates a native draft with copies of the selected PDF versions
       parameters: [{ name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: true
@@ -535,93 +701,93 @@ paths:
                   minItems: 1
                   maxItems: 10
                   items: { type: object, required: [name, email], properties: { name: { type: string }, email: { type: string, format: email } } }
-      responses: { "201": { description: Borrador creado }, "200": { description: Solicitud repetida } }
+      responses: { "201": { description: Draft created }, "200": { description: Repeated request } }
   /v1/organizations/{org}/signatures/eligible-documents:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Versiones PDF vigentes visibles para preparar un sobre, responses: { "200": { description: OK } } }
+    get: { summary: Current visible PDF versions to prepare an envelope, responses: { "200": { description: OK } } }
   /v1/organizations/{org}/signatures/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    get: { summary: Sobre (documentos con SHA-256, firmantes, respuestas, evidencia, eventos), responses: { "200": { description: OK } } }
+    get: { summary: "Envelope (documents with SHA-256, signers, responses, evidence, events)", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/signatures/{id}/local-sign:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Ceremonia del proveedor local de desarrollo. Solo el firmante autenticado; emite el webhook firmado al completarse
+      summary: Ceremony of the local development provider. Only the authenticated signer; emits the signed webhook on completion
       requestBody: { content: { application/json: { schema: { type: object, required: [decision, typed_name, consent], properties: { decision: { type: string, enum: [sign, decline] }, typed_name: { type: string }, consent: { type: boolean, enum: [true] } } } } } }
-      responses: { "200": { description: Estado resultante }, "403": { description: No es firmante }, "404": { description: Proveedor no local }, "409": { description: Ya respondió / sobre no enviado } }
+      responses: { "200": { description: Resulting state }, "403": { description: Not a signer }, "404": { description: Provider is not local }, "409": { description: "Already answered, or envelope not sent" } }
   /v1/organizations/{org}/signatures/{id}/send:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Aprueba y envía un sobre manual (otro signatory o admin)
+      summary: Approves and sends a manual envelope (another signatory or admin)
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [action_hash], properties: { action_hash: { type: string, pattern: '^[0-9a-f]{64}$' } } } } } }
-      responses: { "200": { description: SENT }, "403": { description: Aprobador o destinatario no autorizado }, "409": { description: Sobre o versiones cambiaron } }
+      responses: { "200": { description: SENT }, "403": { description: Approver or recipient not authorized }, "409": { description: Envelope or versions changed } }
   /v1/organizations/{org}/signatures/{id}/documents/{version}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: version, in: path, required: true, schema: { type: string, format: uuid } }]
-    get: { summary: URL breve para revisar la copia exacta del PDF, responses: { "200": { description: OK } } }
+    get: { summary: Short URL to review the exact copy of the PDF, responses: { "200": { description: OK } } }
   /v1/organizations/{org}/signatures/{id}/respond:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Firma o rechaza como firmante autenticado
+      summary: Signs or declines as an authenticated signer
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SignatureDecision' } } } }
-      responses: { "200": { description: Respuesta registrada }, "403": { description: Firmante no autorizado }, "409": { description: Sobre cerrado o respuesta en conflicto } }
+      responses: { "200": { description: Response recorded }, "403": { description: Signer not authorized }, "409": { description: "Envelope closed, or conflicting response" } }
   /v1/organizations/{org}/signatures/{id}/remind:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
-      summary: Invalida la invitación anterior y encola otra para el firmante externo
+      summary: Invalidates the previous invitation and enqueues another one for the external signer
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } } }
-      responses: { "200": { description: Invitación regenerada }, "429": { description: Espera entre reenvíos } }
+      responses: { "200": { description: Invitation regenerated }, "429": { description: Wait between resends } }
   /v1/organizations/{org}/signatures/{id}/void:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: Anula el sobre (creador o admin); el run que lo espera falla, responses: { "200": { description: VOIDED } } }
+    post: { summary: Voids the envelope (creator or admin); the run waiting for it fails, responses: { "200": { description: VOIDED } } }
   /v1/organizations/{org}/signatures/{id}/evidence/{kind}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: kind, in: path, required: true, schema: { type: string, enum: [signed, certificate] } }]
-    get: { summary: URL prefirmada de la evidencia (solo COMPLETED; auditado), responses: { "200": { description: OK } } }
+    get: { summary: Presigned URL of the evidence (COMPLETED only; audited), responses: { "200": { description: OK } } }
   /v1/organizations/{org}/shares:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Enlaces compartidos (estado, destinatarios, accesos), responses: { "200": { description: OK } } }
+    get: { summary: "Shared links (status, recipients, accesses)", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/shares/{id}/reveal:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: Rota el token y devuelve el enlace una sola vez (creador o admin); el enlace anterior deja de funcionar, responses: { "200": { description: OK } } }
+    post: { summary: Rotates the token and returns the link only once (creator or admin); the previous link stops working, responses: { "200": { description: OK } } }
   /v1/organizations/{org}/shares/{id}/revoke:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
-    post: { summary: Revoca de inmediato (creador o admin), responses: { "200": { description: OK } } }
+    post: { summary: Revokes at once (creator or admin), responses: { "200": { description: OK } } }
   /v1/webhooks/signatures/{provider}:
     parameters: [{ name: provider, in: path, required: true, schema: { type: string, enum: [local] } }]
     post:
-      summary: Eventos del simulador de desarrollo (HMAC sobre el cuerpo crudo, idempotente por event_id)
+      summary: Events from the development simulator (HMAC over the raw body, idempotent by event_id)
       security: []
-      responses: { "200": { description: Procesado o duplicado }, "202": { description: Sobre desconocido (ignorado) }, "401": { description: Firma inválida o evento viejo } }
+      responses: { "200": { description: Processed or duplicate }, "202": { description: Unknown envelope (ignored) }, "401": { description: Invalid signature or old event } }
   /v1/signature-guest/open:
     post:
-      summary: Abre la ceremonia del destinatario de la invitación
+      summary: Opens the ceremony for the recipient of the invitation
       security: [{ signatureInvite: [] }]
-      responses: { "200": { description: Sobre visible }, "404": { description: Invitación inválida }, "410": { description: Caducada o anulada } }
+      responses: { "200": { description: Envelope visible }, "404": { description: Invalid invitation }, "410": { description: Expired or voided } }
   /v1/signature-guest/document:
     post:
-      summary: URL breve para revisar un PDF de la invitación
+      summary: Short URL to review a PDF of the invitation
       security: [{ signatureInvite: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [version_id], properties: { version_id: { type: string, format: uuid } } } } } }
       responses: { "200": { description: OK } }
   /v1/signature-guest/respond:
     post:
-      summary: Firma o rechaza con la identidad de la invitación
-      description: Los invitados pueden adjuntar una imagen al sobre en curso con appearance.type=image.
+      summary: Signs or declines with the identity of the invitation
+      description: Guests can attach an image to the current envelope with appearance.type=image.
       security: [{ signatureInvite: [] }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SignatureDecision' } } } }
-      responses: { "200": { description: Respuesta registrada }, "403": { description: El invitado intentó usar una firma guardada } }
+      responses: { "200": { description: Response recorded }, "403": { description: The guest tried to use a saved signature } }
   /v1/signature-guest/signed:
     post:
-      summary: URL breve del PDF final para el destinatario de la invitación
+      summary: Short URL of the final PDF for the recipient of the invitation
       security: [{ signatureInvite: [] }]
-      responses: { "200": { description: OK }, "404": { description: PDF final no disponible } }
+      responses: { "200": { description: OK }, "404": { description: Final PDF not available } }
   /v1/signature-proof/{id}:
     parameters: [{ $ref: '#/components/parameters/id' }]
     get:
-      summary: Huellas del PDF y certificado de un sobre nativo completado
+      summary: Fingerprints of the PDF and certificate of a completed native envelope
       security: []
-      responses: { "200": { description: Huellas y fecha de cierre sin datos de firmantes }, "404": { description: Registro no disponible } }
+      responses: { "200": { description: "Fingerprints and closing date, without signer data" }, "404": { description: Record not available } }
   /v1/shares/access/{token}:
     parameters: [{ name: token, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' } }]
     get:
-      summary: Acceso público a un enlace compartido (valida hash del token, caducidad y revocación; audita el intento)
+      summary: Public access to a shared link (checks the token hash, expiry and revocation; audits the attempt)
       security: []
-      responses: { "302": { description: URL prefirmada de 60 s }, "404": { description: No existe }, "410": { description: Caducado o revocado } }
+      responses: { "302": { description: Presigned URL valid for 60 s }, "404": { description: Not found }, "410": { description: Expired or revoked } }

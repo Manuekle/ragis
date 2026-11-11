@@ -156,8 +156,8 @@ implemented in Postgres (`db/migrations/0005_graphrag.sql`) under this ACL model
   sources visible to that user. An entity shared between A and B, seen by a reader of A, only shows mentions from A.
 - **Deletion.** Sources cascade with their chunk (deletion, full reindex, failure); the worker collects the orphaned
   keys (already invisible) in the same commit.
-- **Extraction** (`ragsis_ingest/graph.py`) after chunking, one `AIGateway.generate` per chunk (text/table) with
-  `AI_GRAPH_MODEL` and the tenant's policy: with no allowed model (e.g. `restricted` with a cloud model) or with the
+- **Extraction** (`ragsis_ingest/graph.py`) after chunking, one `AIGateway.generate` per chunk (text/table;
+  figure/equation since ADR-029) with `AI_GRAPH_MODEL` and the tenant's policy: with no allowed model (e.g. `restricted` with a cloud model) or with the
   provider down → no graph and a warning in the audit (`graph_skipped_policy`); ingestion continues. Only mentions that
   appear literally in the chunk and relations between them are accepted. `local-graph-heuristic@v1` (proper nouns and
   acronyms) is the deterministic offline path (ADR-010).
@@ -539,3 +539,172 @@ conversation stays readable. This way the history is not a route to read what th
 
 **Revisit when** a customer asks for maximum retention or to disable the history, or when Ask passes prior context to the
 model (then it must be decided which hidden turns are excluded from the prompt).
+
+## ADR-029 · Cross-modal graph and modality-aware retrieval (ideas from RAG-Anything)
+
+**Context.** The RAG-Anything paper (Guo et al., 2025) adds three things on top of LightRAG: a *cross-modal* graph where
+every figure, table and equation is a node that anchors the entities found in it (`belongs_to`), fusion of that graph
+with the text graph by entity name, and retrieval that reads modality cues in the question. Its own failure analysis
+names "text-centric retrieval bias" as the main open problem. ragsis already had the parsing, the context-aware VLM
+description, the text graph, hybrid RRF retrieval, reranking and images attached at generation (ADR-018/019), but
+figures and equations were outside the graph and the question's modality was ignored. ADR-004/018 still apply: the
+library is not a dependency.
+
+**Decision.** Everything below reuses the provenance model of ADR-019: every row is tied to one source chunk and is
+visible only to someone who can read that chunk's document.
+
+- **Anchor nodes.** Graph extraction covers figure and equation chunks too (their indexed text: caption + VLM
+  description, or LaTeX + analysis). Every non-text chunk adds one anchor entity (`type` `figura` / `tabla` /
+  `ecuacion`) and a `pertenece_a` relation (weight 3) from each entity extracted from that chunk to the anchor. A
+  non-text chunk with no entities of its own is still a node.
+- **Deterministic, document-scoped names.** The anchor name is built by code, never by the model: the numbered label
+  of the caption when there is one (`Figura 2 · <document title>`), otherwise page and chunk position. Two documents
+  with their own "Figure 2" do not merge; a reindex yields the same key.
+- **Entity summary written by the model.** The model that describes a figure or analyzes an equation ends with a
+  `RESUMEN:` line; it is stored in `meta.entity_summary` and becomes the anchor's description (tables use their verified
+  summary). Without one, the description is derived: caption plus the start of the text, or the column list of a table.
+- **Equation analysis** (`INGEST_EQUATION_ANALYSIS`, off by default like table summaries). The generation model
+  explains what the equation computes and what each variable means, using the nearby text. Sentences with a number that
+  is neither in the equation nor in its context are dropped. The analysis is appended to the chunk, labelled as AI
+  generated, and the citation carries `ai_generated`.
+- **Intra-table graph** (`ragsis_ingest/table_graph.py`), deterministic and with no model. Row headers and column
+  headers are nodes scoped to their table (the "2020" of one table does not merge with another's; two rows called
+  "Total" stay apart). Relations: `fila_de`, `columna_de`, `unidad_de` (unit in parentheses in a header or in the
+  caption) and one `celda` relation per cell whose description is `row / column = value unit`. Caps per table chunk:
+  40 rows, 12 columns, 150 cells.
+- **Fusion is the existing key.** `entities.normalized_name` is unique per workspace, so an entity named in a figure
+  description and in a paragraph is one node with two sources.
+- **Dense graph index** (migration `0015_graph_embeddings.sql`). `entity_source_embeddings` and
+  `relation_source_embeddings` hold one vector per provenance row and model, in the same space as the chunks. What is
+  embedded is the mention as it appears in *its* chunk, never a description merged across documents. Same RLS as the
+  provenance tables, a trigger that ties each vector to its source row, cascade on deletion. `pertenece_a` rows are not
+  embedded. `reindex --mode embeddings` dual-writes them for a new model and `--purge-model` removes them.
+- **Graph seeds are lexical + dense.** `graph_search` adds the nearest entities/relations to the query vector to the
+  tsvector matches; both lists are normalized and summed. Similarity has a floor (the model's evidence threshold), so
+  an unrelated question seeds nothing.
+- **Modality-aware fusion.** `prompting.modality_preference` reads lexical cues (figura, gráfico, tabla, columna,
+  ecuación, fórmula and their English forms). Chunks of the requested kind get half a first-place vote in the RRF
+  (`MODALITY_BONUS`), and if one passes the evidence threshold but would fall outside the cut it takes the last
+  evidence slot. It only reorders candidates that already passed every filter and the threshold.
+- **Graph facts in the prompt.** With the graph on, entities and relations whose source is one of the *selected*
+  evidence chunks are added in a `<grafo>` block, each tagged with the `[n]` of its chunk, ranked by overlap with the
+  question and capped by `RAG_GRAPH_CONTEXT_TOKENS`. Nothing from chunks outside the evidence enters, so every fact is
+  citable and the verifier is unchanged: evidence and citations are still chunks.
+
+**Consequences.**
+- A question about a text passage can reach a figure through the shared entity, a question that names a row and a
+  column matches that cell's relation instead of the neighbouring row, and a paraphrase with no shared words can still
+  seed the graph.
+- Cost per document with the graph on: one extraction call per figure and equation chunk (they count toward
+  `GRAPH_MAX_CHUNKS_PER_DOC`), plus embedding tokens for entities and relations (metered as `embedding_tokens`). Tables
+  add up to ~200 graph rows per chunk.
+- `local-graph-heuristic@v1` no longer reads Markdown table rows as proper nouns; the intra-table graph models them.
+- `PIPELINE_VERSION` is `ingest-2026.11.3`. Documents indexed before need `make reindex ARGS="--org <uuid> --mode
+  graph"` (anchors, table structure, vectors) or `--mode full --only-stale` to also get entity summaries.
+- `retrieved_refs` in `query_runs` records `kind` and `modality` per candidate, for evaluation.
+
+**Not adopted.**
+- *Model-chosen anchor names.* The paper lets the VLM name the entity; here the name stays deterministic so that
+  reindexing is idempotent and two documents never collide.
+- *Graph facts from chunks outside the evidence.* They could not be cited or verified.
+- *One node per cell.* A cell is a relation between its row and its column; a node per cell would triple the rows for
+  the same lookup.
+
+**Revisit when** the evaluation set has multimodal questions that measure these paths separately, or when table chunks
+with more than 150 cells need full coverage.
+
+## ADR-030 · Audio recordings (speech to text with timestamps)
+
+**Context.** Meetings, calls and voice notes hold decisions that never reach a document, and RAG-Anything lists audio
+among its modalities. ragsis indexed only files with text or images. Transcription already has a pluggable shape in
+the codebase: OCR runs through a provider that works on the object already stored in S3 (Textract, ADR-018), and the
+tenant's data policy decides whether a cloud model may see the file.
+
+**Decision.**
+- **Formats:** MP3, WAV, M4A, OGG and FLAC. Validation checks the container by magic bytes (`ID3`/frame sync, `RIFF…WAVE`,
+  `ftyp`, `OggS`, `fLaC`) against the declared extension and MIME type, like every other format.
+- **Provider** (`ragsis_ingest/transcription.py`, `TRANSCRIPTION_PROVIDER`): `none` (default) or `transcribe`
+  (Amazon Transcribe, asynchronous, reading the version's S3 object; the file does not pass through the worker again).
+  The provider is a registered model (`aws-transcribe@v1`, cloud), so `require_allowed` applies the tenant's policy
+  before the call: a `restricted` tenant cannot index audio until there is a local transcriber. Language is fixed
+  (`TRANSCRIPTION_LANGUAGE`) or detected among `TRANSCRIPTION_LANGUAGE_OPTIONS`; speaker separation up to
+  `TRANSCRIPTION_MAX_SPEAKERS`.
+- **Quality gate:** words below `TRANSCRIPTION_MIN_WORD_CONFIDENCE` are dropped. A recording with no reliable speech
+  fails with `no_speech_detected`; one longer than `AUDIO_MAX_SECONDS` fails with `audio_too_long`; audio with no
+  provider configured fails with `transcription_required`. Each code has a plain-language message in the library.
+- **Chunks keep their time range.** Provider segments are grouped into chunks of about 320 tokens without splitting a
+  segment, breaking on long pauses (> 1.5 s) or segments longer than 45 s. Each chunk is `kind = 'audio'` with
+  `meta.t_start`, `meta.t_end` and `meta.speakers`; its text is one line per segment, `[mm:ss] Hablante N: …`. Speaker
+  labels tell voices apart; they are never names.
+- **Paid once.** The normalized transcript is stored as a derived tenant asset (`…/transcript.json`). A full reindex
+  reads it instead of transcribing again.
+- **Schema** (migration `0016_audio.sql`): `chunks.kind` accepts `audio`; `document_versions` gains
+  `duration_seconds`, `transcription_provider`, `transcription_language`; `usage_events.kind` accepts `audio_seconds`
+  (the unit the provider bills).
+- **Query:** audio chunks go through the same retrieval, graph (`GRAPH_KINDS`) and verifier as text. The prompt tells
+  the model that `tipo="audio"` sources are automatic transcripts. Questions with cues such as "grabación", "llamada",
+  "recording" or "call" prefer audio chunks (the modality bonus of ADR-029). Citations carry `t_start`/`t_end`.
+- **Interface:** the viewer plays the original recording next to its transcript (`AudioView`): clicking a line plays
+  from there, the line being spoken is highlighted, and a citation opens the recording at the cited moment without
+  autoplay. `GET …/documents/:id/versions/:ver/transcript` returns the audio chunks under RLS + ACL. The source card
+  says "Listen from mm:ss" and labels the transcript as written by AI.
+
+**Consequences.**
+- No derived audio files are produced; the original S3 object is what plays.
+- Local development and the pilot run with `TRANSCRIPTION_PROVIDER=none`, so recordings there end in
+  `transcription_required`. Turning on `transcribe` on AWS needs `transcribe:StartTranscriptionJob` and
+  `transcribe:GetTranscriptionJob` for the worker role, plus read access to the documents bucket and write access to
+  the derived-assets prefix (and the bucket's KMS key, if any). That IAM is not in Terraform yet.
+- Cost per recording: Transcribe per second of audio, metered as `audio_seconds`, plus the usual embedding (and graph)
+  tokens for the transcript.
+
+**Not adopted.**
+- *Local transcription (Whisper) in the worker image.* It would serve restricted tenants but adds a large model and CPU
+  or GPU sizing to the worker; it fits behind the same provider interface when there is demand.
+- *Speaker names.* Mapping voices to people needs consent and enrollment; numbered speakers are enough to follow a
+  conversation.
+
+**Revisit when** a restricted tenant needs audio, or recordings regularly exceed four hours.
+
+## ADR-031 · Library folders with content-based suggestions
+
+**Context.** The library was a flat list per workspace. People coming from shared drives expect folders, and a long
+flat list makes uploads hard to find. Folders must not become a second permission system next to the document ACL.
+
+**Decision.**
+- **Folders only organize.** Access is still the document's ACL (`document_acl`). Moving a document never changes who
+  can see it. Folder names are visible to the whole workspace; their contents are not: counts and listings are computed
+  under RLS, so each person only counts what they can read.
+- **Schema** (migration `0017_folders.sql`): `folders` (workspace-scoped, `parent_id`, up to 6 levels, no cycles, sibling
+  names unique case-insensitively, no slashes) and `documents.folder_id` (`ON DELETE SET NULL`). Triggers keep folder and
+  document in the same organization and workspace. Deleting a folder deletes its subfolders; no document is deleted,
+  they go back to "No folder".
+- **API** (`apps/api/src/routes/folders.ts`): list (with `document_count` and `unfiled_count`), create, rename or move,
+  delete, `POST …/documents/move` (up to 200 documents, audited as `document.moved`), upload straight into a folder
+  (`folder_id` on `…/documents/uploads`) and `folder_id` (or `none`) as a filter on the document list.
+- **Suggestions.** For documents without a folder, one suggested folder or none:
+  1. *Content:* each indexed document has a summary vector (`document_centroids`, the mean of its chunk vectors per
+     embedding model, refreshed by the worker on indexing). It is compared with the mean of the documents in each
+     folder. Thresholds: cosine similarity ≥ 0.45, or ≥ 0.6 when the folder holds a single document. Below that, no
+     suggestion is better than a wrong one.
+  2. *Name:* the folder name appears in the document title or text (full-text search). It covers new, empty folders.
+  The centroid table has the same row-level rule as chunks (tenant + document ACL), so a document someone cannot read
+  never shapes what is suggested to them. "No thanks" stores `folder_suggestion_dismissed_at`; moving the document
+  clears it.
+- **Interface:** breadcrumb trail, folder chips with counts, a "No folder" view, rename and delete on the current folder,
+  a move dialog per document, and the suggestion as one line under the document title ("Looks like it belongs in …",
+  "Move there", "No thanks"). Dropping files while inside a folder uploads them there.
+
+**Consequences.**
+- Retrieval ignores folders: a question searches every document the person can read, wherever it is filed.
+- The migration backfills `document_centroids` for documents already indexed.
+- Folder names can reveal that a topic exists even to people who cannot open its documents; that is the price of a
+  shared structure and is stated in the move dialog.
+
+**Not adopted.**
+- *Folder permissions.* Two access systems that can disagree is how drives leak; the ACL stays the only one.
+- *Automatic filing.* The suggestion is never applied without a person accepting it.
+- *Uploading a whole folder tree from disk.* Folders are created in the app; a directory upload can map onto them later.
+
+**Revisit when** workspaces regularly hold thousands of documents (bulk move, multi-select), or people ask for folder-level
+sharing.
