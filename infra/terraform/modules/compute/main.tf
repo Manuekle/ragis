@@ -123,7 +123,7 @@ locals {
       { Effect = "Allow", Action = ["s3:PutObject"], Resource = local.assets },
       # Purga por prefijo de los activos de un documento borrado.
       { Effect = "Allow", Action = ["s3:ListBucket"], Resource = var.bucket_arn,
-        Condition = { StringLike = { "s3:prefix" = ["tenants/*/assets/*"] } } },
+      Condition = { StringLike = { "s3:prefix" = ["tenants/*/assets/*"] } } },
       { Effect = "Allow", Action = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"], Resource = var.ingest_queue_arn },
       { Effect = "Allow", Action = ["kms:GenerateDataKey", "kms:Decrypt"], Resource = var.kms_key_arn },
       # Textract asíncrono lee el objeto S3 con la identidad del worker (s3:GetObject + kms:Decrypt arriba).
