@@ -1,7 +1,7 @@
-# Borrado verificable
+# Verifiable deletion
 
-1. `DELETE /v1/organizations/{org}/documents/{id}` → documento `deleting` (excluido del retrieval al instante).
-2. El worker purga chunks, embeddings y objetos S3 de todas las versiones y deja evento `document.purged`.
-3. Verificación de no recuperación: consulta con preguntas del documento → abstención; `SELECT count(*) FROM chunks WHERE document_id = ...` = 0.
-4. Límites a comunicar al cliente: versiones no actuales de S3 expiran por lifecycle (90 días por defecto);
-   backups de RDS conservan datos hasta su retención; `audit_events` se conserva (sin contenido documental).
+1. `DELETE /v1/organizations/{org}/documents/{id}` → document `deleting` (excluded from retrieval instantly).
+2. The worker purges chunks, embeddings and S3 objects of all versions and leaves a `document.purged` event.
+3. Non-recovery check: query with questions about the document → abstention; `SELECT count(*) FROM chunks WHERE document_id = ...` = 0.
+4. Limits to communicate to the customer: non-current S3 versions expire through the lifecycle (90 days by default);
+   RDS backups keep data until their retention ends; `audit_events` is kept (without document content).

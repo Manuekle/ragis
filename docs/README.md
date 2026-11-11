@@ -1,41 +1,41 @@
-# Documentación de Ragsis
+# Ragsis documentation
 
-Empieza por lo que necesites:
+Start with what you need:
 
-| Quiero… | Lee |
+| I want to… | Read |
 |---|---|
-| Entender cómo está construido | [architecture.md](architecture.md) |
-| Levantarlo y desarrollar | [development.md](development.md) |
-| Saber dónde corre cada entorno y cuánto cuesta | [environments.md](environments.md) |
-| Probar infraestructura de AWS sin tocar AWS | [guides/floci.md](guides/floci.md) |
-| Configurar variables y secretos | [configuration.md](configuration.md) |
-| Entender el inicio de sesión | [authentication.md](authentication.md) |
-| Revisar controles de seguridad | [security.md](security.md) |
-| Ver qué hace cada función | [features.md](features.md) |
-| Conectar Gmail, Slack o ClickUp | [connectors-setup.md](connectors-setup.md) |
-| Operar el piloto en AWS | [../ops/runbooks/piloto-aws.md](../ops/runbooks/piloto-aws.md) |
-| Resolver un incidente u operación | [../ops/runbooks](../ops/runbooks/README.md) |
-| Saber por qué se decidió algo | [adr/README.md](adr/README.md) |
+| Understand how it is built | [architecture.md](architecture.md) |
+| Run it and develop | [development.md](development.md) |
+| Know where each environment runs and what it costs | [environments.md](environments.md) |
+| Try AWS infrastructure without touching AWS | [guides/floci.md](guides/floci.md) |
+| Configure variables and secrets | [configuration.md](configuration.md) |
+| Understand sign-in | [authentication.md](authentication.md) |
+| Review security controls | [security.md](security.md) |
+| See what each feature does | [features.md](features.md) |
+| Connect Gmail, Slack or ClickUp | [connectors-setup.md](connectors-setup.md) |
+| Operate the AWS pilot | [../ops/runbooks/piloto-aws.md](../ops/runbooks/piloto-aws.md) |
+| Resolve an incident or operation | [../ops/runbooks](../ops/runbooks/README.md) |
+| Know why something was decided | [adr/README.md](adr/README.md) |
 
-## Mapa
+## Map
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/environments-dark.svg">
-  <img alt="Local, ensayo en Floci y AWS real" src="diagrams/environments.svg">
+  <img alt="Local, rehearsal in Floci and real AWS" src="diagrams/environments.svg">
 </picture>
 
-| Carpeta | Contenido |
+| Folder | Contents |
 |---|---|
-| `docs/` | Esta documentación |
-| `docs/adr/` | Decisiones de arquitectura (ADR) |
-| `docs/guides/` | Guías prácticas (Floci) |
-| `docs/diagrams/` | Diagramas SVG generados con `make diagrams` |
-| `docs/assets/icons/` | Iconos de AWS y de tecnología usados en los diagramas |
-| `../ops/runbooks/` | Procedimientos operativos |
+| `docs/` | This documentation |
+| `docs/adr/` | Architecture decision records (ADRs) |
+| `docs/guides/` | Practical guides (Floci) |
+| `docs/diagrams/` | SVG diagrams generated with `make diagrams` |
+| `docs/assets/icons/` | AWS and technology icons used in the diagrams |
+| `../ops/runbooks/` | Operational procedures |
 
-## Cómo mantener la documentación
+## How to maintain the documentation
 
-- Un cambio de comportamiento actualiza su documento en el mismo pull request.
-- Un cambio de diseño que ya no refleja un ADR agrega un ADR nuevo (no se reescribe la historia).
-- Los diagramas se editan en `docs/diagrams/build.py`, nunca a mano en el SVG.
-- Documentación y comentarios en español; sin secretos ni identificadores de cuenta reales en los ejemplos.
+- A behavior change updates its document in the same pull request.
+- A design change that an ADR no longer reflects adds a new ADR (history is not rewritten).
+- Diagrams are edited in `docs/diagrams/build.py`, never by hand in the SVG.
+- The README and all documentation are written in English; no secrets or real account identifiers in examples.

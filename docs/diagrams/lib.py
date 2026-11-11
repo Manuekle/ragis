@@ -1,7 +1,7 @@
-"""Mini-biblioteca para componer diagramas SVG autocontenidos con los iconos de docs/assets/icons.
+"""Mini-library to compose self-contained SVG diagrams with the icons in docs/assets/icons.
 
-Los iconos se incrustan dentro de cada diagrama (GitHub no carga recursos externos desde un SVG
-mostrado con <img>), por eso no hay referencias a archivos. Solo usa la librería estándar.
+Icons are embedded inside each diagram (GitHub does not load external resources from an SVG
+shown with <img>), so there are no file references. It only uses the standard library.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def esc(s: str) -> str:
 
 
 def text_width(s: str, size: float) -> float:
-    """Estimación del ancho de un texto (suficiente para ubicar etiquetas)."""
+    """Estimate of a text's width (enough to place labels)."""
     return len(s) * size * 0.56
 
 
@@ -47,7 +47,7 @@ def _icon_file(name: str, theme: str) -> Path:
 
 
 def inline_icon(name: str, theme: str, x: float, y: float, w: float, h: float | None = None) -> str:
-    """Devuelve un <svg> anidado con el icono; ids/clases únicos para que no choquen entre iconos."""
+    """Returns a nested <svg> with the icon; ids/classes are unique so icons do not collide."""
     global _uid
     _uid += 1
     pfx = f"i{_uid}-"

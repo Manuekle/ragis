@@ -1,10 +1,10 @@
-# Restauración consistente (RPO ≤ 24 h, RTO ≤ 8 h en MVP)
+# Consistent restore (RPO ≤ 24 h, RTO ≤ 8 h in the MVP)
 
-Los snapshots de RDS no reconstruyen S3 ni el estado de jobs de forma transaccional.
+RDS snapshots do not transactionally rebuild S3 or the job state.
 
-1. Restaurar RDS a un punto en el tiempo (PITR) en una instancia nueva; apuntar servicios en modo mantenimiento.
-2. S3 está versionado: los objetos originales son la fuente de verdad; no se requiere restauración salvo borrado.
-3. Reconciliar: versiones `indexed` cuyo objeto no exista en S3 → marcar `failed` (`error_code='restore_missing_object'`).
-4. Chunks/embeddings son derivados: si hay dudas de consistencia, reindexar (runbook `reindex.md`) desde los originales.
-5. Jobs `queued/running` posteriores al punto de restauración: reencolar.
-6. Ensayo obligatorio trimestral (gate de "Continuidad" en la checklist de producción).
+1. Restore RDS to a point in time (PITR) on a new instance; point the services to it in maintenance mode.
+2. S3 is versioned: the original objects are the source of truth; no restore is needed unless they were deleted.
+3. Reconcile: `indexed` versions whose object does not exist in S3 → mark `failed` (`error_code='restore_missing_object'`).
+4. Chunks/embeddings are derived: if consistency is in doubt, reindex (runbook `reindex.md`) from the originals.
+5. `queued/running` jobs after the restore point: requeue.
+6. Mandatory quarterly rehearsal (the "Continuity" gate in the production checklist).

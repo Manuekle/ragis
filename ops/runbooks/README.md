@@ -1,12 +1,12 @@
-# Runbooks operativos
+# Operational runbooks
 
-| Runbook | Cuándo |
+| Runbook | When |
 |---|---|
-| [piloto-aws.md](piloto-aws.md) | Preparación, arranque, apagado y actualización del piloto en AWS Ohio |
-| [Ensayo en Floci](../../docs/guides/floci.md) | Antes de crear o cambiar cualquier recurso de AWS |
-| [db-bootstrap.md](db-bootstrap.md) | Alta de un ambiente: roles de BD sin BYPASSRLS y migraciones |
-| [dlq.md](dlq.md) | Alarma `ingest-dlq-not-empty` |
-| [reindex.md](reindex.md) | Cambio de parser, chunking o modelo de embeddings |
-| [restore.md](restore.md) | Restauración consistente de BD + S3 + índices |
-| [incident-cross-tenant.md](incident-cross-tenant.md) | Sospecha de acceso o cita entre tenants |
-| [deletion.md](deletion.md) | Solicitud de borrado verificable de un cliente/documento |
+| [piloto-aws.md](piloto-aws.md) | Preparation, start-up, shutdown and update of the pilot on AWS Ohio |
+| [Rehearsal in Floci](../../docs/guides/floci.md) | Before creating or changing any AWS resource |
+| [db-bootstrap.md](db-bootstrap.md) | Setting up an environment: DB roles without BYPASSRLS and migrations |
+| [dlq.md](dlq.md) | `ingest-dlq-not-empty` alarm |
+| [reindex.md](reindex.md) | Change of parser, chunking or embedding model |
+| [restore.md](restore.md) | Consistent restore of DB + S3 + indexes |
+| [incident-cross-tenant.md](incident-cross-tenant.md) | Suspected access or citation across tenants |
+| [deletion.md](deletion.md) | Request for verifiable deletion of a customer/document |

@@ -1,4 +1,4 @@
-# Conectores: cómo crear las apps de Google, Slack y ClickUp
+# Connectors: how to create the Google, Slack and ClickUp apps
 
 <p>
   <img alt="Gmail" src="assets/icons/tech/gmail.svg" height="32">&nbsp;
@@ -6,42 +6,42 @@
   <img alt="ClickUp" src="assets/icons/tech/clickup.svg" height="32">
 </p>
 
-Guía para activar los conectores de CON-01 (ADR-025). Sin estas credenciales la página **Connected apps** muestra cada
-app como "Not available yet". Para probar sin cuentas reales usa `CONNECTORS_DEMO=1` (solo desarrollo).
+Guide to enabling the CON-01 connectors (ADR-025). Without these credentials the **Connected apps** page shows each app
+as "Not available yet". To test without real accounts use `CONNECTORS_DEMO=1` (development only).
 
-Las tres apps usan la **misma URL de vuelta** (redirect URI):
+All three apps use the **same return URL** (redirect URI):
 
 ```
 <PUBLIC_BASE_URL>/connect/callback
 ```
 
-En local: `http://localhost:3000/connect/callback`. En producción, la URL HTTPS pública de la web
-(p. ej. `https://app.tudominio.com/connect/callback`).
+Locally: `http://localhost:3000/connect/callback`. In production, the public HTTPS URL of the web
+(e.g. `https://app.yourdomain.com/connect/callback`).
 
-## 1. Clave de cifrado de tokens
+## 1. Token encryption key
 
-Los tokens se guardan cifrados. En producción la clave es obligatoria y debe vivir en Secrets Manager:
+Tokens are stored encrypted. In production the key is required and must live in Secrets Manager:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Guárdala como `CONNECTOR_ENCRYPTION_KEY`. Si la cambias, las conexiones existentes tendrán que reconectarse.
+Store it as `CONNECTOR_ENCRYPTION_KEY`. If you change it, existing connections will have to reconnect.
 
 ## 2. Google (Gmail)
 
-1. Entra en [Google Cloud Console](https://console.cloud.google.com/) y crea (o elige) un proyecto.
-2. **APIs y servicios → Biblioteca**: busca **Gmail API** y pulsa **Habilitar**.
-3. **APIs y servicios → Pantalla de consentimiento de OAuth**:
-   - Si todos los usuarios están en tu Google Workspace, elige **Interno**: no requiere verificación.
-   - Si no, elige **Externo**. En modo *Testing* solo pueden conectar los usuarios de prueba que añadas (máx. 100).
-     Para abrirlo a todo el mundo, Google exige verificar la app y, por usar un scope restringido, una evaluación de
-     seguridad (CASA). Cuenta con semanas de trámite.
-   - Scope: `https://www.googleapis.com/auth/gmail.readonly` (solo lectura).
-4. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth**:
-   - Tipo: **Aplicación web**.
-   - **URI de redireccionamiento autorizados**: la URL de vuelta de arriba.
-5. Copia el ID y el secreto:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create (or pick) a project.
+2. **APIs & Services → Library**: search for **Gmail API** and click **Enable**.
+3. **APIs & Services → OAuth consent screen**:
+   - If all users are in your Google Workspace, choose **Internal**: it needs no verification.
+   - Otherwise, choose **External**. In *Testing* mode only the test users you add can connect (max. 100). To open it
+     to everyone, Google requires verifying the app and, because it uses a restricted scope, a security assessment
+     (CASA). Expect weeks of processing.
+   - Scope: `https://www.googleapis.com/auth/gmail.readonly` (read-only).
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Type: **Web application**.
+   - **Authorized redirect URIs**: the return URL above.
+5. Copy the ID and the secret:
 
 ```
 GOOGLE_CLIENT_ID=...apps.googleusercontent.com
@@ -50,59 +50,59 @@ GOOGLE_CLIENT_SECRET=...
 
 ## 3. Slack
 
-1. Entra en [api.slack.com/apps](https://api.slack.com/apps) → **Create New App → From scratch**. Elige el workspace
-   de Slack de tu empresa.
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App → From scratch**. Pick your company's
+   Slack workspace.
 2. **OAuth & Permissions**:
-   - **Redirect URLs**: añade la URL de vuelta.
+   - **Redirect URLs**: add the return URL.
    - **Bot Token Scopes**: `channels:read`, `channels:history`, `channels:join`, `groups:read`, `groups:history`,
      `users:read`, `team:read`.
-3. **Basic Information → App Credentials**: copia Client ID y Client Secret:
+3. **Basic Information → App Credentials**: copy Client ID and Client Secret:
 
 ```
 SLACK_CLIENT_ID=...
 SLACK_CLIENT_SECRET=...
 ```
 
-4. Los canales privados solo se pueden leer si invitas a la app en Slack (`/invite @nombre-de-la-app`).
+4. Private channels can only be read if you invite the app in Slack (`/invite @app-name`).
 
-> **Importante.** Desde mayo de 2025, Slack limita a 1 petición por minuto la lectura de mensajes en apps distribuidas
-> comercialmente fuera del Slack Marketplace. Una app **interna** (instalada solo en el workspace de tu empresa)
-> mantiene los límites normales. Si vas a ofrecer el conector a varios clientes desde una sola app, revisa con legal
-> los términos de la API de Slack antes de activarlo y valora publicar la app en el Marketplace.
+> **Important.** Since May 2025, Slack limits message reading to 1 request per minute for commercially distributed apps
+> outside the Slack Marketplace. An **internal** app (installed only in your company's workspace) keeps the normal
+> limits. If you plan to offer the connector to several customers from a single app, review the Slack API terms with
+> legal before enabling it and consider publishing the app in the Marketplace.
 
 ## 4. ClickUp
 
-1. En ClickUp: **avatar → Settings → Apps → Create new app** (requiere ser admin u owner del workspace).
-2. **Redirect URL(s)**: el dominio de la web (en local `localhost:3000`).
-3. Copia Client ID y Client Secret:
+1. In ClickUp: **avatar → Settings → Apps → Create new app** (requires being a workspace admin or owner).
+2. **Redirect URL(s)**: the web's domain (locally `localhost:3000`).
+3. Copy Client ID and Client Secret:
 
 ```
 CLICKUP_CLIENT_ID=...
 CLICKUP_CLIENT_SECRET=...
 ```
 
-4. ClickUp no tiene scopes: el conector ve lo mismo que la persona que autoriza. Recomendado: conectar con una cuenta
-   de servicio que solo tenga acceso a los espacios que deban compartirse.
+4. ClickUp has no scopes: the connector sees the same as the person who authorizes it. Recommended: connect with a
+   service account that only has access to the spaces that should be shared.
 
-## 5. Activar
+## 5. Enable
 
-Añade las variables a `.env` (local) o a Secrets Manager (AWS) y reinicia la API:
+Add the variables to `.env` (local) or to Secrets Manager (AWS) and restart the API:
 
 ```bash
 docker compose -f infra/docker/compose.yml --env-file .env up -d --no-deps api
 ```
 
-Comprueba en **Connected apps** que cada app aparece con su botón **Connect**. Gmail lo conecta cada persona; Slack y
-ClickUp, un administrador (elige el workspace donde se podrán buscar).
+Check in **Connected apps** that each app shows up with its **Connect** button. Each person connects Gmail themselves;
+Slack and ClickUp are connected by an administrator (who picks the workspace where they can be searched).
 
 ## Variables
 
-| Variable | Para qué |
+| Variable | Used for |
 | --- | --- |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | App OAuth de Google (Gmail) |
-| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | App de Slack |
-| `CLICKUP_CLIENT_ID` / `CLICKUP_CLIENT_SECRET` | App de ClickUp |
-| `CONNECTOR_ENCRYPTION_KEY` | Clave AES-256 (base64, 32 bytes) de los tokens; obligatoria en producción |
-| `CONNECTOR_SYNC_INTERVAL_MINUTES` | Cada cuánto se actualiza cada conexión (por defecto 30) |
-| `CONNECTOR_SYNC_ENABLED` | `false` en réplicas que no deban sincronizar |
-| `CONNECTORS_DEMO` | `1` = datos simulados sin cuentas reales (prohibido en producción) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth app (Gmail) |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | Slack app |
+| `CLICKUP_CLIENT_ID` / `CLICKUP_CLIENT_SECRET` | ClickUp app |
+| `CONNECTOR_ENCRYPTION_KEY` | AES-256 key (base64, 32 bytes) for the tokens; required in production |
+| `CONNECTOR_SYNC_INTERVAL_MINUTES` | How often each connection is refreshed (default 30) |
+| `CONNECTOR_SYNC_ENABLED` | `false` on replicas that must not sync |
+| `CONNECTORS_DEMO` | `1` = simulated data without real accounts (forbidden in production) |

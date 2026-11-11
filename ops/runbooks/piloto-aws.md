@@ -1,33 +1,33 @@
-# Piloto de Ragsis en AWS Ohio
+# Ragsis pilot on AWS Ohio
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../../docs/diagrams/aws-pilot-dark.svg">
-  <img alt="Topología del piloto en AWS us-east-2" src="../../docs/diagrams/aws-pilot.svg">
+  <img alt="Pilot topology on AWS us-east-2" src="../../docs/diagrams/aws-pilot.svg">
 </picture>
 
-Contexto, costos y decisiones: [docs/environments.md](../../docs/environments.md). Variables: [docs/configuration.md](../../docs/configuration.md).
+Context, costs and decisions: [docs/environments.md](../../docs/environments.md). Variables: [docs/configuration.md](../../docs/configuration.md).
 
-Este entorno usa una EC2 `m7i-flex.large` de 2 vCPU y 8 GiB, Ubuntu 24.04 amd64, PostgreSQL con pgvector en un disco EBS cifrado, S3 privado y SQS con DLQ. Cognito limita el acceso a usuarios invitados. Caddy expone la web por HTTPS y Session Manager permite administrar el host. API, base de datos, worker, motor RAG y ClamAV se comunican dentro de Docker.
+This environment uses one `m7i-flex.large` EC2 instance with 2 vCPU and 8 GiB, Ubuntu 24.04 amd64, PostgreSQL with pgvector on an encrypted EBS disk, private S3 and SQS with a DLQ. Cognito limits access to invited users. Caddy exposes the web over HTTPS and Session Manager allows administering the host. The API, database, worker, RAG engine and ClamAV talk to each other inside Docker.
 
-El repositorio público tiene el [entorno pilot de GitHub](https://github.com/Manuekle/ragis/settings/environments/26787121908/edit). Guarda `AWS_REGION=us-east-2`, `DEPLOY_STAGE=pilot`, `RAGSIS_ENV=production` y `AUTH_MODE=oidc`, y admite la rama `codex/piloto-aws`. El arranque descrito aquí usa imágenes de ECR privado desde tu máquina. Para automatizarlo después hacen falta un workflow y un rol de despliegue limitado a ese entorno. CloudShell devolvió `AccessDenied` al listar proveedores OIDC de IAM. Esa autorización de GitHub es independiente del login de usuarios en Cognito.
+The public repository has the [GitHub pilot environment](https://github.com/Manuekle/ragis/settings/environments/26787121908/edit). It stores `AWS_REGION=us-east-2`, `DEPLOY_STAGE=pilot`, `RAGSIS_ENV=production` and `AUTH_MODE=oidc`, and allows the `codex/piloto-aws` branch. The start-up described here uses images from private ECR, pushed from your machine. To automate it later, a workflow and a deployment role limited to that environment are needed. CloudShell returned `AccessDenied` when listing IAM OIDC providers. That GitHub authorization is independent of the user login in Cognito.
 
-## Antes de tocar AWS: ensayo en Floci
+## Before touching AWS: rehearse in Floci
 
-Todo cambio de infraestructura se prueba primero en el emulador local (Floci, `localhost:4566`). Solo con el ensayo limpio se sigue con AWS real. Guía y límites conocidos: [docs/guides/floci.md](../../docs/guides/floci.md).
+Every infrastructure change is tested first in the local emulator (Floci, `localhost:4566`). Only with a clean rehearsal do you continue with real AWS. Guide and known limits: [docs/guides/floci.md](../../docs/guides/floci.md).
 
 ```bash
-make rehearse-plan      # qué crearía Terraform en Floci
-make rehearse           # lo crea en Floci
-make rehearse-destroy   # lo borra
+make rehearse-plan      # what Terraform would create in Floci
+make rehearse           # creates it in Floci
+make rehearse-destroy   # deletes it
 ```
 
-El ensayo usa un estado propio en `infra/terraform/.floci/` y nunca lee ni modifica el estado de AWS real.
+The rehearsal uses its own state in `infra/terraform/.floci/` and never reads or modifies the real AWS state.
 
-## Preparar el plan de AWS
+## Prepare the AWS plan
 
-1. Define un subdominio que controles, por ejemplo `piloto.tudominio.com`. El valor se usa en el certificado, el callback de Cognito y el CORS de S3.
-2. Inicia un perfil temporal `ragsis-pilot` para el proyecto **Rubber Ducking** desde la cuenta de tu consola. Sigue la conexión inicial del perfil o renuévalo con `aws login --profile ragsis-pilot`. Selecciona ese proyecto en el navegador. [Acceso temporal al proyecto AWS](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html)
-3. Desde la raíz de Ragsis, ejecuta un plan real con ese perfil. Sustituye `ACCOUNT_ID` y `PILOT_HOSTNAME` por los datos del proyecto. Guarda el plan localmente para revisar los recursos y el consumo previsto de EC2, EBS, IPv4, KMS, S3, SQS y ECR antes de aprobar el alta.
+1. Define a subdomain that you control, for example `pilot.yourdomain.com`. The value is used in the certificate, the Cognito callback and the S3 CORS.
+2. Start a temporary `ragsis-pilot` profile for the **Rubber Ducking** project from your console account. Follow the profile's initial connection or renew it with `aws login --profile ragsis-pilot`. Select that project in the browser. [Temporary access to the AWS project](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html)
+3. From the Ragsis root, run a real plan with that profile. Replace `ACCOUNT_ID` and `PILOT_HOSTNAME` with the project's data. Save the plan locally to review the resources and the expected consumption of EC2, EBS, IPv4, KMS, S3, SQS and ECR before approving the creation.
 
 ```bash
 (
@@ -44,25 +44,25 @@ El ensayo usa un estado propio en `infra/terraform/.floci/` y nunca lee ni modif
 )
 ```
 
-El proveedor Terraform está limitado al ID indicado. El plan real requiere acceso de lectura al proyecto y al parámetro público de la AMI. Al autorizar su aplicación, la identidad también necesita crear el perfil de EC2 y pasar su rol. Revisa el plan antes de ejecutar `terraform apply pilot.tfplan` en ese directorio. El estado es local al operador. Consérvalo con permisos de lectura restringidos y guárdalo fuera de GitHub.
+The Terraform provider is limited to the given ID. The real plan requires read access to the project and to the AMI's public parameter. When authorizing its application, the identity also needs to create the EC2 profile and pass its role. Review the plan before running `terraform apply pilot.tfplan` in that directory. The state is local to the operator. Keep it with restricted read permissions and store it outside GitHub.
 
-## Arranque tras la aprobación
+## Start-up after approval
 
-1. Cuando Terraform termine, publica las cuatro imágenes Linux amd64 en los repositorios privados que devuelve `terraform output -json ecr_repositories`. Usa una etiqueta nueva de versión y anota los cuatro digests publicados. La EC2 descarga las imágenes mediante su perfil IAM y el *credential helper* de ECR. [Autenticación de ECR privado](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
+1. When Terraform finishes, publish the four Linux amd64 images to the private repositories returned by `terraform output -json ecr_repositories`. Use a new version tag and note the four published digests. The EC2 downloads the images through its IAM profile and the ECR *credential helper*. [Private ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
 
-   | Imagen | Dockerfile |
+   | Image | Dockerfile |
    |---|---|
    | `api` | `apps/api/Dockerfile` |
    | `web` | `apps/web/Dockerfile` |
    | `rag-engine` | `services/rag-engine/Dockerfile` |
    | `ingest-worker` | `services/ingest-worker/Dockerfile` |
 
-   Construye cada una desde la raíz con `docker buildx build --platform linux/amd64 --load -f DOCKERFILE -t IMAGEN:VERSION .`. Autentica Docker a ECR con `aws ecr get-login-password` por entrada estándar. Etiqueta la imagen para su repositorio privado y usa `docker push` después de aprobar la publicación de las imágenes.
+   Build each one from the root with `docker buildx build --platform linux/amd64 --load -f DOCKERFILE -t IMAGE:VERSION .`. Authenticate Docker to ECR with `aws ecr get-login-password` through standard input. Tag the image for its private repository and use `docker push` after approving the publication of the images.
 
-2. En el proveedor DNS, crea un registro A del subdominio hacia `terraform output -raw dns_ipv4`. En la instancia, comprueba que `cloud-init status --wait` terminó y que `docker compose version` funciona.
-3. Copia `infra/docker/compose.pilot.yml`, `infra/docker/Caddyfile.pilot`, `infra/docker/.env.pilot.example` e `infra/docker/postgres/10-roles.sh` a `/opt/ragsis`, conservando el subdirectorio `postgres/`. Puedes usar Run Command de Systems Manager para transferir solo esos archivos de configuración. El paquete no necesita código fuente ni secretos.
-4. En la EC2, completa `/opt/ragsis/.env.pilot` con permisos `0600`. Usa los valores de `terraform output -json runtime` y las cuatro referencias privadas `repo@sha256:...`. Para el primer arranque, genera cuatro valores independientes con `openssl rand -hex 32` para las tres contraseñas de PostgreSQL y el secreto interno. Conserva esos valores al actualizar imágenes para reutilizar el volumen y mantener la firma de los tokens internos. El cliente de Cognito es público y permite `USER_PASSWORD_AUTH`: el formulario de acceso vive en la web ([docs/authentication.md](../../docs/authentication.md)). Añade `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` de la base de la waitlist: es una base Turso aparte, solo para `/waitlist`, y no comparte datos con PostgreSQL.
-5. Desde `/opt/ragsis`, inicia los servicios.
+2. At the DNS provider, create an A record for the subdomain pointing to `terraform output -raw dns_ipv4`. On the instance, check that `cloud-init status --wait` has finished and that `docker compose version` works.
+3. Copy `infra/docker/compose.pilot.yml`, `infra/docker/Caddyfile.pilot`, `infra/docker/.env.pilot.example` and `infra/docker/postgres/10-roles.sh` to `/opt/ragsis`, keeping the `postgres/` subdirectory. You can use Systems Manager Run Command to transfer only those configuration files. The package needs neither source code nor secrets.
+4. On the EC2, complete `/opt/ragsis/.env.pilot` with `0600` permissions. Use the values from `terraform output -json runtime` and the four private `repo@sha256:...` references. For the first start, generate four independent values with `openssl rand -hex 32` for the three PostgreSQL passwords and the internal secret. Keep those values when updating images to reuse the volume and keep the internal tokens' signature valid. The Cognito client is public and allows `USER_PASSWORD_AUTH`: the sign-in form lives in the web ([docs/authentication.md](../../docs/authentication.md)). Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` for the waitlist database: it is a separate Turso database, only for `/waitlist`, and shares no data with PostgreSQL.
+5. From `/opt/ragsis`, start the services.
 
 ```bash
 sudo docker compose --env-file .env.pilot -f compose.pilot.yml config --quiet
@@ -70,32 +70,32 @@ sudo docker compose --env-file .env.pilot -f compose.pilot.yml pull
 sudo docker compose --env-file .env.pilot -f compose.pilot.yml up -d --wait --wait-timeout 420
 ```
 
-## Prueba de aceptación
+## Acceptance test
 
-- Invita dos cuentas de prueba en Cognito. El login es el formulario de la propia app en `/login` (correo y clave); Cognito solo guarda las cuentas y nunca muestra su página. La clave temporal de la invitación pide elegir una nueva en el primer ingreso, y "Forgot your password?" envía un código por correo. Comprueba la sesión HTTPS y que Biblioteca y Ask funcionan con los roles de administración y lectura.
-- Carga un DOCX, un XLSX y un PDF con texto del corpus sintético. Verifica subida prefirmada, consumo de SQS, estado indexado, cita y descarga. Confirma la denegación con un lector fuera del grupo.
-- Revisa el funcionamiento de ClamAV, el espacio en disco y la cola de errores. Establece una copia de seguridad y prueba la restauración de PostgreSQL antes de incorporar expedientes de clientes.
-- La configuración arranca con embeddings y generación locales y con escáner ClamAV. Antes de usar documentos de clientes, comprueba que las citas de PDF abran la página que contiene el pasaje citado. Los escaneos necesitan OCR real si se incluyen en el alcance.
+- Invite two test accounts in Cognito. The login is the app's own form at `/login` (email and password); Cognito only stores the accounts and never shows its page. The temporary password from the invitation asks you to choose a new one on first sign-in, and "Forgot your password?" sends a code by email. Check the HTTPS session and that Library and Ask work with the admin and reader roles.
+- Upload a DOCX, an XLSX and a PDF with text from the synthetic corpus. Verify presigned upload, SQS consumption, indexed status, citation and download. Confirm the denial with a reader outside the group.
+- Check that ClamAV works, the disk space and the error queue. Set up a backup and test the PostgreSQL restore before onboarding client files.
+- The configuration starts with local embeddings and generation and with the ClamAV scanner. Before using client documents, check that PDF citations open the page that contains the cited passage. Scans need real OCR if they are in scope.
 
-## Apagar y encender para cuidar los créditos
+## Shut down and start up to save credits
 
-La instancia consume créditos del plan FREE mientras corre (ver [costos](../../docs/environments.md#costo-y-créditos)). Apágala cuando no pruebes. Los contenedores usan `restart: unless-stopped` y vuelven solos al encender.
+The instance consumes FREE plan credits while it runs (see [costs](../../docs/environments.md#cost-and-credits)). Shut it down when you are not testing. The containers use `restart: unless-stopped` and come back on their own when it starts.
 
 ```bash
 (
   unset AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
   export AWS_PROFILE=ragsis-pilot AWS_REGION=us-east-2
   ID=$(terraform -chdir=infra/terraform/envs/pilot output -raw instance_id)
-  aws ec2 stop-instances  --instance-ids "$ID"   # apagar
-  # aws ec2 start-instances --instance-ids "$ID" # encender
+  aws ec2 stop-instances  --instance-ids "$ID"   # shut down
+  # aws ec2 start-instances --instance-ids "$ID" # start up
 )
 ```
 
-Detenida no cobra cómputo, pero el disco EBS y la IP elástica siguen consumiendo créditos. Tras encender, espera a que `docker compose ps` muestre todos los servicios saludables antes de probar el login.
+A stopped instance does not charge for compute, but the EBS disk and the Elastic IP keep consuming credits. After starting, wait until `docker compose ps` shows all services healthy before testing the login.
 
-## Actualizar imágenes
+## Update images
 
-1. Ensaya el cambio en local (`make up`) y, si toca Terraform, en Floci (`make rehearse`).
-2. Construye y publica las imágenes nuevas con una etiqueta nueva (las etiquetas de ECR son inmutables) y anota los digests.
-3. Actualiza las referencias `repo@sha256:...` en `/opt/ragsis/.env.pilot`, conservando las contraseñas y el secreto interno.
-4. Ejecuta `docker compose ... pull` y `up -d --wait` como en el arranque inicial.
+1. Rehearse the change locally (`make up`) and, if it touches Terraform, in Floci (`make rehearse`).
+2. Build and publish the new images with a new tag (ECR tags are immutable) and note the digests.
+3. Update the `repo@sha256:...` references in `/opt/ragsis/.env.pilot`, keeping the passwords and the internal secret.
+4. Run `docker compose ... pull` and `up -d --wait` as in the initial start-up.

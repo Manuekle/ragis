@@ -1,168 +1,168 @@
-# Configuración
+# Configuration
 
-Toda la configuración llega por **variables de entorno**. Nada de secretos en el repositorio: `.env` está en
-`.gitignore` y `scripts/dev-env.sh` lo genera con valores aleatorios. En el piloto los secretos viven en
-`/opt/ragsis/.env.pilot` (permisos `0600`) y, cuando se agregue una clave externa, en AWS Secrets Manager o en SSM
-Parameter Store.
+All configuration arrives through **environment variables**. No secrets in the repository: `.env` is in `.gitignore`
+and `scripts/dev-env.sh` generates it with random values. In the pilot, secrets live in `/opt/ragsis/.env.pilot`
+(permissions `0600`) and, when an external key is added, in AWS Secrets Manager or SSM Parameter Store.
 
-Las tablas indican el valor por defecto cuando existe. Los nombres en mayúsculas son los de la variable.
+The tables show the default value when there is one. Uppercase names are the variable names.
 
-## Secretos y base de datos
+## Secrets and database
 
-| Variable | Obligatoria | Descripción |
+| Variable | Required | Description |
 |---|---|---|
-| `POSTGRES_PASSWORD` | sí | Contraseña del propietario `ragsis_owner` (migraciones). |
-| `RAGSIS_APP_DB_PASSWORD` | sí | Rol `ragsis_app` (API y rag-engine). Sin `BYPASSRLS`. |
-| `RAGSIS_WORKER_DB_PASSWORD` | sí | Rol `ragsis_worker` (ingesta). Sin `BYPASSRLS`. |
-| `INTERNAL_SERVICE_SECRET` | sí | Al menos 32 caracteres. Firma el token interno API → rag-engine (60 s). |
-| `JWT_DEV_SECRET` | solo `AUTH_MODE=dev` | Firma el token de sesión de desarrollo. |
-| `DATABASE_URL` | no | Si está vacía, libpq usa `PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` y `PGSSLMODE`. |
-| `DB_POOL_MIN` / `DB_POOL_MAX` | no (1 / 10) | Tamaño del pool en los servicios Python. |
+| `POSTGRES_PASSWORD` | yes | Password of the `ragsis_owner` owner (migrations). |
+| `RAGSIS_APP_DB_PASSWORD` | yes | `ragsis_app` role (API and rag-engine). No `BYPASSRLS`. |
+| `RAGSIS_WORKER_DB_PASSWORD` | yes | `ragsis_worker` role (ingestion). No `BYPASSRLS`. |
+| `INTERNAL_SERVICE_SECRET` | yes | At least 32 characters. Signs the internal API → rag-engine token (60 s). |
+| `JWT_DEV_SECRET` | only `AUTH_MODE=dev` | Signs the development session token. |
+| `DATABASE_URL` | no | If empty, libpq uses `PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` and `PGSSLMODE`. |
+| `DB_POOL_MIN` / `DB_POOL_MAX` | no (1 / 10) | Pool size in the Python services. |
 
-## Autenticación
+## Authentication
 
-| Variable | Dónde | Descripción |
+| Variable | Where | Description |
 |---|---|---|
-| `AUTH_MODE` | web, API | `dev` (cualquier correo entra) u `oidc`. Por defecto `dev`. |
-| `OIDC_ISSUER` | web, API | URL del emisor. Con Cognito: `https://cognito-idp.<región>.amazonaws.com/<pool-id>`. |
-| `OIDC_AUDIENCE` | API | Audiencia que valida la API (el `client_id` del IdP). |
-| `OIDC_CLIENT_ID` | web | `client_id` del cliente público. En el piloto Compose lo toma de `OIDC_AUDIENCE`. |
-| `OIDC_CLIENT_SECRET` | web | Solo para IdP con cliente confidencial. Con Cognito no se usa. |
-| `OIDC_SCOPES` | web | Por defecto `openid email profile`. |
-| `SESSION_COOKIE_SECURE` | web | Por defecto `true`. Poner `false` solo en `http://localhost`. |
-| `PUBLIC_BASE_URL` | web, API | Origen público (por ejemplo `https://piloto.ejemplo.com`). Se usa en redirecciones, invitaciones y enlaces. |
+| `AUTH_MODE` | web, API | `dev` (any email signs in) or `oidc`. Defaults to `dev`. |
+| `OIDC_ISSUER` | web, API | Issuer URL. With Cognito: `https://cognito-idp.<region>.amazonaws.com/<pool-id>`. |
+| `OIDC_AUDIENCE` | API | Audience the API validates (the IdP's `client_id`). |
+| `OIDC_CLIENT_ID` | web | `client_id` of the public client. In the Compose pilot it is taken from `OIDC_AUDIENCE`. |
+| `OIDC_CLIENT_SECRET` | web | Only for IdPs with a confidential client. Not used with Cognito. |
+| `OIDC_SCOPES` | web | Defaults to `openid email profile`. |
+| `SESSION_COOKIE_SECURE` | web | Defaults to `true`. Set to `false` only on `http://localhost`. |
+| `PUBLIC_BASE_URL` | web, API | Public origin (for example `https://pilot.example.com`). Used in redirects, invitations and links. |
 
-Cómo funciona el inicio de sesión: [authentication.md](authentication.md).
+How sign-in works: [authentication.md](authentication.md).
 
 ## Web
 
-| Variable | Descripción |
+| Variable | Description |
 |---|---|
-| `API_URL` | URL interna de la API (`http://api:4000` en Compose). |
-| `DEMO_BOOKING_URL` | URL HTTPS de reservas o correo para solicitar la demo de la portada. |
-| `CONTACT_EMAIL`, `LEGAL_ENTITY` | Datos de contacto y razón social en páginas públicas. |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Base de datos Turso de `/waitlist` (tabla `waitlist`, creada sola al primer uso). Sin ellas, producción responde 503 y desarrollo solo registra en consola. Un cupo de patrocinio se ocupa al confirmar: `UPDATE waitlist SET status = 'confirmed' WHERE email = '…'`. |
-| `WAITLIST_EMAIL_FROM` | Remitente verificado en Amazon SES para confirmar el correo en `/waitlist`. Con él, el registro queda pendiente (tabla `waitlist_pending`) y solo entra en `waitlist` cuando la persona abre el enlace del correo (24 h, un solo uso). La web necesita `AWS_REGION` y permiso `ses:SendEmail` sobre esa identidad. Vacío = los registros se guardan sin confirmar. |
-| `WAITLIST_EMAIL_TEST` | `1` = modo de prueba cuando no hay remitente: no se envía correo y el enlace de confirmación aparece en la página y en el log. Es el valor por defecto de `infra/docker/compose.yml`; no usarlo en producción. |
+| `API_URL` | Internal API URL (`http://api:4000` in Compose). |
+| `DEMO_BOOKING_URL` | HTTPS booking URL or email to request the demo from the landing page. |
+| `CONTACT_EMAIL`, `LEGAL_ENTITY` | Contact details and legal entity name on public pages. |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Turso database for `/waitlist` (`waitlist` table, created automatically on first use). Without them, production responds 503 and development only logs to the console. A sponsorship slot is taken on confirmation: `UPDATE waitlist SET status = 'confirmed' WHERE email = '…'`. |
+| `WAITLIST_EMAIL_FROM` | Sender verified in Amazon SES to confirm the email on `/waitlist`. With it, the sign-up stays pending (`waitlist_pending` table) and only enters `waitlist` when the person opens the email link (24 h, single use). The web needs `AWS_REGION` and `ses:SendEmail` permission on that identity. Empty = sign-ups are stored unconfirmed. |
+| `WAITLIST_EMAIL_TEST` | `1` = test mode when there is no sender: no email is sent and the confirmation link appears on the page and in the log. It is the default in `infra/docker/compose.yml`; do not use it in production. |
 
 ## API (`apps/api/src/config.ts`)
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `RAGSIS_ENV` | `local` | Identifica el entorno en logs y trazas. |
-| `PORT` | `4000` | Puerto HTTP. |
-| `RAG_ENGINE_URL` | `http://localhost:8080` | Dirección del rag-engine. |
-| `AWS_REGION` | `us-east-1` | Región de S3 y SQS. |
-| `S3_ENDPOINT` | vacío | Endpoint S3 alternativo (SeaweedFS en local). |
-| `S3_PUBLIC_ENDPOINT` | vacío | Endpoint S3 que ve el **navegador** para las URLs prefirmadas. |
-| `S3_BUCKET` | `ragsis-documents` | Bucket de documentos. |
-| `SQS_ENDPOINT` | vacío | Endpoint SQS alternativo (ElasticMQ en local). |
-| `SQS_INGEST_QUEUE_URL` | vacío | Cola de ingesta. |
-| `CORS_ORIGINS` | `http://localhost:3000` | Orígenes permitidos, separados por coma. |
-| `UPLOAD_URL_TTL_SECONDS` | `600` | Vigencia de la URL prefirmada de subida. |
-| `DOWNLOAD_URL_TTL_SECONDS` | `120` | Vigencia de la URL prefirmada de descarga. |
-| `ESIGN_PROVIDER` | `native` | `native`, `local` (solo simula, desarrollo) o `disabled`. |
-| `ESIGN_WEBHOOK_SECRET` | vacío | Al menos 32 caracteres. |
-| `SIGNATURE_SEAL_SECRET` | derivado | Secreto estable del sello Ed25519 (mínimo 32 caracteres). Por defecto se deriva de `INTERNAL_SERVICE_SECRET`. |
-| `SIGNATURE_EMAIL_FROM` | vacío | Remitente verificado de SES. Vacío en desarrollo usa la invitación de prueba. |
+| `RAGSIS_ENV` | `local` | Identifies the environment in logs and traces. |
+| `PORT` | `4000` | HTTP port. |
+| `RAG_ENGINE_URL` | `http://localhost:8080` | Address of the rag-engine. |
+| `AWS_REGION` | `us-east-1` | S3 and SQS Region. |
+| `S3_ENDPOINT` | empty | Alternate S3 endpoint (SeaweedFS locally). |
+| `S3_PUBLIC_ENDPOINT` | empty | S3 endpoint the **browser** sees for presigned URLs. |
+| `S3_BUCKET` | `ragsis-documents` | Documents bucket. |
+| `SQS_ENDPOINT` | empty | Alternate SQS endpoint (ElasticMQ locally). |
+| `SQS_INGEST_QUEUE_URL` | empty | Ingestion queue. |
+| `CORS_ORIGINS` | `http://localhost:3000` | Allowed origins, comma-separated. |
+| `UPLOAD_URL_TTL_SECONDS` | `600` | Lifetime of the presigned upload URL. |
+| `DOWNLOAD_URL_TTL_SECONDS` | `120` | Lifetime of the presigned download URL. |
+| `ESIGN_PROVIDER` | `native` | `native`, `local` (simulates only, development) or `disabled`. |
+| `ESIGN_WEBHOOK_SECRET` | empty | At least 32 characters. |
+| `SIGNATURE_SEAL_SECRET` | derived | Stable secret for the Ed25519 seal (minimum 32 characters). Derived from `INTERNAL_SERVICE_SECRET` by default. |
+| `SIGNATURE_EMAIL_FROM` | empty | Verified SES sender. Empty in development uses the test invitation. |
 
-### Conectores
+### Connectors
 
-Guía de alta de las apps OAuth: [connectors-setup.md](connectors-setup.md).
+OAuth app setup guide: [connectors-setup.md](connectors-setup.md).
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | vacío | Gmail. Sin `client_id` el proveedor aparece como «no configurado». |
-| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | vacío | Slack. |
-| `CLICKUP_CLIENT_ID`, `CLICKUP_CLIENT_SECRET` | vacío | ClickUp. |
-| `CONNECTOR_ENCRYPTION_KEY` | derivado | Clave AES-256 en base64 (`openssl rand -base64 32`). Obligatoria en producción. |
-| `CONNECTORS_DEMO` | `false` | Proveedores simulados en memoria. Prohibido en producción. |
-| `CONNECTOR_SYNC_ENABLED` | `true` | `false` en réplicas que no deben sincronizar. |
-| `CONNECTOR_SYNC_INTERVAL_MINUTES` | `30` | Entre 5 y 1440. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Gmail. Without `client_id` the provider appears as "not configured". |
+| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | empty | Slack. |
+| `CLICKUP_CLIENT_ID`, `CLICKUP_CLIENT_SECRET` | empty | ClickUp. |
+| `CONNECTOR_ENCRYPTION_KEY` | derived | AES-256 key in base64 (`openssl rand -base64 32`). Required in production. |
+| `CONNECTORS_DEMO` | `false` | In-memory simulated providers. Forbidden in production. |
+| `CONNECTOR_SYNC_ENABLED` | `true` | `false` on replicas that must not sync. |
+| `CONNECTOR_SYNC_INTERVAL_MINUTES` | `30` | Between 5 and 1440. |
 
-## Servicios Python (`packages/ragsis-core/src/ragsis_core/settings.py`)
+## Python services (`packages/ragsis-core/src/ragsis_core/settings.py`)
 
-Cada campo es una variable en mayúsculas (`ai_embedding_model` → `AI_EMBEDDING_MODEL`).
+Each field is an uppercase variable (`ai_embedding_model` → `AI_EMBEDDING_MODEL`).
 
-### Modelos
+### Models
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `AI_DEFAULT_PROVIDER` | `local` | Reservada: hoy el modelo se elige con `AI_GENERATION_MODEL` y los demás `AI_*_MODEL`. |
-| `AI_EMBEDDING_MODEL` | `local-hash-1024@v1` | Modelo de embeddings. Cambiarlo exige reindexar. |
-| `AI_GENERATION_MODEL` | `local-extractive@v1` | Modelo de generación de respuestas. |
+| `AI_DEFAULT_PROVIDER` | `local` | Reserved: today the model is chosen with `AI_GENERATION_MODEL` and the other `AI_*_MODEL` variables. |
+| `AI_EMBEDDING_MODEL` | `local-hash-1024@v1` | Embedding model. Changing it requires a reindex. |
+| `AI_GENERATION_MODEL` | `local-extractive@v1` | Answer generation model. |
 | `AI_RERANK_MODEL` | `local-lexical-rerank@v1` | Rerank. |
-| `AI_VISION_MODEL` | vacío | VLM que describe figuras en la ingesta. Vacío: solo captions. |
-| `AI_GRAPH_MODEL` | vacío | Extracción de entidades y relaciones. Vacío: sin grafo aunque el tenant lo tenga activo. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Servidor Ollama. |
+| `AI_VISION_MODEL` | empty | VLM that describes figures during ingestion. Empty: captions only. |
+| `AI_GRAPH_MODEL` | empty | Entity and relation extraction. Empty: no graph even if the tenant has it enabled. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. |
 
-Para Bedrock: `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (o
-`bedrock-claude-sonnet-5-5@v1`) y credenciales de AWS en el entorno de los contenedores. En la EC2 del piloto vienen del
-rol `ragsis-pilot-ec2`, que hoy no incluye permisos de Bedrock (hay que agregarlos y habilitar los modelos en la cuenta).
+For Bedrock: `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
+`bedrock-claude-sonnet-5-5@v1`) and AWS credentials in the containers' environment. On the pilot EC2 they come from the
+`ragsis-pilot-ec2` role, which today does not include Bedrock permissions (they must be added and the models enabled in
+the account).
 
-### Ingesta y multimodal
+### Ingestion and multimodal
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `S3_ENDPOINT`, `S3_BUCKET`, `AWS_REGION` | ver API | Igual que la API. |
-| `SQS_ENDPOINT`, `SQS_INGEST_QUEUE_URL`, `SQS_INGEST_DLQ_URL` | vacío | Cola de ingesta y DLQ. |
-| `MALWARE_SCANNER` | `none` | `none` o `clamav`. Producción y piloto usan `clamav`. |
-| `CLAMAV_HOST`, `CLAMAV_PORT` | `clamav`, `3310` | Servicio ClamAV. |
-| `OCR_PROVIDER` | `none` | `none` o `textract`. |
-| `OCR_TIMEOUT_SECONDS` | `600` | Límite del OCR. |
-| `OCR_MIN_LINE_CONFIDENCE` | `60.0` | Confianza mínima por línea. |
-| `PARSER_PREFERENCE` | `native` | `native` o `docling` (requiere el paquete `docling` en la imagen). |
-| `DOCLING_OCR` | `false` | OCR local de Docling, sin red. |
-| `DOCLING_ARTIFACTS_PATH` | vacío | Modelos de Docling descargados de antemano. |
-| `VISION_MAX_IMAGES_PER_DOC` | `40` | Tope de figuras por documento. |
-| `VISION_MIN_IMAGE_BYTES` / `VISION_MIN_IMAGE_SIDE` | `2048` / `64` | Descarta iconos y viñetas. |
-| `VISION_MAX_IMAGE_BYTES` / `VISION_MAX_IMAGE_PIXELS` | `3750000` / `40000000` | Límites por imagen (Bedrock Converse y defensa ante bombas de descompresión). |
-| `INGEST_TABLE_SUMMARIES` | `false` | Resume tablas con el modelo de generación, verificando cifras. |
-| `GRAPH_MAX_CHUNKS_PER_DOC` | `200` | Tope de chunks que alimentan el grafo. |
+| `S3_ENDPOINT`, `S3_BUCKET`, `AWS_REGION` | see API | Same as the API. |
+| `SQS_ENDPOINT`, `SQS_INGEST_QUEUE_URL`, `SQS_INGEST_DLQ_URL` | empty | Ingestion queue and DLQ. |
+| `MALWARE_SCANNER` | `none` | `none` or `clamav`. Production and the pilot use `clamav`. |
+| `CLAMAV_HOST`, `CLAMAV_PORT` | `clamav`, `3310` | ClamAV service. |
+| `OCR_PROVIDER` | `none` | `none` or `textract`. |
+| `OCR_TIMEOUT_SECONDS` | `600` | OCR limit. |
+| `OCR_MIN_LINE_CONFIDENCE` | `60.0` | Minimum confidence per line. |
+| `PARSER_PREFERENCE` | `native` | `native` or `docling` (requires the `docling` package in the image). |
+| `DOCLING_OCR` | `false` | Docling local OCR, no network. |
+| `DOCLING_ARTIFACTS_PATH` | empty | Docling models downloaded in advance. |
+| `VISION_MAX_IMAGES_PER_DOC` | `40` | Cap on figures per document. |
+| `VISION_MIN_IMAGE_BYTES` / `VISION_MIN_IMAGE_SIDE` | `2048` / `64` | Discards icons and bullets. |
+| `VISION_MAX_IMAGE_BYTES` / `VISION_MAX_IMAGE_PIXELS` | `3750000` / `40000000` | Per-image limits (Bedrock Converse and defense against decompression bombs). |
+| `INGEST_TABLE_SUMMARIES` | `false` | Summarizes tables with the generation model, verifying figures. |
+| `GRAPH_MAX_CHUNKS_PER_DOC` | `200` | Cap on chunks that feed the graph. |
 
-### Consulta
+### Query
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `RAG_VLM_ENHANCED` | `auto` | Adjunta imágenes de figuras citadas si el generador tiene visión (`auto`, `on`, `off`). |
-| `RAG_VLM_MAX_IMAGES` | `3` | Máximo de imágenes por consulta. |
-| `INTERNAL_TOKEN_AUDIENCE`, `INTERNAL_TOKEN_ISSUER` | `ragsis-rag`, `ragsis-api` | Claims del token interno. |
+| `RAG_VLM_ENHANCED` | `auto` | Attaches images of cited figures if the generator has vision (`auto`, `on`, `off`). |
+| `RAG_VLM_MAX_IMAGES` | `3` | Maximum images per query. |
+| `INTERNAL_TOKEN_AUDIENCE`, `INTERNAL_TOKEN_ISSUER` | `ragsis-rag`, `ragsis-api` | Claims of the internal token. |
 
-### Operación
+### Operations
 
-| Variable | Por defecto | Descripción |
+| Variable | Default | Description |
 |---|---|---|
-| `LOG_LEVEL` | `INFO` | Nivel de log (JSON). |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | vacío | Vacío: sin trazas. Con `make up-obs`: `http://jaeger:4318`. |
-| `OTEL_SERVICE_NAME` | por servicio | Por ejemplo `ragsis-api`. |
-| `PIPELINE_VERSION` | `ingest-2026.11.2` | Versión del pipeline; se guarda con cada chunk. |
+| `LOG_LEVEL` | `INFO` | Log level (JSON). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Empty: no traces. With `make up-obs`: `http://jaeger:4318`. |
+| `OTEL_SERVICE_NAME` | per service | For example `ragsis-api`. |
+| `PIPELINE_VERSION` | `ingest-2026.11.2` | Pipeline version; stored with each chunk. |
 
-## Piloto en AWS (`/opt/ragsis/.env.pilot`)
+## AWS pilot (`/opt/ragsis/.env.pilot`)
 
-Plantilla: [`infra/docker/.env.pilot.example`](../infra/docker/.env.pilot.example). Los valores de red y recursos salen
-de `terraform output -json runtime`.
+Template: [`infra/docker/.env.pilot.example`](../infra/docker/.env.pilot.example). Network and resource values come from
+`terraform output -json runtime`.
 
-| Variable | Origen |
+| Variable | Source |
 |---|---|
 | `AWS_REGION`, `PILOT_HOSTNAME`, `S3_BUCKET`, `SQS_INGEST_QUEUE_URL` | `terraform output -json runtime` |
-| `OIDC_ISSUER`, `OIDC_AUDIENCE` | `terraform output -json runtime` (el segundo es el `client_id` de Cognito) |
-| `API_IMAGE`, `WEB_IMAGE`, `RAG_ENGINE_IMAGE`, `INGEST_WORKER_IMAGE` | Referencias de ECR por digest (`repo@sha256:…`) |
-| `POSTGRES_PASSWORD`, `RAGSIS_APP_DB_PASSWORD`, `RAGSIS_WORKER_DB_PASSWORD`, `INTERNAL_SERVICE_SECRET` | Un valor distinto por variable: `openssl rand -hex 32` en el host. Consérvalos al actualizar imágenes. |
+| `OIDC_ISSUER`, `OIDC_AUDIENCE` | `terraform output -json runtime` (the second is the Cognito `client_id`) |
+| `API_IMAGE`, `WEB_IMAGE`, `RAG_ENGINE_IMAGE`, `INGEST_WORKER_IMAGE` | ECR references by digest (`repo@sha256:…`) |
+| `POSTGRES_PASSWORD`, `RAGSIS_APP_DB_PASSWORD`, `RAGSIS_WORKER_DB_PASSWORD`, `INTERNAL_SERVICE_SECRET` | A different value per variable: `openssl rand -hex 32` on the host. Keep them when updating images. |
 
-El piloto fija `AUTH_MODE=oidc`, `SESSION_COOKIE_SECURE=true`, `MALWARE_SCANNER=clamav`, `OCR_PROVIDER=none` y modelos
-locales (`local-extractive@v1`, `local-hash-1024@v1`).
+The pilot fixes `AUTH_MODE=oidc`, `SESSION_COOKIE_SECURE=true`, `MALWARE_SCANNER=clamav`, `OCR_PROVIDER=none` and local
+models (`local-extractive@v1`, `local-hash-1024@v1`).
 
 ## Terraform
 
-| Entorno | Variables | Notas |
+| Environment | Variables | Notes |
 |---|---|---|
-| `envs/pilot` | `aws_account_id`, `pilot_hostname` | Región fija `us-east-2`. El proveedor solo acepta esa cuenta. |
-| `envs/dev` | `region` (`us-east-1`), `env`, `image_tag`, más las de `terraform.tfvars.example` | Estado remoto en S3 con `use_lockfile`; `bucket/key/region` por `-backend-config`. |
+| `envs/pilot` | `aws_account_id`, `pilot_hostname` | Fixed Region `us-east-2`. The provider only accepts that account. |
+| `envs/dev` | `region` (`us-east-1`), `env`, `image_tag`, plus those in `terraform.tfvars.example` | Remote state in S3 with `use_lockfile`; `bucket/key/region` via `-backend-config`. |
 
-Para Ragsis Sign con correo en AWS, `envs/dev` acepta `signature_email_from` y `signature_email_identity_arn` (una
-identidad SES verificada en la región de la API y con acceso de producción). Con una instalación directa, la API recibe
-`SIGNATURE_EMAIL_FROM`, credenciales con `ses:SendEmail` y `PUBLIC_BASE_URL` con HTTPS.
+For Ragsis Sign with email on AWS, `envs/dev` accepts `signature_email_from` and `signature_email_identity_arn` (a
+verified SES identity in the API's Region with production access). With a direct installation, the API receives
+`SIGNATURE_EMAIL_FROM`, credentials with `ses:SendEmail` and `PUBLIC_BASE_URL` with HTTPS.
 
-## Variables del script de ensayo
+## Rehearsal script variables
 
-`REHEARSAL_ENV`, `FLOCI_ENDPOINT`, `REHEARSAL_HOSTNAME` y `REHEARSAL_TARGETS`: ver [guides/floci.md](guides/floci.md).
+`REHEARSAL_ENV`, `FLOCI_ENDPOINT`, `REHEARSAL_HOSTNAME` and `REHEARSAL_TARGETS`: see [guides/floci.md](guides/floci.md).

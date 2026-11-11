@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 580" width="1180" height="580" font-family="ui-sans-serif, system-ui, -apple-system, &#x27;Segoe UI&#x27;, Roboto, &#x27;Helvetica Neue&#x27;, Arial, sans-serif" role="img" aria-labelledby="t d">
-<title id="t">Flujo de inicio de sesión</title><desc id="d">El formulario de login vive en la web y habla con Cognito desde el servidor; la sesión es una cookie httpOnly.</desc>
+<title id="t">Sign-in flow</title><desc id="d">The login form lives in the web app and talks to Cognito from the server; the session is an httpOnly cookie.</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8e8e96"/></marker><marker id="arrow-s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8e8e96"/></marker></defs>
 <rect width="1180" height="580" rx="12" fill="#17171a"/>
-<text x="24.0" y="36.0" font-size="17" font-weight="700" fill="#ececef" text-anchor="start">Inicio de sesión dentro de la app (Cognito solo guarda las cuentas)</text>
+<text x="24.0" y="36.0" font-size="17" font-weight="700" fill="#ececef" text-anchor="start">In-app sign-in (Cognito only stores the accounts)</text>
 <rect x="30" y="66" width="200" height="64" rx="10" fill="#222227" stroke="#3b3b44" stroke-width="1.3"/>
 <svg x="42.0" y="83.0" width="30.0" height="30.0" viewBox="0 0 48 48" preserveAspectRatio="xMidYMid meet">
     
@@ -10,8 +10,8 @@
         <path d="M28.639,9.286 C28.639,6.371 31.052,4 34.019,4 C36.985,4 39.397,6.371 39.397,9.286 C39.397,12.201 36.985,14.572 34.019,14.572 C31.052,14.572 28.639,12.201 28.639,9.286 L28.639,9.286 Z M40.163,16.334 C39.516,15.932 38.833,15.6 38.128,15.333 C40.098,14.023 41.397,11.802 41.397,9.286 C41.397,5.269 38.087,2 34.019,2 C29.95,2 26.639,5.269 26.639,9.286 C26.639,11.796 27.932,14.014 29.895,15.325 C28.614,15.808 27.41,16.515 26.349,17.425 L27.652,18.943 C29.434,17.414 31.689,16.572 34,16.572 C35.802,16.572 37.569,17.077 39.109,18.033 C41.849,19.735 43.647,22.725 43.953,26 L34,26 L34,28 L45,28 C45.553,28 46,27.553 46,27 C46,22.657 43.764,18.57 40.163,16.334 L40.163,16.334 Z M8.639,9.286 C8.639,6.371 11.052,4 14.019,4 C16.985,4 19.397,6.371 19.397,9.286 C19.397,12.201 16.985,14.572 14.019,14.572 C11.052,14.572 8.639,12.201 8.639,9.286 L8.639,9.286 Z M14,26 L4.046,26 C4.53,20.717 8.81,16.572 14,16.572 C15.802,16.572 17.569,17.077 19.109,18.033 C19.541,18.302 19.958,18.608 20.349,18.943 L21.652,17.426 C21.184,17.024 20.684,16.657 20.163,16.334 C19.516,15.932 18.833,15.6 18.128,15.333 C20.098,14.023 21.397,11.802 21.397,9.286 C21.397,5.269 18.087,2 14.019,2 C9.95,2 6.639,5.269 6.639,9.286 C6.639,11.801 7.937,14.023 9.907,15.332 C5.302,17.071 2,21.638 2,27 C2,27.553 2.448,28 3,28 L14,28 L14,26 Z M14.046,44 C14.53,38.717 18.81,34.572 24,34.572 C25.802,34.572 27.569,35.077 29.109,36.033 C31.849,37.735 33.647,40.725 33.953,44 L14.046,44 Z M18.639,27.286 C18.639,24.371 21.052,22 24.019,22 C26.985,22 29.397,24.371 29.397,27.286 C29.397,30.201 26.985,32.572 24.019,32.572 C21.052,32.572 18.639,30.201 18.639,27.286 L18.639,27.286 Z M30.163,34.334 C29.516,33.932 28.833,33.6 28.128,33.333 C30.098,32.023 31.397,29.802 31.397,27.286 C31.397,23.269 28.087,20 24.019,20 C19.95,20 16.639,23.269 16.639,27.286 C16.639,29.801 17.937,32.023 19.907,33.332 C15.302,35.071 12,39.638 12,45 C12,45.553 12.448,46 13,46 L35,46 C35.553,46 36,45.553 36,45 C36,40.657 33.764,36.57 30.163,34.334 L30.163,34.334 Z" fill="#FFFFFF"></path>
     </g>
 </svg>
-<text x="82.0" y="96.5" font-size="13" font-weight="600" fill="#ececef" text-anchor="start">Navegador</text>
-<text x="82.0" y="111.5" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">página /login de Ragsis</text>
+<text x="82.0" y="96.5" font-size="13" font-weight="600" fill="#ececef" text-anchor="start">Browser</text>
+<text x="82.0" y="111.5" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">Ragsis /login page</text>
 <line x1="130" y1="130" x2="130" y2="520" stroke="#5a5a64" stroke-width="1.3" stroke-dasharray="4 5"/>
 <rect x="300" y="66" width="200" height="64" rx="10" fill="#222227" stroke="#3b3b44" stroke-width="1.3"/>
 <svg x="312.0" y="83.0" width="30.0" height="30.0" viewBox="0 0 180 180" preserveAspectRatio="xMidYMid meet"><mask height="180" id="i152-:r8:mask0_408_134" maskUnits="userSpaceOnUse" width="180" x="0" y="0" style="mask-type: alpha;"><circle cx="90" cy="90" fill="black" r="90"></circle></mask><g mask="url(#i152-:r8:mask0_408_134)"><circle cx="90" cy="90" data-circle="true" fill="black" r="90"></circle><path d="M149.508 157.52L69.142 54H54V125.97H66.1136V69.3836L139.999 164.845C143.333 162.614 146.509 160.165 149.508 157.52Z" fill="url(#i152-:r8:paint0_linear_408_134)"></path><rect fill="url(#i152-:r8:paint1_linear_408_134)" height="72" width="12" x="115" y="54"></rect></g><defs><linearGradient gradientUnits="userSpaceOnUse" id="i152-:r8:paint0_linear_408_134" x1="109" x2="144.5" y1="116.5" y2="160.5"><stop stop-color="white"></stop><stop offset="1" stop-color="white" stop-opacity="0"></stop></linearGradient><linearGradient gradientUnits="userSpaceOnUse" id="i152-:r8:paint1_linear_408_134" x1="121" x2="120.799" y1="54" y2="106.875"><stop stop-color="white"></stop><stop offset="1" stop-color="white" stop-opacity="0"></stop></linearGradient></defs></svg>
@@ -29,16 +29,16 @@
     </g>
 </svg>
 <text x="652.0" y="96.5" font-size="13" font-weight="600" fill="#ececef" text-anchor="start">Cognito</text>
-<text x="652.0" y="111.5" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">InitiateAuth (cliente público)</text>
+<text x="652.0" y="111.5" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">InitiateAuth (public client)</text>
 <line x1="700" y1="130" x2="700" y2="520" stroke="#5a5a64" stroke-width="1.3" stroke-dasharray="4 5"/>
 <rect x="900" y="66" width="200" height="64" rx="10" fill="#222227" stroke="#3b3b44" stroke-width="1.3"/>
 <svg x="912.0" y="83.0" width="30.0" height="30.0" viewBox="0 0 256 167.509" preserveAspectRatio="xMidYMid meet"><path fill="#fff" d="M247.942 23.314 256 2.444l-.35-1.293-79.717 21.003C184.433 9.86 181.513 0 181.513 0s-25.457 16.257-44.709 15.832c-19.251-.426-25.457-5.564-54.977 3.853-29.52 9.41-37.86 38.295-46.419 44.5S0 90.603 0 90.603l.058.359 24.207-7.707S17.625 89.51 3.52 108.52l-.659-.609.025.134s11.336 17.324 22.463 14.121c1.118-.325 2.377-.859 3.753-1.56 4.48 2.495 10.327 4.947 16.783 5.622 0 0-4.37-5.08-8.016-10.86.984-.634 1.994-1.293 3.02-1.96l-.476.334 9.217 3.386-1.017-8.666c.033-.017.058-.042.091-.059l9.059 3.328-1.126-7.882a76.868 76.868 0 0 1 3.436-1.693l9.443-35.717 39.045-26.634-3.103 7.808c-7.916 19.468-22.78 24.064-22.78 24.064l-6.206 2.352c-4.612 5.455-6.556 6.798-8.14 25.107 3.72-.934 7.273-1.16 10.492-.292 16.683 4.496 22.463 24.599 17.967 30.162-1.126 1.393-3.803 3.77-7.181 6.565h-6.773l-.092 5.488c-.234.184-.467.359-.693.542h-6.89l-.083 5.355c-.609.468-1.218.918-1.801 1.36-6.473.133-14.673-5.514-14.673-5.514 0 5.139 4.28 13.046 4.28 13.046s.283-.133.758-.367c-.417.309-.65.476-.65.476s17.324 11.552 28.235 7.273c9.7-3.804 34.816-23.606 56.495-32.981l65.603-17.283 8.65-22.413-49.997 13.17V83.597l58.664-15.457 8.65-22.413-67.297 17.734V43.324z"/></svg>
 <text x="952.0" y="96.5" font-size="13" font-weight="600" fill="#ececef" text-anchor="start">api</text>
-<text x="952.0" y="111.5" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">valida id_token (JWKS)</text>
+<text x="952.0" y="111.5" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">validates id_token (JWKS)</text>
 <line x1="1000" y1="130" x2="1000" y2="520" stroke="#5a5a64" stroke-width="1.3" stroke-dasharray="4 5"/>
 <polyline points="130.0,170.0 400.0,170.0" fill="none" stroke="#8e8e96" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<rect x="207.1" y="149.0" width="115.8" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
-<text x="265.0" y="162.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">POST email + clave</text>
+<rect x="198.3" y="149.0" width="133.5" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
+<text x="265.0" y="162.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">POST email + password</text>
 <circle cx="148" cy="170" r="10" fill="#5eb0ff"/>
 <text x="148.0" y="174.0" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
 <polyline points="400.0,210.0 700.0,210.0" fill="none" stroke="#8e8e96" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
@@ -47,8 +47,8 @@
 <circle cx="418" cy="210" r="10" fill="#5eb0ff"/>
 <text x="418.0" y="214.0" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
 <polyline points="700.0,250.0 400.0,250.0" fill="none" stroke="#8e8e96" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<rect x="424.5" y="229.0" width="251.1" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
-<text x="550.0" y="242.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">id_token  ·  o reto NEW_PASSWORD_REQUIRED</text>
+<rect x="406.8" y="229.0" width="286.4" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
+<text x="550.0" y="242.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">id_token  ·  or NEW_PASSWORD_REQUIRED challenge</text>
 <circle cx="682" cy="250" r="10" fill="#5eb0ff"/>
 <text x="682.0" y="254.0" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
 <polyline points="400.0,290.0 130.0,290.0" fill="none" stroke="#8e8e96" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow)"/>
@@ -67,14 +67,14 @@
 <circle cx="418" cy="380" r="10" fill="#5eb0ff"/>
 <text x="418.0" y="384.0" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">6</text>
 <polyline points="1000.0,420.0 700.0,420.0" fill="none" stroke="#8e8e96" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<rect x="727.4" y="399.0" width="245.2" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
-<text x="850.0" y="412.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">claves públicas (JWKS), una vez por hora</text>
+<rect x="750.9" y="399.0" width="198.2" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
+<text x="850.0" y="412.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">public keys (JWKS), once an hour</text>
 <circle cx="982" cy="420" r="10" fill="#5eb0ff"/>
 <text x="982.0" y="424.0" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">7</text>
 <polyline points="1000.0,460.0 400.0,460.0" fill="none" stroke="#8e8e96" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<rect x="580.3" y="439.0" width="239.3" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
-<text x="700.0" y="452.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">datos del tenant, según membresía y rol</text>
+<rect x="592.1" y="439.0" width="215.8" height="18" rx="4" fill="#17171a" fill-opacity="0.92"/>
+<text x="700.0" y="452.0" font-size="10.5" font-weight="500" fill="#aeaeb5" text-anchor="middle">tenant data, by membership and role</text>
 <circle cx="982" cy="460" r="10" fill="#5eb0ff"/>
 <text x="982.0" y="464.0" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">8</text>
-<text x="24.0" y="556.0" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">El id_token nunca llega a JavaScript: vive en una cookie httpOnly. «¿Olvidaste tu clave?» usa ForgotPassword; el código llega por correo.</text>
+<text x="24.0" y="556.0" font-size="11" font-weight="400" fill="#aeaeb5" text-anchor="start">The id_token never reaches JavaScript: it lives in an httpOnly cookie. &quot;Forgot your password?&quot; uses ForgotPassword; the code arrives by email.</text>
 </svg>

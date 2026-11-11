@@ -1,542 +1,541 @@
-# Registro de decisiones (ADR)
+# Decision records (ADR)
 
-Las ADR-001 a ADR-007 vienen del Plan Maestro (sección 17). Las ADR-008+ documentan decisiones
-tomadas durante la implementación de F1/F2.
+ADR-001 to ADR-007 come from the Master Plan (section 17). ADR-008 onward document decisions made during the
+implementation of F1/F2.
 
-| ADR | Decisión | Motivo | Revisar cuando… |
+| ADR | Decision | Reason | Revisit when… |
 |---|---|---|---|
-| 001 | ECS Fargate > EKS en MVP | Menor complejidad operativa | Se necesite scheduling especializado / GPU a escala |
-| 002 | RDS PostgreSQL + pgvector | Una BD, ACL transaccional, RLS | Corpus/QPS supere benchmark (HNSW saturado) |
-| 003 | Bedrock vía AI Gateway propio | Multi-modelo, gobierno de IA | Costo/latencia o residencia lo exijan |
-| 004 | Motor RAG detrás de adapter | Evitar lock-in con RAG-Anything/LightRAG | Migración de framework |
-| 005 | GraphRAG no por defecto | Costo de mantener relaciones | Multi-hop supere híbrido en golden set |
-| 006 | Pool seguro; dedicated premium | Economías de escala | Requisitos regulatorios / no-isolation |
-| 007 | Read-only retrieval en MVP | Riesgo de agentes con herramientas | Exista control de permisos y aprobación |
+| 001 | ECS Fargate > EKS in the MVP | Lower operational complexity | Specialized scheduling / GPU at scale is needed |
+| 002 | RDS PostgreSQL + pgvector | One DB, transactional ACL, RLS | Corpus/QPS exceeds the benchmark (HNSW saturated) |
+| 003 | Bedrock through our own AI Gateway | Multi-model, AI governance | Cost/latency or residency demand it |
+| 004 | RAG engine behind an adapter | Avoid lock-in with RAG-Anything/LightRAG | Framework migration |
+| 005 | GraphRAG not on by default | Cost of maintaining relations | Multi-hop beats hybrid on the golden set |
+| 006 | Secure pool; dedicated as premium | Economies of scale | Regulatory requirements / no-isolation |
+| 007 | Read-only retrieval in the MVP | Risk of agents with tools | Permission control and approval exist |
 
-## ADR-008 · ACL aplicada en la base de datos, no solo en la app
+## ADR-008 · ACL enforced in the database, not only in the app
 
-**Decisión.** Toda tabla con datos de cliente tiene RLS **forzada**. Para `ragsis_app` (API y
-rag-engine) las políticas de `documents`, `document_versions`, `chunks` y `chunk_embeddings`
-exigen tenant **y** un principal del usuario en `document_acl`. El worker (`ragsis_worker`) solo
-tiene frontera de tenant. Ningún rol de aplicación tiene `BYPASSRLS`.
+**Decision.** Every table with customer data has **forced** RLS. For `ragsis_app` (API and rag-engine) the policies of
+`documents`, `document_versions`, `chunks` and `chunk_embeddings` require the tenant **and** a principal of the user in
+`document_acl`. The worker (`ragsis_worker`) only has the tenant boundary. No application role has `BYPASSRLS`.
 
-**Motivo.** Sección 05 del plan: "la segregación de datos no equivale a autorización fuerte".
-Un bug en un `WHERE` de la app no puede filtrar documentos entre tenants ni dentro del tenant.
-El retrieval además filtra por principals explícitamente (defensa en profundidad).
+**Reason.** Plan section 05: "data segregation is not the same as strong authorization". A bug in an app `WHERE` clause
+cannot leak documents between tenants or within a tenant. Retrieval also filters by principals explicitly (defense in
+depth).
 
-**Consecuencia.** Agregados tenant-wide (cuotas) usan funciones `SECURITY DEFINER` que solo
-devuelven números del tenant activo (`app.tenant_corpus_stats`).
+**Consequence.** Tenant-wide aggregates (quotas) use `SECURITY DEFINER` functions that only return numbers for the
+active tenant (`app.tenant_corpus_stats`).
 
-## ADR-009 · Token interno API → rag-engine
+## ADR-009 · Internal API → rag-engine token
 
-**Decisión.** La API resuelve identidad, membresía, tenant y principals, y emite un JWT HS256
-de 60 s (`aud=ragsis-rag`). rag-engine no acepta tenant/principals de otra fuente.
+**Decision.** The API resolves identity, membership, tenant and principals, and issues a 60 s HS256 JWT
+(`aud=ragsis-rag`). The rag-engine does not accept tenant/principals from any other source.
 
-**Revisar cuando** haya más servicios internos: migrar a mTLS de Service Connect o tokens
-firmados con KMS (asimétricos).
+**Revisit when** there are more internal services: migrate to Service Connect mTLS or KMS-signed (asymmetric) tokens.
 
-## ADR-010 · Proveedor local determinista para desarrollo y on-prem mínimo
+## ADR-010 · Deterministic local provider for development and minimal on-prem
 
-**Decisión.** El AI Gateway incluye `local-hash-1024@v1` (embeddings por feature hashing),
-`local-extractive@v1` (respuesta extractiva con citas) y `local-lexical-rerank@v1`.
+**Decision.** The AI Gateway includes `local-hash-1024@v1` (embeddings by feature hashing), `local-extractive@v1`
+(extractive answer with citations) and `local-lexical-rerank@v1`.
 
-**Motivo.** Permite correr todo el sistema, los tests y la evaluación sin red, sin GPU ni
-credenciales, y ofrece una ruta 100 % offline. **No es semántico**: en producción se usa
-Bedrock (Titan v2 / Cohere multilingual, Nova/Claude) u Ollama (BGE-M3, Qwen3).
+**Reason.** It lets the whole system, the tests and the evaluation run with no network, GPU or credentials, and offers a
+100 % offline path. It is **not semantic**: production uses Bedrock (Titan v2 / Cohere multilingual, Nova/Claude) or
+Ollama (BGE-M3, Qwen3).
 
-**Consecuencia.** Todos los modelos de embeddings admitidos producen 1024 dimensiones;
-`model_version` separa espacios vectoriales y nunca se mezclan (sin fallback de embeddings).
+**Consequence.** All supported embedding models produce 1024 dimensions; `model_version` separates vector spaces and they
+are never mixed (no embedding fallback).
 
-## ADR-011 · Claude en Bedrock vía SDK oficial de Anthropic
+## ADR-011 · Claude on Bedrock through the official Anthropic SDK
 
-**Decisión.** Modelos Claude en Bedrock se invocan con `AnthropicBedrockMantle` (SDK
-`anthropic`); Nova y embeddings vía `bedrock-runtime` (Converse / InvokeModel).
-Rechazos (`stop_reason=refusal`) activan el fallback del gateway **solo** a modelos permitidos
-por la política del tenant; si no queda ninguno, la consulta se abstiene.
+**Decision.** Claude models on Bedrock are invoked with `AnthropicBedrockMantle` (`anthropic` SDK); Nova and embeddings
+through `bedrock-runtime` (Converse / InvokeModel). Refusals (`stop_reason=refusal`) trigger the gateway fallback
+**only** to models allowed by the tenant's policy; if none is left, the query abstains.
 
-## ADR-012 · SeaweedFS como S3 local
+## ADR-012 · SeaweedFS as local S3
 
-**Decisión.** MinIO dejó de publicar imágenes comunitarias; el entorno local usa SeaweedFS
-(S3 compatible, URLs prefirmadas y CORS). En AWS se usa S3 real (módulo `storage`).
+**Decision.** MinIO stopped publishing community images; the local environment uses SeaweedFS (S3 compatible, presigned
+URLs and CORS). On AWS, real S3 is used (`storage` module).
 
-## ADR-013 · Chunking y tokenización sin tiktoken
+## ADR-013 · Chunking and tokenization without tiktoken
 
-**Decisión.** Estimación de tokens por palabras/caracteres (conservadora) para chunking y
-presupuestos; el conteo exacto lo reporta el proveedor. Evita depender de la caché de tiktoken
-en despliegues desconectados (riesgo listado en la sección 03).
+**Decision.** Token estimation by words/characters (conservative) for chunking and budgets; the exact count is reported
+by the provider. This avoids depending on the tiktoken cache in disconnected deployments (risk listed in section 03).
 
-## ADR-014 · Claves de API de servicio (API-01)
+## ADR-014 · Service API keys (API-01)
 
-**Decisión.** Formato `rsk_<prefijo>_<secreto>`; en BD solo prefijo + SHA-256 del secreto. Cada clave tiene
-scopes (`query`, `documents:read`, `documents:write` ⊇ read), lista de workspaces, expiración (≤ 365 días) y
-revocación inmediata. Se resuelve con `app.resolve_api_key` (SECURITY DEFINER) antes de conocer el tenant y
-actúa como un usuario de servicio (`users.identity_provider='ragsis-apikey'`) con principals solo de sus
-workspaces: nunca ve documentos restringidos a grupos. Las rutas declaran `config.scopes`; sin scopes la ruta
-no acepta claves (administración, miembros, auditoría, creación de claves).
+**Decision.** Format `rsk_<prefix>_<secret>`; the DB stores only the prefix + SHA-256 of the secret. Each key has scopes
+(`query`, `documents:read`, `documents:write` ⊇ read), a list of workspaces, an expiration (≤ 365 days) and immediate
+revocation. It is resolved with `app.resolve_api_key` (SECURITY DEFINER) before the tenant is known and acts as a service
+user (`users.identity_provider='ragsis-apikey'`) with principals only from its workspaces: it never sees documents
+restricted to groups. Routes declare `config.scopes`; a route without scopes does not accept keys (administration,
+members, audit, key creation).
 
-## ADR-015 · Login web OIDC en el BFF (Authorization Code + PKCE)
+## ADR-015 · Web OIDC login in the BFF (Authorization Code + PKCE)
 
-**Decisión.** El BFF Next.js ejecuta el flujo (state, nonce, PKCE S256), verifica el `id_token` con el JWKS del
-IdP (issuer, audiencia = client_id, nonce) y lo guarda en cookie httpOnly; el navegador nunca ve tokens. La API
-revalida el mismo `id_token` en cada llamada y exige `email_verified` y `token_use=id` (Cognito).
-Logout RP-initiated vía `end_session_endpoint` si el IdP lo publica. `apps/api/src/scripts/mock-oidc.ts`
-emula un IdP para desarrollo y pruebas.
+**Decision.** The Next.js BFF runs the flow (state, nonce, PKCE S256), verifies the `id_token` with the IdP's JWKS
+(issuer, audience = client_id, nonce) and stores it in an httpOnly cookie; the browser never sees tokens. The API
+revalidates the same `id_token` on every call and requires `email_verified` and `token_use=id` (Cognito). RP-initiated
+logout through `end_session_endpoint` if the IdP publishes it. `apps/api/src/scripts/mock-oidc.ts` emulates an IdP for
+development and tests.
 
-**Revisar cuando** se requieran sesiones largas: agregar refresh tokens cifrados server-side.
+**Revisit when** long sessions are required: add server-side encrypted refresh tokens.
 
-**Actualización.** Con Cognito el formulario de acceso vive en la propia app; este flujo por redirección queda para
-otros IdP OIDC. Ver [ADR-026](#adr-026--login-dentro-de-la-app-con-cognito-user_password_auth).
+**Update.** With Cognito the sign-in form lives in the app itself; this redirect flow remains for other OIDC IdPs. See
+[ADR-026](#adr-026--in-app-login-with-cognito-user_password_auth).
 
-## ADR-016 · OCR con Amazon Textract como primera ruta multimodal (F3)
+## ADR-016 · OCR with Amazon Textract as the first multimodal path (F3)
 
-**Decisión.** Páginas con < 40 caracteres de texto digital se envían a Textract asíncrono sobre el objeto S3
-existente. Quality gate: líneas con confianza < 60 se descartan; se guardan proveedor y confianza media por
-versión y se contabilizan `ocr_pages`. Textract es un servicio cloud registrado en `ModelRegistry`
-(`aws-textract@v1`): la política de datos del tenant decide (restringido = nunca). Sin OCR habilitado, un PDF
-mayoritariamente escaneado falla con `ocr_required` en vez de indexarse vacío.
+**Decision.** Pages with < 40 characters of digital text are sent to asynchronous Textract over the existing S3 object.
+Quality gate: lines with confidence < 60 are discarded; the provider and mean confidence are stored per version and
+`ocr_pages` are counted. Textract is a cloud service registered in `ModelRegistry` (`aws-textract@v1`): the tenant's data
+policy decides (restricted = never). Without OCR enabled, a mostly scanned PDF fails with `ocr_required` instead of being
+indexed empty.
 
-**Revisar cuando** se necesite OCR offline (Docling/PaddleOCR en worker GPU) o tablas/figuras (RAG-04).
+**Revisit when** offline OCR (Docling/PaddleOCR on a GPU worker) or tables/figures (RAG-04) are needed.
 
-## ADR-017 · Trazas OpenTelemetry manuales
+## ADR-017 · Manual OpenTelemetry traces
 
-**Decisión.** Instrumentación manual (sin auto-instrumentación de módulos ESM): span por request en la API con
-ruta plantilla, spans por etapa en rag-engine (`rag.embed/retrieve/rerank/generate/verify/persist`) y por job en
-el worker. Propagación W3C: API → rag-engine por header y API → worker por campo `traceparent` del mensaje SQS.
-Atributos solo pseudónimos (UUIDs, modelos, conteos); prueba automática verifica ausencia de texto y emails.
-Exportación OTLP/HTTP solo si `OTEL_EXPORTER_OTLP_ENDPOINT` está definido (local: Jaeger; AWS: ADOT collector).
+**Decision.** Manual instrumentation (no auto-instrumentation of ESM modules): one span per request in the API with the
+route template, spans per stage in the rag-engine (`rag.embed/retrieve/rerank/generate/verify/persist`) and per job in
+the worker. W3C propagation: API → rag-engine by header and API → worker by the `traceparent` field of the SQS message.
+Attributes are pseudonymous only (UUIDs, models, counts); an automated test verifies the absence of text and emails.
+OTLP/HTTP export only if `OTEL_EXPORTER_OTLP_ENDPOINT` is defined (local: Jaeger; AWS: ADOT collector).
 
-## ADR-018 · Contenido multimodal (RAG-04) dentro del pipeline propio, no con RAG-Anything
+## ADR-018 · Multimodal content (RAG-04) inside our own pipeline, not with RAG-Anything
 
-**Decisión.** Se toman las ideas de RAG-Anything (lista de bloques tipados texto/figura/tabla/ecuación con página,
-bbox y caption; procesadores por modalidad; contexto del documento al describir figuras; consulta VLM-enhanced)
-pero se implementan en el pipeline existente, no como dependencia: su almacenamiento es LightRAG, fuera de
-pgvector y de las RLS/ACL (ADR-004, ADR-008).
+**Decision.** The ideas of RAG-Anything are adopted (a list of typed text/figure/table/equation blocks with page, bbox
+and caption; processors per modality; document context when describing figures; VLM-enhanced query) but implemented in
+the existing pipeline, not as a dependency: its storage is LightRAG, outside pgvector and the RLS/ACL (ADR-004,
+ADR-008).
 
-- **Parsers nativos sin dependencias**: DOCX (figuras + texto alternativo, gráficos nativos, ecuaciones OMML,
-  captions), PPTX (diapositiva = página, bbox de imágenes/tablas, gráficos, notas del orador), XLSX (hojas
-  visibles, fechas y porcentajes según estilo), PNG/JPEG como documento e imágenes JPEG/PNG de PDFs digitales.
-  Los gráficos nativos de Office se convierten a **tabla con las cifras de su caché**: números exactos y
-  citables sin VLM. Destinos externos de relaciones OOXML nunca se resuelven (SSRF).
-- **Docling opcional** (`PARSER_PREFERENCE=docling`, paquete `docling` instalado en la imagen del worker): layout, estructura de tablas, fórmulas y
-  figuras con bbox. Si falla o no está instalado se usa el parser nativo con advertencia. Su OCR es local
-  (`DOCLING_OCR=true`): ruta de OCR offline para tenants `restricted`. MinerU no se adopta por su licencia (AGPL)
-  en un SaaS; revisar si cambia.
-- **Figuras**: filtro por tamaño mínimo, duplicados (SHA-256), tope por documento y límite de píxeles (bombas);
-  descripción con el VLM de `AI_VISION_MODEL` filtrado por la política del tenant (sin VLM permitido → solo
-  caption/alt text; nunca se envía una imagen de un tenant restringido a la nube). La imagen se guarda en
-  `tenants/<org>/assets/<doc>/<ver>/<sha>.<ext>` (CHECK en BD impide salir del prefijo del tenant); el borrado
-  purga el prefijo. Un reindexado full reutiliza descripciones por SHA-256.
-- **Tablas**: resumen opcional (`INGEST_TABLE_SUMMARIES`) cuyas oraciones con cifras que no estén en la tabla se
-  descartan antes de indexar.
-- **Consulta VLM-enhanced** (`RAG_VLM_ENHANCED=auto`): si el generador tiene visión, se adjuntan (máx. 3) las
-  imágenes de figuras **ya seleccionadas como evidencia** —autorizadas por RLS + ACL—, etiquetadas con su [n].
-  El verificador de citas **no se relaja**: toda cifra de la respuesta debe estar en el texto de la evidencia
-  (descripción incluida); lo que el modelo lea solo en la imagen y no esté en el texto se descarta.
-- **Transparencia**: las citas exponen `kind`, `bbox`, `caption`, `has_asset` y `ai_generated`; la web marca la
-  evidencia generada por IA y muestra la figura con URL firmada corta (`GET /chunks/{chunk}/asset`, auditada).
+- **Native parsers with no dependencies**: DOCX (figures + alt text, native charts, OMML equations, captions), PPTX
+  (slide = page, bbox of images/tables, charts, speaker notes), XLSX (visible sheets, dates and percentages according to
+  style), PNG/JPEG as a document, and JPEG/PNG images from digital PDFs. Native Office charts are converted to a **table
+  with the figures from their cache**: exact, citable numbers without a VLM. External targets of OOXML relationships
+  are never resolved (SSRF).
+- **Optional Docling** (`PARSER_PREFERENCE=docling`, `docling` package installed in the worker image): layout, table
+  structure, formulas and figures with bbox. If it fails or is not installed, the native parser is used with a warning.
+  Its OCR is local (`DOCLING_OCR=true`): an offline OCR path for `restricted` tenants. MinerU is not adopted because of
+  its license (AGPL) in a SaaS; revisit if that changes.
+- **Figures**: filter by minimum size, duplicates (SHA-256), per-document cap and pixel limit (bombs); description with
+  the VLM from `AI_VISION_MODEL` filtered by the tenant's policy (no allowed VLM → caption/alt text only; an image from
+  a restricted tenant is never sent to the cloud). The image is stored at
+  `tenants/<org>/assets/<doc>/<ver>/<sha>.<ext>` (a DB CHECK prevents leaving the tenant prefix); deletion purges the
+  prefix. A full reindex reuses descriptions by SHA-256.
+- **Tables**: optional summary (`INGEST_TABLE_SUMMARIES`) in which sentences with figures that are not in the table are
+  discarded before indexing.
+- **VLM-enhanced query** (`RAG_VLM_ENHANCED=auto`): if the generator has vision, the images of figures **already
+  selected as evidence** (authorized by RLS + ACL) are attached (max. 3), labeled with their [n]. The citation verifier
+  is **not relaxed**: every figure in the answer must be in the evidence text (description included); whatever the model
+  reads only in the image and is not in the text is discarded.
+- **Transparency**: citations expose `kind`, `bbox`, `caption`, `has_asset` and `ai_generated`; the web marks
+  AI-generated evidence and shows the figure with a short signed URL (`GET /chunks/{chunk}/asset`, audited).
 
-**Revisar cuando** el golden set real (F0/F2) mida el aporte de la descripción VLM frente a solo caption, o se
-necesite bbox de figuras en PDF sin Docling (requiere interpretar el content stream).
+**Revisit when** the real golden set (F0/F2) measures the contribution of the VLM description versus caption only, or
+figure bbox is needed in PDFs without Docling (requires interpreting the content stream).
 
-## ADR-019 · GraphRAG (RAG-05) dentro de Postgres con ACL derivada de los chunks
+## ADR-019 · GraphRAG (RAG-05) inside Postgres with ACL derived from the chunks
 
-**Contexto.** ADR-005 deja GraphRAG fuera por defecto; ADR-004/018 descartan LightRAG/RAG-Anything como
-dependencia porque su grafo y sus resúmenes viven fuera de pgvector y de las RLS/ACL. El riesgo propio de un grafo
-es la **fuga entre documentos con ACL distinta**: una entidad o un resumen global construido con el documento A
-(público) y el B (restringido) revela B a quien solo puede leer A.
+**Context.** ADR-005 leaves GraphRAG off by default; ADR-004/018 reject LightRAG/RAG-Anything as a dependency because
+their graph and summaries live outside pgvector and the RLS/ACL. A graph's own risk is **leakage between documents with
+different ACLs**: an entity or a global summary built from document A (public) and B (restricted) reveals B to someone
+who can only read A.
 
-**Decisión.** Se toman las ideas de LightRAG (extracción de entidades/relaciones por chunk, modos local/global/
-hybrid) y se implementan en Postgres (`db/migrations/0005_graphrag.sql`) bajo este modelo de ACL:
+**Decision.** The ideas of LightRAG (per-chunk entity/relation extraction, local/global/hybrid modes) are adopted and
+implemented in Postgres (`db/migrations/0005_graphrag.sql`) under this ACL model:
 
-- **Procedencia obligatoria.** `entities` y `relations` guardan solo su clave (`normalized_name`; par de extremos),
-  función determinista de cualquiera de sus menciones. Nombre visible, tipo, descripción, keywords y peso viven en
-  `entity_sources` / `relation_sources`: una fila por chunk fuente con el `document_id` del chunk. Un trigger
-  impide atar una procedencia a un documento/tenant/workspace distinto del de su chunk.
-- **Visibilidad derivada.** RLS forzada en las 4 tablas. Una fuente es visible si el usuario puede leer el
-  documento de su chunk (misma regla que `chunks`); una entidad/relación es visible solo si tiene **al menos una
-  fuente visible** (EXISTS explícito contra `document_acl`, sin depender de RLS anidada). El worker ve por tenant;
-  `ragsis_app` solo lee.
-- **Nada global.** No hay descripciones fusionadas, resúmenes de comunidad ni grados precomputados. Todo lo
-  servible —nombre mostrado, descripción agregada, puntajes, grado de vecinos, nombres puente— se calcula en la
-  consulta solo con fuentes visibles para ese usuario. Una entidad compartida entre A y B, vista por un lector de A,
-  solo muestra menciones de A.
-- **Borrado.** Las fuentes caen en cascada con su chunk (borrado, reindexado full, fallo); el worker recolecta
-  las claves huérfanas (ya invisibles) en el mismo commit.
-- **Extracción** (`ragsis_ingest/graph.py`) tras el chunking, un `AIGateway.generate` por chunk (texto/tabla)
-  con `AI_GRAPH_MODEL` y la política del tenant: sin modelo permitido (p. ej. `restricted` con modelo cloud) o con
-  el proveedor caído → sin grafo y advertencia en la auditoría (`graph_skipped_policy`), la ingesta sigue. Solo se
-  aceptan menciones que aparecen literalmente en el chunk y relaciones entre ellas. `local-graph-heuristic@v1`
-  (nombres propios y siglas) es la ruta determinista offline (ADR-010).
-- **Consulta** (`retrieval.graph_search`): *local* = entidades que coinciden con la pregunta + relaciones y vecinos
-  a 1 salto; *global* = relaciones que coinciden por keywords/descripción + sus extremos; *hybrid* = ambas. Cada
-  lista de chunks entra al mismo RRF que vector + full-text y vuelve a pasar por todos los filtros (tenant,
-  workspace, activo, versión vigente, ACL, `as_of`). Las **citas siguen siendo chunks** y el verificador no cambia.
-- **Evidencia de salto.** Puente = entidad mencionada en la evidencia fuerte cuya mención visible (descripción de
-  esa fuente) es la más pertinente a la pregunta sin estar ya nombrada en ella (máx. 3). Un chunk que llega solo
-  por el grafo y no supera el umbral entra (máx. 2) únicamente si menciona un puente. Sin evidencia fuerte se
-  abstiene igual que antes. Los nombres puente (`GenerationRequest.hints`) solo los usa el generador extractivo
-  local para elegir la oración del segundo salto (debe compartir algún término con la pregunta); no entran al
-  prompt de un LLM.
-- **Habilitación.** `plans.graph_enabled` (team=false; business/private=true) con override
-  `organizations.graph_mode` (`inherit|on|off`) vía `PATCH /v1/organizations/:org/settings` (admin, auditado). La
-  API firma el claim `graph`; el cliente solo elige `mode` (`auto|off|local|global|hybrid`). Activarlo no
-  reprocesa: backfill con `make reindex ARGS="--org <uuid> --mode graph"`.
+- **Mandatory provenance.** `entities` and `relations` store only their key (`normalized_name`; pair of endpoints), a
+  deterministic function of any of their mentions. Display name, type, description, keywords and weight live in
+  `entity_sources` / `relation_sources`: one row per source chunk with the chunk's `document_id`. A trigger prevents
+  tying a provenance row to a document/tenant/workspace different from that of its chunk.
+- **Derived visibility.** RLS forced on the 4 tables. A source is visible if the user can read the document of its chunk
+  (same rule as `chunks`); an entity/relation is visible only if it has **at least one visible source** (explicit
+  EXISTS against `document_acl`, without relying on nested RLS). The worker sees per tenant; `ragsis_app` only reads.
+- **Nothing global.** There are no merged descriptions, community summaries or precomputed degrees. Everything servable
+  (display name, aggregated description, scores, neighbor degree, bridge names) is computed at query time using only
+  sources visible to that user. An entity shared between A and B, seen by a reader of A, only shows mentions from A.
+- **Deletion.** Sources cascade with their chunk (deletion, full reindex, failure); the worker collects the orphaned
+  keys (already invisible) in the same commit.
+- **Extraction** (`ragsis_ingest/graph.py`) after chunking, one `AIGateway.generate` per chunk (text/table) with
+  `AI_GRAPH_MODEL` and the tenant's policy: with no allowed model (e.g. `restricted` with a cloud model) or with the
+  provider down → no graph and a warning in the audit (`graph_skipped_policy`); ingestion continues. Only mentions that
+  appear literally in the chunk and relations between them are accepted. `local-graph-heuristic@v1` (proper nouns and
+  acronyms) is the deterministic offline path (ADR-010).
+- **Query** (`retrieval.graph_search`): *local* = entities that match the question + relations and 1-hop neighbors;
+  *global* = relations that match by keywords/description + their endpoints; *hybrid* = both. Each list of chunks enters
+  the same RRF as vector + full-text and goes through all the filters again (tenant, workspace, active, current version,
+  ACL, `as_of`). **Citations are still chunks** and the verifier does not change.
+- **Hop evidence.** Bridge = entity mentioned in the strong evidence whose visible mention (description from that
+  source) is the most relevant to the question without already being named in it (max. 3). A chunk that arrives only
+  through the graph and does not pass the threshold enters (max. 2) only if it mentions a bridge. Without strong
+  evidence it abstains as before. Bridge names (`GenerationRequest.hints`) are used only by the local extractive
+  generator to choose the second-hop sentence (it must share some term with the question); they do not enter an LLM
+  prompt.
+- **Enablement.** `plans.graph_enabled` (team=false; business/private=true) with the override
+  `organizations.graph_mode` (`inherit|on|off`) through `PATCH /v1/organizations/:org/settings` (admin, audited). The
+  API signs the `graph` claim; the client only chooses `mode` (`auto|off|local|global|hybrid`). Enabling it does not
+  reprocess: backfill with `make reindex ARGS="--org <uuid> --mode graph"`.
 
-**Pruebas.** `tests/python/test_graph_acl.py`: un usuario sin el grupo no ve entidades/relaciones/procedencia
-derivadas solo del documento restringido (ni pidiéndolas por nombre), la entidad compartida solo agrega menciones
-visibles, `graph_search` (3 modos) y los puentes nunca alcanzan sus chunks aunque la app pasara principals de más
-(la RLS de sesión manda), la respuesta no filtra su contenido, aislamiento entre tenants y control positivo con el
-grupo. Golden set: preguntas multi-hop (q19–q21, q23) y ACL multi-hop (q22); `multi_hop_accuracy` informativa.
+**Tests.** `tests/python/test_graph_acl.py`: a user without the group does not see entities/relations/provenance derived
+only from the restricted document (not even by asking for them by name), the shared entity only adds visible mentions,
+`graph_search` (3 modes) and the bridges never reach their chunks even if the app passed extra principals (session RLS
+rules), the answer does not leak its content, tenant isolation and a positive control with the group. Golden set:
+multi-hop questions (q19–q21, q23) and multi-hop ACL (q22); `multi_hop_accuracy` is informational.
 
-**Revisar cuando** el golden set real mida multi-hop frente al híbrido (criterio de ADR-005), el costo de
-extracción por LLM lo exija (cuotas por plan), o se necesite emparejar entidades por embeddings por fuente
-(hoy coinciden por full-text) o desambiguación de homónimos.
+**Revisit when** the real golden set measures multi-hop against hybrid (ADR-005 criterion), the LLM extraction cost
+demands it (quotas per plan), or entities need to be matched by embeddings per source (today they match by full-text) or
+homonym disambiguation is needed.
 
-## ADR-020 · Onboarding sectorial y Agent Studio (hitos A, B, D de la especificación de agentes)
+## ADR-020 · Sector onboarding and Agent Studio (milestones A, B, D of the agent specification)
 
-**Contexto.** `Especificacion_Claude_Onboarding_Agentes_RAG.md` v1.0 pide onboarding adaptativo por sector y un
-Agent Studio con agentes declarativos, versionados y con herramientas gobernadas, antes de workflows, firma y envío.
-ADR-007 (retrieval read-only en el MVP) sigue vigente para todo lo que tenga efectos reales.
+**Context.** `Especificacion_Claude_Onboarding_Agentes_RAG.md` v1.0 (the onboarding and agents specification) asks for
+adaptive onboarding by sector and an Agent Studio with declarative, versioned agents and governed tools, before
+workflows, signatures and sending. ADR-007 (read-only retrieval in the MVP) remains in force for anything with real
+effects.
 
-**Decisión.**
-- **Mismo monolito, límites lógicos.** Rutas nuevas en la API Fastify (`routes/onboarding.ts`, `routes/agents.ts`);
-  Policy Engine puro en `lib/policy.ts`; presets en `lib/presets.ts`; sandbox en `lib/agent-sandbox.ts`. Sin servicio
-  `agent-runtime` todavía (P1-01): no hay planificador LLM ni acciones externas que lo justifiquen.
-- **Datos** (`0006_onboarding_agent_studio.sql`): `organization_profiles`, `onboarding_sessions` (máquina
-  `NOT_STARTED → PROFILE_STARTED → DATA_SOURCES → SECURITY → WORKSPACE_READY → PILOT_TESTED → COMPLETED`, más `PAUSED`
-  y `NEEDS_REVIEW`), `agents` (draft mutable + `draft_hash`), `agent_versions` y `agent_test_runs`. RLS forzada por
-  tenant en todas; versiones y pruebas son **append-only** para `ragsis_app` (solo `SELECT, INSERT`), y un trigger
-  impide atar una versión/prueba a un agente de otro tenant.
-- **Knowledge Spaces = workspaces existentes.** No se duplica el modelo: los espacios sugeridos se crean como
-  workspaces con su ACL actual. El onboarding nunca sobrescribe espacios (match por nombre sin mayúsculas) ni agentes
-  (match por slug).
-- **Presets deterministas y versionados en código** (`legal-v1`, …): (sector + objetivos + sensibilidad + tipos de
-  archivo + despliegue + plan) → espacios, perfil RAG, agentes sugeridos, política de modelo y avisos. El snapshot
-  (`template_version` + recomendación) se guarda en la sesión. Sin LLM en este camino.
-- **Política de datos.** El paso 5 solo **endurece** `organizations.data_class` (nunca la relaja); `restricted` +
-  modelos cloud se rechaza. `restricted`, `local_only` u on-prem ⇒ agentes con perfil de modelo `local`.
-- **Agentes declarativos** (`AgentConfig`, Zod estricto): identidad, instrucciones, conocimiento, perfil de modelo
-  (no marca), allowlist de herramientas, autonomía (`suggest | draft_only | safe_execute | approval_required`),
-  disparadores, límites y casos de prueba. Hash canónico (claves ordenadas) para atar pruebas y versiones.
-- **Policy Engine deny-by-default.** Catálogo con riesgo y disponibilidad: firma, envío, email, borrado y cambio de
-  ACL existen en el catálogo pero **no están disponibles** (fase F o prohibidas en el MVP) y nunca pasan validación.
-  Conocimiento = intersección con los workspaces del diseñador (y del ejecutor en runtime), nunca ampliación.
-  Instrucciones que piden ignorar políticas, saltar aprobaciones, firmar en nombre de alguien o conceder permisos se
-  rechazan (heurística conservadora es/en). Solo disparador `manual` hasta workflows.
-- **Sandbox.** `search_documents` se ejecuta de verdad por `runRagQuery` (la misma ruta gobernada que `/query`:
-  cuota, rate limit, token interno con principals del usuario) sobre espacios efectivos; toda otra herramienta se
-  simula (`mock`) y queda en la traza. El texto recuperado nunca decide herramientas ni argumentos. La pregunta se
-  persiste solo como SHA-256 y la traza sin respuesta ni fragmentos.
-- **Publicación.** Requiere validación sin errores y un test `passed` sobre el **hash exacto** del draft; versión
-  semántica, changelog, diff de permisos (`permissions_expanded`) en la auditoría. Publica el owner del agente o un
-  admin; `safe_execute` con escrituras exige admin. Rollback revalida contra la política vigente. Las denegaciones se
-  auditan (`agent.publish` / `deny`) en una transacción que sí hace commit.
-- **Roles.** Se mantienen `owner/admin/member/viewer`: admin ≈ Knowledge Manager/Admin; member ≈ Agent Designer
-  (crea drafts propios); viewer solo lee agentes publicados. Reviewer/Approver/Signatory llegan con el hito E.
+**Decision.**
+- **Same monolith, logical boundaries.** New routes in the Fastify API (`routes/onboarding.ts`, `routes/agents.ts`); a
+  pure Policy Engine in `lib/policy.ts`; presets in `lib/presets.ts`; sandbox in `lib/agent-sandbox.ts`. No
+  `agent-runtime` service yet (P1-01): there is no LLM planner or external action to justify it.
+- **Data** (`0006_onboarding_agent_studio.sql`): `organization_profiles`, `onboarding_sessions` (state machine
+  `NOT_STARTED → PROFILE_STARTED → DATA_SOURCES → SECURITY → WORKSPACE_READY → PILOT_TESTED → COMPLETED`, plus `PAUSED`
+  and `NEEDS_REVIEW`), `agents` (mutable draft + `draft_hash`), `agent_versions` and `agent_test_runs`. RLS forced per
+  tenant on all of them; versions and tests are **append-only** for `ragsis_app` (only `SELECT, INSERT`), and a trigger
+  prevents tying a version/test to an agent of another tenant.
+- **Knowledge Spaces = existing workspaces.** The model is not duplicated: suggested spaces are created as workspaces
+  with their current ACL. Onboarding never overwrites spaces (case-insensitive name match) or agents (slug match).
+- **Deterministic presets versioned in code** (`legal-v1`, …): (sector + goals + sensitivity + file types + deployment +
+  plan) → spaces, RAG profile, suggested agents, model policy and notices. The snapshot (`template_version` +
+  recommendation) is stored in the session. No LLM on this path.
+- **Data policy.** Step 5 only **tightens** `organizations.data_class` (never relaxes it); `restricted` + cloud models is
+  rejected. `restricted`, `local_only` or on-prem ⇒ agents with the `local` model profile.
+- **Declarative agents** (`AgentConfig`, strict Zod): identity, instructions, knowledge, model profile (not brand),
+  tool allowlist, autonomy (`suggest | draft_only | safe_execute | approval_required`), triggers, limits and test cases.
+  Canonical hash (sorted keys) to tie tests and versions.
+- **Deny-by-default Policy Engine.** Catalog with risk and availability: signing, sending, email, deletion and ACL
+  change exist in the catalog but are **not available** (phase F or forbidden in the MVP) and never pass validation.
+  Knowledge = intersection with the designer's workspaces (and the executor's at runtime), never an expansion.
+  Instructions that ask to ignore policies, skip approvals, sign on someone's behalf or grant permissions are rejected
+  (conservative es/en heuristic). Only the `manual` trigger until workflows.
+- **Sandbox.** `search_documents` really runs through `runRagQuery` (the same governed path as `/query`: quota, rate
+  limit, internal token with the user's principals) over effective spaces; every other tool is simulated (`mock`) and
+  recorded in the trace. Retrieved text never decides tools or arguments. The question is persisted only as a SHA-256
+  and the trace has no answer or fragments.
+- **Publishing.** Requires validation with no errors and a `passed` test on the **exact hash** of the draft; semantic
+  version, changelog, permission diff (`permissions_expanded`) in the audit. The agent owner or an admin publishes;
+  `safe_execute` with writes requires an admin. Rollback revalidates against the current policy. Denials are audited
+  (`agent.publish` / `deny`) in a transaction that does commit.
+- **Roles.** `owner/admin/member/viewer` are kept: admin ≈ Knowledge Manager/Admin; member ≈ Agent Designer (creates own
+  drafts); viewer only reads published agents. Reviewer/Approver/Signatory arrive with milestone E.
 
-**Pruebas.** `apps/api/test/studio.test.ts` (22): reglas puras del Policy Engine y presets; flujo legal completo del
-onboarding; caso 10 (Legal → Mixto propone sin sobrescribir); caso 3 (publicar sin test se deniega y audita; test;
-1.0.0); escrituras simuladas; herramienta no disponible bloquea; caso 8 parcial (un miembro no amplía alcance y no hay
-retrieval sobre espacios ajenos); visibilidad de drafts; viewer sin creación; rollback/pausa; inmutabilidad de
-`agent_versions` en la BD.
+**Tests.** `apps/api/test/studio.test.ts` (22): pure Policy Engine and preset rules; full legal onboarding flow; case 10
+(Legal → Mixed proposes without overwriting); case 3 (publishing without a test is denied and audited; test; 1.0.0);
+simulated writes; an unavailable tool blocks; partial case 8 (a member does not widen scope and there is no retrieval
+over foreign spaces); draft visibility; viewer cannot create; rollback/pause; immutability of `agent_versions` in the
+DB.
 
-**Revisar cuando** llegue el hito E (workflows durables + Approval Inbox + roles Reviewer/Approver), cuando un agente
-necesite ejecutar fuera del sandbox (runtime P1-01 con presupuesto real y trazas por paso), o cuando la heurística de
-instrucciones produzca falsos positivos medibles (sustituir por clasificador evaluado).
+**Revisit when** milestone E arrives (durable workflows + Approval Inbox + Reviewer/Approver roles), when an agent needs
+to run outside the sandbox (P1-01 runtime with a real budget and per-step traces), or when the instruction heuristic
+produces measurable false positives (replace with an evaluated classifier).
 
-## ADR-021 · Calificación comercial en el alta (¿es buen cliente?)
+## ADR-021 · Commercial qualification at sign-up (is this a good customer?)
 
-**Contexto.** El onboarding de ADR-020 configura el producto, pero no dice si la organización encaja con el cliente
-objetivo ni de dónde llegó. Perfil objetivo: 15–150 empleados, 500+ documentos, 5–30 usuarios iniciales, compra decidida
-por gerencia con presupuesto, y señales de dolor (búsquedas repetidas, carpetas/servidores/SharePoint/Drive, información
-confidencial, procesos con varias fuentes, pérdida medible).
+**Context.** The onboarding of ADR-020 configures the product, but does not say whether the organization fits the target
+customer or where it came from. Target profile: 15–150 employees, 500+ documents, 5–30 initial users, purchase decided
+by management with a budget, and pain signals (repeated searches, folders/servers/SharePoint/Drive, confidential
+information, processes with several sources, measurable loss).
 
-**Decisión.**
-- **Dónde vive cada cosa.** *Fuera de la app*, en la pantalla de alta (`/app`, antes de que exista el tenant): la
-  calificación comercial, que es información sobre la empresa — sector, tamaño de equipo, quién decide la compra,
-  usuarios iniciales, volumen documental, dónde viven los documentos, señales de dolor y canal de origen (Google,
-  LinkedIn, Instagram, X, YouTube, Facebook, TikTok, WhatsApp, recomendación, evento). Viaja en
-  `POST /v1/organizations` (`qualification`, validada con Zod estricto); el catálogo sectorial sale de
-  `GET /v1/onboarding/catalog`. *Dentro de la app*, en Setup: configuración del producto — país/zona horaria, objetivos,
-  tipos de documento, privacidad y residencia, espacios, agentes, prueba controlada y activación. El wizard interno ya
-  no acepta ni pide campos comerciales.
-- **Sin renumerar pasos.** Si el alta trae sector y tamaño, el paso 2 nace resuelto y la recomendación sectorial ya
-  está calculada; el wizard salta al primer paso pendiente. El paso 2 sigue editable desde Setup.
-- **Sector Logística** y, por sector, **enfoque RAG recomendado y despliegue probable** (`SectorTemplate.approach`,
-  `.deployment`). Se muestran como sugerencia; **nunca se preselecciona** la privacidad. Lo aún no construido (SQL
-  controlado, conectores operativos) se marca `planned`. «Cloud privado» y «cloud dedicado» comparten el valor
-  `private_cloud`; solo cambia la etiqueta.
-- **Puntaje determinista e interno** (`lib/lead-fit.ts`, 0–100, `strong ≥ 70`, `possible ≥ 40`, `weak`). Se recalcula en
-  cada cambio de perfil y se guarda en `organization_profiles.lead_score/lead_tier` para operaciones. **La API no lo
-  devuelve al cliente.** Un perfil sin respuestas comerciales queda sin calificar (`NULL`), no `weak`.
-- **Cortes de tamaño** (`0009_team_size_bins.sql`): `1-14 / 15-50 / 51-150 / 151-500 / 500+`, alineados al rango 15–150. Los valores antiguos se reasignaron al corte más cercano (aproximado en los bordes).
+**Decision.**
+- **Where each thing lives.** *Outside the app*, on the sign-up screen (`/app`, before the tenant exists): the commercial
+  qualification, which is information about the company — sector, team size, who decides the purchase, initial users,
+  document volume, where the documents live, pain signals and origin channel (Google, LinkedIn, Instagram, X, YouTube,
+  Facebook, TikTok, WhatsApp, referral, event). It travels in `POST /v1/organizations` (`qualification`, validated with
+  strict Zod); the sector catalog comes from `GET /v1/onboarding/catalog`. *Inside the app*, in Setup: product
+  configuration — country/time zone, goals, document types, privacy and residency, spaces, agents, controlled test and
+  activation. The internal wizard no longer accepts or asks for commercial fields.
+- **No step renumbering.** If sign-up brings sector and size, step 2 is born resolved and the sector recommendation is
+  already computed; the wizard jumps to the first pending step. Step 2 remains editable from Setup.
+- **Logistics sector** and, per sector, **recommended RAG approach and likely deployment** (`SectorTemplate.approach`,
+  `.deployment`). They are shown as a suggestion; privacy is **never preselected**. What is not yet built (controlled
+  SQL, operational connectors) is marked `planned`. "Private cloud" and "dedicated cloud" share the value
+  `private_cloud`; only the label changes.
+- **Deterministic, internal score** (`lib/lead-fit.ts`, 0–100, `strong ≥ 70`, `possible ≥ 40`, `weak`). It is recomputed
+  on every profile change and stored in `organization_profiles.lead_score/lead_tier` for operations. **The API does not
+  return it to the client.** A profile without commercial answers stays unqualified (`NULL`), not `weak`.
+- **Size bins** (`0009_team_size_bins.sql`): `1-14 / 15-50 / 51-150 / 151-500 / 500+`, aligned to the 15–150 range. Old
+  values were reassigned to the nearest bin (approximate at the edges).
 
-**Revisar cuando** haya datos de conversión reales por canal y tier para recalibrar pesos y alinear los cortes de tamaño.
+**Revisit when** there is real conversion data per channel and tier to recalibrate weights and align the size bins.
 
-## ADR-022 · Workflows durables con human-in-the-loop (hito E de la especificación de agentes)
+## ADR-022 · Durable workflows with human-in-the-loop (milestone E of the agent specification)
 
-**Contexto.** Hito E (P1-02 runner + Approval Inbox, P1-03 delegación limitada, P1-04 trazas): encadenar agentes
-publicados con revisión y aprobación humana, sin acciones externas todavía (firma/envío = hito F).
+**Context.** Milestone E (P1-02 runner + Approval Inbox, P1-03 bounded delegation, P1-04 traces): chain published agents
+with human review and approval, with no external actions yet (signing/sending = milestone F).
 
-**Decisión.**
-- **DSL declarativo** (`lib/workflow-dsl.ts`, Zod estricto): nodos `START | AGENT_TASK | HUMAN_REVIEW | APPROVAL_GATE |
-  CONDITION | EXTERNAL_ACTION | WAIT_EVENT | END`, aristas `[from, to]` o `[cond, to, "true"|"false"]` y políticas.
-  `deny_on_reject` y `no_external_action_without_approval` son literales `true` (no se pueden apagar). Validación pura:
-  un START, DAG sin ciclos, todo alcanzable, una salida por paso (sin paralelismo en v1), condición con ramas
-  true/false y fuente previa, agentes publicados y activos, máx. 3 hops por camino (configurable 1–5), toda acción
-  externa precedida de un gate. `EXTERNAL_ACTION` y `WAIT_EVENT` existen en el DSL pero no validan hasta la fase F.
-- **Versionado.** `workflows` (draft mutable) + `workflow_versions` inmutables; al publicar cada `AGENT_TASK` queda
-  **fijado** a la versión publicada vigente del agente (`agent_version_id`): un run nunca cambia de agente a mitad.
-- **Runner durable en Postgres** (`lib/workflow-runner.ts`). Cada transición se persiste con `pg_advisory_xact_lock`
-  por run antes de la siguiente; los eventos (`WORKFLOW_RUN_STARTED`, `AGENT_RUN_STARTED/COMPLETED`,
-  `APPROVAL_REQUESTED/DECIDED`, `WORKFLOW_COMPLETED/FAILED/CANCELLED`) salen por **outbox** en la misma transacción
-  (esquema de la sección 14: `event_id`, `correlation_id`, `aggregate_id`, `schema_version`, hash del payload). Un
-  `AGENT_TASK` marca `RUNNING`, ejecuta fuera de la transacción y vuelve a persistir; al arrancar la API,
-  `resumePending()` (función `SECURITY DEFINER` que solo devuelve ids) reanuda runs a medias. Las esperas humanas no
-  ocupan proceso (`WAITING_HUMAN`). En AWS esta clase es la costura para Step Functions Standard (callback de
-  aprobación) o un consumidor SQS; el despacho del outbox a EventBridge es un adaptador pendiente.
-- **Ejecución de agentes en runs** (`executeAgent`, compartido con el sandbox): permisos del **iniciador resueltos de
-  nuevo en cada paso**; `search_documents` real con su ACL; las escrituras quedan como **propuestas sin efecto** (los
-  efectos los autoriza un paso humano, nunca el agente). Reintentos con backoff solo para errores recuperables
-  (RAG caído/limitado) hasta `max_retries` del agente, sin duplicar el paso ni el evento.
-- **Delegación limitada.** El agente siguiente opera sobre (sus espacios ∩ acceso del iniciador) y solo recibe
-  fragmentos de esos espacios (`context_received.citations_withheld`); sin espacios en común ⇒ `delegation_denied`
-  sin retrieval. Presupuesto por run (`max_agent_calls`, `max_retrieval_calls`): agotado ⇒ `FAILED budget_exhausted`
-  y aviso en el Inbox del iniciador.
-- **Aprobaciones con binding.** `approvals.binding` = run, nodo, acción siguiente, propósito, `{document_id,
-  version_id}` citados y hash de las salidas; `action_hash` = SHA-256 canónico. Decidir exige: rol funcional asignado,
-  el **hash exacto** que la pantalla mostró, vigencia, que ninguna versión citada haya cambiado
-  (`app.current_versions`, solo ids) y **separación de funciones** (el iniciador no aprueba su run; desactivable por
-  workflow con aviso). Rechazo ⇒ `CANCELLED`, nada aguas abajo corre. Cambio de versión ⇒ `REVOKED` + `FAILED
-  approval_invalidated`. Vencida ⇒ `EXPIRED` (perezoso al listar). Denegaciones auditadas con commit.
-- **Roles funcionales** (`functional_roles`: reviewer, approver, signatory, auditor, agent_designer,
-  knowledge_manager), asignados por admin en *Gobierno → Roles*, además del rol de organización.
-- **Visibilidad y redacción.** Un run lo ven iniciador, admin, auditor o quien tiene una aprobación asignada por rol.
-  Las salidas de agente se muestran solo si quien mira puede leer **todos** los documentos citados (RLS); si no,
-  respuesta y fragmentos se ocultan y se informa cuántas citas.
-- **Idempotencia.** `POST …/runs` exige `Idempotency-Key` (único por tenant); repetir devuelve el mismo run (200).
+**Decision.**
+- **Declarative DSL** (`lib/workflow-dsl.ts`, strict Zod): nodes `START | AGENT_TASK | HUMAN_REVIEW | APPROVAL_GATE |
+  CONDITION | EXTERNAL_ACTION | WAIT_EVENT | END`, edges `[from, to]` or `[cond, to, "true"|"false"]` and policies.
+  `deny_on_reject` and `no_external_action_without_approval` are literal `true` (they cannot be turned off). Pure
+  validation: one START, a DAG without cycles, everything reachable, one exit per step (no parallelism in v1), a
+  condition with true/false branches and a prior source, published and active agents, max. 3 hops per path
+  (configurable 1–5), every external action preceded by a gate. `EXTERNAL_ACTION` and `WAIT_EVENT` exist in the DSL but
+  do not validate until phase F.
+- **Versioning.** `workflows` (mutable draft) + immutable `workflow_versions`; on publish each `AGENT_TASK` is **pinned**
+  to the agent's current published version (`agent_version_id`): a run never changes agent midway.
+- **Durable runner on Postgres** (`lib/workflow-runner.ts`). Each transition is persisted with a per-run
+  `pg_advisory_xact_lock` before the next one; events (`WORKFLOW_RUN_STARTED`, `AGENT_RUN_STARTED/COMPLETED`,
+  `APPROVAL_REQUESTED/DECIDED`, `WORKFLOW_COMPLETED/FAILED/CANCELLED`) go out through an **outbox** in the same
+  transaction (section 14 schema: `event_id`, `correlation_id`, `aggregate_id`, `schema_version`, payload hash). An
+  `AGENT_TASK` marks `RUNNING`, executes outside the transaction and persists again; when the API starts,
+  `resumePending()` (a `SECURITY DEFINER` function that only returns ids) resumes half-finished runs. Human waits do not
+  occupy a process (`WAITING_HUMAN`). On AWS this class is the seam for Step Functions Standard (approval callback) or an
+  SQS consumer; dispatching the outbox to EventBridge is a pending adapter.
+- **Agent execution in runs** (`executeAgent`, shared with the sandbox): permissions of the **initiator re-resolved at
+  every step**; real `search_documents` with their ACL; writes remain as **proposals with no effect** (effects are
+  authorized by a human step, never by the agent). Retries with backoff only for recoverable errors (RAG down/limited)
+  up to the agent's `max_retries`, without duplicating the step or the event.
+- **Bounded delegation.** The next agent operates on (its spaces ∩ the initiator's access) and only receives fragments
+  from those spaces (`context_received.citations_withheld`); no spaces in common ⇒ `delegation_denied` without
+  retrieval. Budget per run (`max_agent_calls`, `max_retrieval_calls`): exhausted ⇒ `FAILED budget_exhausted` and a
+  notice in the initiator's Inbox.
+- **Approvals with binding.** `approvals.binding` = run, node, next action, purpose, cited `{document_id, version_id}` and
+  hash of the outputs; `action_hash` = canonical SHA-256. Deciding requires: an assigned functional role, the **exact
+  hash** the screen showed, validity, that no cited version has changed (`app.current_versions`, ids only) and
+  **separation of duties** (the initiator does not approve their own run; can be disabled per workflow with a notice).
+  Rejection ⇒ `CANCELLED`, nothing downstream runs. Version change ⇒ `REVOKED` + `FAILED approval_invalidated`. Past due
+  ⇒ `EXPIRED` (lazy on listing). Denials are audited with commit.
+- **Functional roles** (`functional_roles`: reviewer, approver, signatory, auditor, agent_designer, knowledge_manager),
+  assigned by an admin in *Governance → Roles*, in addition to the organization role.
+- **Visibility and redaction.** A run is seen by the initiator, an admin, an auditor or whoever has an approval assigned by
+  role. Agent outputs are shown only if the viewer can read **all** cited documents (RLS); otherwise the answer and
+  fragments are hidden and the number of citations is reported.
+- **Idempotency.** `POST …/runs` requires `Idempotency-Key` (unique per tenant); repeating returns the same run (200).
 
-**Pruebas.** `apps/api/test/workflows.test.ts` (15): DSL (agente sin publicar, ciclo, fase F, hops, condición,
-políticas fijas); roles; pin de versiones e idempotencia; flujo feliz con SoD, hash viejo y secuencia de eventos;
-caso 4 (rechazo detiene); caso 5 (V2→V3 invalida); aprobador sin acceso ve la tarea pero no el contenido; caso 8
-(delegación denegada sin retrieval + fragmentos retenidos); caso 9 (budget); reintento sin duplicar; agente pausado;
-aislamiento e inmutabilidad de `workflow_versions`.
+**Tests.** `apps/api/test/workflows.test.ts` (15): DSL (unpublished agent, cycle, phase F, hops, condition, fixed
+policies); roles; version pinning and idempotency; happy path with SoD, stale hash and event sequence; case 4 (rejection
+stops); case 5 (V2→V3 invalidates); an approver without access sees the task but not the content; case 8 (delegation
+denied without retrieval + withheld fragments); case 9 (budget); retry without duplicating; paused agent; isolation and
+immutability of `workflow_versions`.
 
-**Revisar cuando** haya más de una réplica de la API (lease por paso o Step Functions), llegue la fase F (gates
-atados a `EXTERNAL_ACTION`, `WAIT_EVENT` con webhooks verificados) o se necesiten ramas paralelas.
+**Revisit when** there is more than one API replica (lease per step or Step Functions), phase F arrives (gates tied to
+`EXTERNAL_ACTION`, `WAIT_EVENT` with verified webhooks) or parallel branches are needed.
 
-## ADR-023 · Firma electrónica y distribución controlada (hito F de la especificación de agentes)
+## ADR-023 · E-signature and controlled distribution (milestone F of the agent specification)
 
-**Contexto.** P2-01 (adapter de firma) y P2-02 (compartición). Reglas de la especificación: la IA nunca firma ni
-simula consentimiento; `SIGNED` solo por evento verificado del proveedor; aprobación atada a hash, versión,
-destinatarios, acción y vigencia; acciones externas idempotentes; destinatarios en allowlist con caducidad y revocación.
+**Context.** P2-01 (signature adapter) and P2-02 (sharing). Rules from the specification: the AI never signs or simulates
+consent; `SIGNED` only by a verified provider event; approval tied to hash, version, recipients, action and validity;
+idempotent external actions; recipients on an allowlist with expiration and revocation.
 
-**Decisión.**
-- **Adapter `ESignProvider`** (`lib/esign.ts`): `createDraft / send / void / verify / parse / fetchEvidence`.
-  - `docusign`: eSignature REST v2.1 con JWT grant (`jose`, RS256) y Connect con HMAC `X-DocuSign-Signature-*`;
-    sobres creados con `status: "created"` (borrador) y enviados con `PUT status: "sent"`; evidencia = PDF combinado +
-    certificado. Connect no trae id de evento: se deriva `sha256(envelopeId|event|generatedDateTime)`. **Escrito contra
-    la documentación pública; pendiente de validar en una cuenta sandbox real.**
-  - `local` (solo desarrollo, prohibido en producción): la ceremonia ocurre en la app — el firmante, autenticado con el
-    email del sobre, escribe su nombre y consiente — y el proveedor emite el webhook firmado (HMAC + timestamp ±5 min)
-    por **el mismo camino de verificación** que un proveedor real. El certificado registra firmantes, consentimiento, IP
-    y hashes; el PDF no se estampa y se rotula como sin validez legal.
-  - `disabled`: valor por defecto en producción sin configuración; los pasos de firma fallan con `esign_disabled`.
-- **Nodos de workflow** (`EXTERNAL_ACTION`, `WAIT_EVENT SIGNATURE_COMPLETED`) ejecutados por el orquestador, nunca por un
-  agente (los agentes con herramientas de firma/compartir solo proponen). Validación del grafo: `create_signature_draft`
-  exige una revisión humana previa y es único por run; `send_signature_envelope`, `share_document` y `send_email` exigen
-  un `APPROVAL_GATE` **inmediatamente antes**; el envío necesita un borrador previo y la espera un envío previo.
-- **Binding de la acción.** El gate anterior a una acción externa incluye en su binding (y en el hash) el detalle de lo
-  que autoriza: el sobre (id, firmantes, documentos con SHA-256) o los destinatarios normalizados, el artefacto (copia
-  firmada o versiones aprobadas) y la caducidad. Al ejecutar se re-verifica: aprobación `APPROVED`, más reciente que
-  `approval_max_age_hours`, coincidencia exacta con el sobre/destinatarios y versiones de documento vigentes (si
-  cambiaron, el sobre se anula). Aprobar el envío exige MFA (`amr` del IdP) si el tenant lo pide.
-- **Ciclo de vida por versión** (`document_lifecycle`): una revisión humana aprobada ⇒ `APPROVED`; envío ⇒
-  `SIGNATURE_PENDING`; evento verificado de completado ⇒ `SIGNED`; compartir ⇒ `DISTRIBUTED`; rechazo/anulación del
-  sobre ⇒ vuelve a `APPROVED`. Solo se prepara una firma sobre versiones `APPROVED`, leídas con la ACL del iniciador y
-  con el SHA-256 verificado contra el registrado en la ingesta.
-- **Webhooks** (`POST /v1/webhooks/signatures/:provider`, cuerpo crudo): HMAC antes de leer nada; sobre localizado por
-  función `SECURITY DEFINER` que solo devuelve ids; `webhook_inbox (provider, event_id)` garantiza **un efecto por
-  evento** (caso E2E 6); transiciones monótonas (`DRAFT < SENT < DELIVERED < COMPLETED|DECLINED|VOIDED`, terminales
-  inmutables); la evidencia se descarga antes de consumir el evento (si falla, el proveedor reintenta). Un evento
-  terminal reanuda o termina el run que espera (`signal`).
-- **Compartición** (`shares`): un enlace por artefacto, token de 256 bits del que solo se guarda el SHA-256; el token no
-  se registra: "Get link" **rota** el token y lo muestra una vez (iniciador/admin). Caducidad ≤ `share_max_days`,
-  revocación inmediata, acceso público por función `SECURITY DEFINER` que valida y **audita cada intento**, y entrega
-  una URL prefirmada de 60 s. Destinatarios solo de `allowed_domains` (exacto o subdominio; vacío bloquea todo),
-  verificados al iniciar el run y otra vez al ejecutar (caso E2E 7, denegación auditada como `share.denied`); DLP:
-  documentos `restricted` nunca salen.
-- **Email** (`send_email`) sigue no disponible: el adapter SES añadiría una dependencia nueva (`@aws-sdk/client-sesv2`);
-  hasta entonces el enlace se entrega manualmente desde *Signatures → Shared links*.
+**Decision.**
+- **`ESignProvider` adapter** (`lib/esign.ts`): `createDraft / send / void / verify / parse / fetchEvidence`.
+  - `docusign`: eSignature REST v2.1 with JWT grant (`jose`, RS256) and Connect with HMAC `X-DocuSign-Signature-*`;
+    envelopes created with `status: "created"` (draft) and sent with `PUT status: "sent"`; evidence = combined PDF +
+    certificate. Connect carries no event id: it is derived as `sha256(envelopeId|event|generatedDateTime)`. **Written
+    against the public documentation; pending validation in a real sandbox account.**
+  - `local` (development only, forbidden in production): the ceremony happens in the app — the signer, authenticated with
+    the envelope's email, types their name and consents — and the provider issues the signed webhook (HMAC + timestamp
+    ±5 min) through **the same verification path** as a real provider. The certificate records signers, consent, IP and
+    hashes; the PDF is not stamped and is labeled as having no legal validity.
+  - `disabled`: default in production without configuration; signing steps fail with `esign_disabled`.
+- **Workflow nodes** (`EXTERNAL_ACTION`, `WAIT_EVENT SIGNATURE_COMPLETED`) executed by the orchestrator, never by an
+  agent (agents with sign/share tools only propose). Graph validation: `create_signature_draft` requires a prior human
+  review and is unique per run; `send_signature_envelope`, `share_document` and `send_email` require an `APPROVAL_GATE`
+  **immediately before**; sending needs a prior draft and the wait needs a prior send.
+- **Action binding.** The gate before an external action includes in its binding (and in the hash) the detail of what it
+  authorizes: the envelope (id, signers, documents with SHA-256) or the normalized recipients, the artifact (signed copy
+  or approved versions) and the expiration. On execution it is re-verified: approval `APPROVED`, more recent than
+  `approval_max_age_hours`, exact match with the envelope/recipients and current document versions (if they changed, the
+  envelope is voided). Approving the send requires MFA (`amr` from the IdP) if the tenant asks for it.
+- **Lifecycle per version** (`document_lifecycle`): an approved human review ⇒ `APPROVED`; send ⇒ `SIGNATURE_PENDING`;
+  verified completion event ⇒ `SIGNED`; share ⇒ `DISTRIBUTED`; envelope rejection/void ⇒ back to `APPROVED`. A signature
+  is prepared only over `APPROVED` versions, read with the initiator's ACL and with the SHA-256 verified against the one
+  recorded at ingestion.
+- **Webhooks** (`POST /v1/webhooks/signatures/:provider`, raw body): HMAC before reading anything; envelope located by a
+  `SECURITY DEFINER` function that only returns ids; `webhook_inbox (provider, event_id)` guarantees **one effect per
+  event** (E2E case 6); monotonic transitions (`DRAFT < SENT < DELIVERED < COMPLETED|DECLINED|VOIDED`, terminals
+  immutable); the evidence is downloaded before consuming the event (if it fails, the provider retries). A terminal
+  event resumes or ends the waiting run (`signal`).
+- **Sharing** (`shares`): one link per artifact, a 256-bit token of which only the SHA-256 is stored; the token is not
+  logged: "Get link" **rotates** the token and shows it once (initiator/admin). Expiration ≤ `share_max_days`, immediate
+  revocation, public access through a `SECURITY DEFINER` function that validates and **audits every attempt**, and
+  delivers a 60 s presigned URL. Recipients only from `allowed_domains` (exact or subdomain; empty blocks everything),
+  verified when the run starts and again on execution (E2E case 7, denial audited as `share.denied`); DLP: `restricted`
+  documents never leave.
+- **Email** (`send_email`) remains unavailable: the SES adapter would add a new dependency (`@aws-sdk/client-sesv2`);
+  until then the link is delivered manually from *Signatures → Shared links*.
 
-**Pruebas.** `apps/api/test/signatures.test.ts` (11): allowlist y HMAC/frescura; política solo admin y caso 7 al
-iniciar; revisión ⇒ `APPROVED` ⇒ sobre `DRAFT` con gate atado al sobre; rol signatory y MFA; webhook falsificado o viejo
-no cambia nada; ceremonia ⇒ webhook verificado ⇒ `COMPLETED` + certificado ⇒ el run continúa; caso 6 (repetición ⇒ un
-efecto); distribución del documento firmado, rotación de token, revocación (410) y auditoría de accesos; caso 7 en
-ejecución tras endurecer la política; anular un sobre termina el run.
+**Tests.** `apps/api/test/signatures.test.ts` (11): allowlist and HMAC/freshness; admin-only policy and case 7 at start;
+review ⇒ `APPROVED` ⇒ `DRAFT` envelope with a gate tied to the envelope; signatory role and MFA; a forged or old webhook
+changes nothing; ceremony ⇒ verified webhook ⇒ `COMPLETED` + certificate ⇒ the run continues; case 6 (repeat ⇒ one
+effect); distribution of the signed document, token rotation, revocation (410) and access audit; case 7 at execution
+after tightening the policy; voiding an envelope ends the run.
 
-**Revisar cuando** se valide DocuSign en sandbox (tabs de firma, Connect por cuenta, reconciliación periódica de sobres),
-se necesite enviar email (SES + plantillas), o un tenant requiera firma digital cualificada por jurisdicción (eIDAS,
-leyes locales): **revisión legal por país antes de ofrecerlo como servicio**.
+**Revisit when** DocuSign is validated in a sandbox (signature tabs, Connect per account, periodic envelope
+reconciliation), email sending is needed (SES + templates), or a tenant requires qualified digital signature by
+jurisdiction (eIDAS, local laws): **legal review per country before offering it as a service**.
 
 ## ADR-024 · Ragsis Sign
 
-Ragsis gestiona la firma electrónica dentro de la app. La integración DocuSign del ADR-023 queda retirada.
-Los sobres históricos conservan su proveedor y su evidencia. El simulador `ESIGN_PROVIDER=local` sigue
-disponible en desarrollo para probar los webhooks del hito F.
+Ragsis manages e-signature inside the app. The DocuSign integration from ADR-023 is retired. Historical envelopes keep
+their provider and their evidence. The `ESIGN_PROVIDER=local` simulator remains available in development to test the
+milestone F webhooks.
 
-- **Preparación y envío.** La app congela los bytes y el SHA-256 de cada PDF. Un signatory o admin distinto
-  del autor aprueba los sobres manuales. Los sobres de workflow pasan por sus gates humanos. Se comprueba que
-  las versiones sigan vigentes y se exige MFA para aprobar cuando la política del tenant lo indica.
-- **Identidad.** Los miembros usan su cuenta con email verificado. Para externos, la allowlist y la clasificación
-  se comprueban en cada acceso. La invitación se envía por SES, caduca en siete días y puede regenerarse. La
-  regeneración invalida el token anterior. La anulación bloquea la ceremonia y las futuras descargas.
-- **Cierre.** El bloqueo del sobre serializa las respuestas y la anulación. La última firma genera el PDF con una
-  hoja de firmas y un certificado JSON con el consentimiento, el método de identificación, las fechas y las
-  huellas de los documentos. El sello Ed25519 autentica el certificado de la plataforma. El estado y el evento
-  del workflow se registran en la misma transacción. El certificado conserva el texto exacto de los nombres.
-- **Verificación.** `/sign/verify` compara el PDF y el certificado opcional con sus huellas en Ragsis, sin
-  transmitir los archivos. La consulta pública requiere el ID aleatorio del sobre y devuelve solo huellas,
-  identificador de clave y fecha. El sello cubre el certificado adjunto al PDF como archivo separado.
-- **Correo.** La cola de invitaciones en Postgres reintenta fallos de SES y envía un aviso cuando se completa
-  el sobre. SES puede aceptar un correo antes de que el API registre el envío. Un reinicio en ese intervalo
-  puede duplicar el aviso con el mismo enlace. La operación de firma permanece idempotente.
+- **Preparation and sending.** The app freezes the bytes and the SHA-256 of each PDF. A signatory or admin other than the
+  author approves manual envelopes. Workflow envelopes go through their human gates. It checks that the versions are
+  still current and requires MFA to approve when the tenant's policy says so.
+- **Identity.** Members use their account with a verified email. For external people, the allowlist and the
+  classification are checked on every access. The invitation is sent through SES, expires in seven days and can be
+  regenerated. Regeneration invalidates the previous token. Voiding blocks the ceremony and future downloads.
+- **Closing.** The envelope lock serializes responses and voiding. The last signature generates the PDF with a signature
+  sheet and a JSON certificate with the consent, the identification method, the dates and the document fingerprints. The
+  Ed25519 seal authenticates the platform's certificate. The workflow state and event are recorded in the same
+  transaction. The certificate keeps the exact text of the names.
+- **Verification.** `/sign/verify` compares the PDF and the optional certificate with their fingerprints in Ragsis,
+  without transmitting the files. The public lookup requires the envelope's random ID and returns only fingerprints, key
+  identifier and date. The seal covers the certificate attached to the PDF as a separate file.
+- **Email.** The invitation queue in Postgres retries SES failures and sends a notice when the envelope is completed. SES
+  may accept an email before the API records the send. A restart in that interval can duplicate the notice with the same
+  link. The signing operation remains idempotent.
 
-## ADR-025 · Conectores Gmail, Slack y ClickUp (CON-01)
+## ADR-025 · Gmail, Slack and ClickUp connectors (CON-01)
 
-**Contexto.** CON-01 pide traer al corpus fuentes vivas con delta sync, cursores, backoff, límites de tasa, tombstones y
-permisos. Prioridad del usuario: Gmail, Slack y ClickUp, **indexados** (no herramientas en vivo). Gmail es correo
-personal; Slack y ClickUp son espacios de empresa.
+**Context.** CON-01 asks to bring live sources into the corpus with delta sync, cursors, backoff, rate limits, tombstones
+and permissions. The user's priority: Gmail, Slack and ClickUp, **indexed** (not live tools). Gmail is personal email;
+Slack and ClickUp are company spaces.
 
-**Decisión.**
-- **Cada elemento es un documento normal.** `source_id = con:<connector>:<item>`, versión nueva solo si cambia el SHA-256
-  del contenido renderizado, y entrada por el pipeline existente (S3 + `ingestion_jobs` + SQS). Así heredan parsing,
-  ACL por RLS, citas, versiones, cuotas del plan y borrado verificable. Granularidad: Gmail = hilo (sin texto citado) +
-  un documento por adjunto admitido; Slack = canal × día UTC con los hilos dentro del mensaje que los abre; ClickUp =
-  tarea (descripción + comentarios) y Doc (páginas en Markdown).
-- **Permisos.** Gmail es `personal`: ACL `user:<dueño>`, `confidential`; ni los admins lo ven (RLS también oculta la
-  conexión). Slack/ClickUp son `organization`: los conecta un admin para **un workspace** y la ACL es
-  `workspace:<id>`. No se replican los permisos finos del origen: por eso los canales privados de Slack solo aparecen si
-  el bot fue invitado y los espacios privados de ClickUp requieren selección explícita, con aviso en la UI. Se recomienda
-  conectar ClickUp con una cuenta de servicio que solo vea lo que debe compartirse.
-- **OAuth.** PKCE (Google) y `state` de un solo uso, 10 min, guardado como SHA-256 y ligado a persona + organización.
-  Redirect único `<PUBLIC_BASE_URL>/connect/callback`: página de cliente que completa con la sesión (la cookie
-  `SameSite=strict` no viaja en la navegación cross-site, sí en el fetch same-origin). Tokens cifrados AES-256-GCM con
-  AAD `org:connector` (`CONNECTOR_ENCRYPTION_KEY`, obligatoria en producción; en dev se deriva con HKDF). Gmail usa
-  solo `gmail.readonly`; Slack un bot con scopes de lectura; ClickUp no tiene scopes (lee lo que ve quien autoriza).
-- **Planificador en la API** (como las invitaciones de firma): cada minuto `app.due_connectors()` (SECURITY DEFINER, solo
-  IDs) → lease de 10 min en la fila (seguro con varias réplicas; `CONNECTOR_SYNC_ENABLED=false` lo apaga) → pasada
-  acotada (4 min / 150 cambios) que guarda el cursor tras cada página. El trabajo corre con RLS del dueño y el principal
-  de la ACL del conector. Errores: token revocado ⇒ `reconnect_needed`; 429 ⇒ reprograma con `Retry-After`; cuota ⇒
-  reintento en 6 h; otros ⇒ backoff exponencial y `error` tras 8 fallos.
-- **Delta y borrados.** Gmail: History API; si el `historyId` caduca, carga completa + barrido de lo no visto. Slack:
-  avance diario por canal releyendo ayer y hoy (ediciones, borrados y respuestas recientes). ClickUp: `date_updated_gt`
-  + reconciliación de IDs cada 24 h (ClickUp no expone borrados); Docs se listan cada pasada y solo se descargan si
-  cambió `date_updated`. Deseleccionar un canal/espacio retira sus documentos. Desconectar revoca el token (mejor
-  esfuerzo), marca todo como `deleting` (el worker purga chunks, embeddings y objetos) y borra credenciales. Si el dueño
-  de un Gmail deja la organización, su correo sale del corpus en la siguiente pasada. Un elemento borrado a mano desde la
-  biblioteca no se recrea.
-- **Gobierno.** `organizations.allowed_connectors` (admin): desactivar una app pausa sus conexiones sin borrar nada.
-  Auditoría: conexión, cambios, sincronizaciones con cambios, fallos que requieren acción y desconexión.
-- **Modo demo** (`CONNECTORS_DEMO=1`, prohibido en producción): emulador en memoria de las APIs usadas, con datos de
-  ejemplo; el mismo emulador sostiene los tests.
+**Decision.**
+- **Each item is a normal document.** `source_id = con:<connector>:<item>`, a new version only if the SHA-256 of the
+  rendered content changes, and entry through the existing pipeline (S3 + `ingestion_jobs` + SQS). This way they inherit
+  parsing, ACL through RLS, citations, versions, plan quotas and verifiable deletion. Granularity: Gmail = thread (without
+  quoted text) + one document per supported attachment; Slack = channel × UTC day with threads inside the message that
+  opens them; ClickUp = task (description + comments) and Doc (pages in Markdown).
+- **Permissions.** Gmail is `personal`: ACL `user:<owner>`, `confidential`; not even admins see it (RLS also hides the
+  connection). Slack/ClickUp are `organization`: an admin connects them for **one workspace** and the ACL is
+  `workspace:<id>`. The source's fine-grained permissions are not replicated: that is why private Slack channels appear
+  only if the bot was invited and private ClickUp spaces require explicit selection, with a notice in the UI. Connecting
+  ClickUp with a service account that only sees what should be shared is recommended.
+- **OAuth.** PKCE (Google) and a single-use `state`, 10 min, stored as SHA-256 and bound to person + organization. A
+  single redirect `<PUBLIC_BASE_URL>/connect/callback`: a client page that completes with the session (the
+  `SameSite=strict` cookie does not travel on cross-site navigation, but does on the same-origin fetch). Tokens
+  encrypted with AES-256-GCM with AAD `org:connector` (`CONNECTOR_ENCRYPTION_KEY`, required in production; in dev it is
+  derived with HKDF). Gmail uses only `gmail.readonly`; Slack a bot with read scopes; ClickUp has no scopes (it reads what
+  the authorizer sees).
+- **Scheduler in the API** (like the signature invitations): every minute `app.due_connectors()` (SECURITY DEFINER, ids
+  only) → 10 min lease on the row (safe with several replicas; `CONNECTOR_SYNC_ENABLED=false` turns it off) → a bounded
+  pass (4 min / 150 changes) that stores the cursor after each page. The work runs with the owner's RLS and the
+  connector's ACL principal. Errors: revoked token ⇒ `reconnect_needed`; 429 ⇒ reschedule with `Retry-After`; quota ⇒
+  retry in 6 h; others ⇒ exponential backoff and `error` after 8 failures.
+- **Delta and deletions.** Gmail: History API; if the `historyId` expires, full load + sweep of what was not seen. Slack:
+  daily advance per channel re-reading yesterday and today (edits, deletions and recent replies). ClickUp:
+  `date_updated_gt` + ID reconciliation every 24 h (ClickUp does not expose deletions); Docs are listed on every pass
+  and only downloaded if `date_updated` changed. Deselecting a channel/space removes its documents. Disconnecting
+  revokes the token (best effort), marks everything as `deleting` (the worker purges chunks, embeddings and objects) and
+  deletes credentials. If the owner of a Gmail leaves the organization, their email leaves the corpus on the next pass.
+  An item deleted by hand from the library is not recreated.
+- **Governance.** `organizations.allowed_connectors` (admin): disabling an app pauses its connections without deleting
+  anything. Audit: connection, changes, syncs with changes, failures that require action and disconnection.
+- **Demo mode** (`CONNECTORS_DEMO=1`, forbidden in production): an in-memory emulator of the APIs used, with sample data;
+  the same emulator backs the tests.
 
-**Riesgos conocidos.**
-- **Slack (mayo 2025):** apps distribuidas comercialmente fuera del Slack Marketplace tienen `conversations.history` y
-  `conversations.replies` limitados a 1 llamada/min y 15 mensajes; las apps internas de un solo workspace mantienen los
-  límites normales. Además, los términos actualizados de Slack restringen el uso de datos de su API; revisar con legal
-  si se permite indexar mensajes en un producto SaaS multi-tenant. Opciones: app interna por cliente (despliegue
-  dedicado) o publicación en el Marketplace.
-- **Google:** `gmail.readonly` es un scope restringido: para usuarios externos exige verificación de Google y evaluación
-  de seguridad (CASA). Una app "Internal" de Google Workspace no la necesita.
-- Borrados antiguos de Slack (fuera de la ventana de relectura) y respuestas nuevas en hilos viejos no se detectan sin
-  Events API.
+**Known risks.**
+- **Slack (May 2025):** commercially distributed apps outside the Slack Marketplace have `conversations.history` and
+  `conversations.replies` limited to 1 call/min and 15 messages; internal single-workspace apps keep the normal limits.
+  In addition, Slack's updated terms restrict the use of its API data; review with legal whether indexing messages in a
+  multi-tenant SaaS product is allowed. Options: an internal app per customer (dedicated deployment) or publishing in the
+  Marketplace.
+- **Google:** `gmail.readonly` is a restricted scope: for external users it requires Google verification and a security
+  assessment (CASA). An "Internal" Google Workspace app does not need it.
+- Old Slack deletions (outside the re-read window) and new replies in old threads are not detected without the Events
+  API.
 
-**Pruebas.** `apps/api/test/connectors.test.ts` (20) contra Postgres real y APIs emuladas: cifrado con AAD; PKCE, state
-de un solo uso y de la misma persona; Gmail solo visible para su dueño (ni el admin ve correo ni conexión), sin spam ni
-promociones, delta con versión nueva, hilo borrado ⇒ tombstone, historial caducado ⇒ recarga sin duplicados, token
-revocado ⇒ reconectar, desconexión ⇒ revocación + retirada; Slack pendiente de canales, privados solo con el bot dentro,
-documento por canal-día visible para el workspace, deseleccionar ⇒ retirar; ClickUp espacios no privados por defecto,
-edición ⇒ versión, borrado ⇒ reconciliación, privados por selección, política de la organización.
+**Tests.** `apps/api/test/connectors.test.ts` (20) against real Postgres and emulated APIs: encryption with AAD; PKCE,
+single-use state bound to the same person; Gmail visible only to its owner (not even the admin sees email or connection),
+no spam or promotions, delta with a new version, deleted thread ⇒ tombstone, expired history ⇒ reload without
+duplicates, revoked token ⇒ reconnect, disconnect ⇒ revocation + removal; Slack pending channels, private ones only with
+the bot inside, a channel-day document visible to the workspace, deselecting ⇒ removal; ClickUp non-private spaces by
+default, edit ⇒ version, deletion ⇒ reconciliation, private ones by selection, organization policy.
 
-**Revisar cuando** haya apps OAuth reales (validar respuestas y límites), se necesiten permisos finos por canal/espacio
-(mapear miembros del origen a usuarios ragsis), Events API/webhooks para borrados inmediatos, o más proveedores (Drive,
-SharePoint): el contrato `ProviderAdapter` + `SyncSink` es el punto de extensión.
+**Revisit when** there are real OAuth apps (validate responses and limits), fine-grained permissions per channel/space
+are needed (map source members to ragsis users), Events API/webhooks for immediate deletions, or more providers (Drive,
+SharePoint): the `ProviderAdapter` + `SyncSink` contract is the extension point.
 
-## ADR-026 · Login dentro de la app con Cognito (USER_PASSWORD_AUTH)
+## ADR-026 · In-app login with Cognito (USER_PASSWORD_AUTH)
 
-**Contexto.** El piloto usaba la página alojada de Cognito. Esa página se sale del producto: otra marca, otro idioma y un
-dominio de terceros en medio del acceso. El estilo clásico de Cognito solo permite CSS limitado y logo (el fondo de la
-página queda fijo); el editor de marca exige otro plan de funciones. Las personas deben iniciar sesión sin salir de Ragsis.
+**Context.** The pilot used the Cognito hosted page. That page leaves the product: another brand, another language and a
+third-party domain in the middle of sign-in. The classic Cognito style only allows limited CSS and a logo (the page
+background stays fixed); the branding editor requires a different feature plan. People must sign in without leaving
+Ragsis.
 
-**Decisión.** Cuando `OIDC_ISSUER` es un user pool de Cognito, `/login` muestra un formulario propio (correo y clave,
-clave nueva para cuentas invitadas y recuperación por código). La ruta `POST /api/auth/password` llama desde el
-servidor a la API pública de Cognito para clientes sin secreto (`InitiateAuth` con `USER_PASSWORD_AUTH`,
-`RespondToAuthChallenge`, `ForgotPassword`, `ConfirmForgotPassword`). La sesión sigue siendo el `id_token` en una cookie
-`httpOnly` que la API revalida; el token del reto `NEW_PASSWORD_REQUIRED` viaja en una cookie `httpOnly` de 170 s.
-Otros IdP OIDC conservan la redirección de ADR-015. El cliente de Cognito pasa a permitir `ALLOW_USER_PASSWORD_AUTH`.
+**Decision.** When `OIDC_ISSUER` is a Cognito user pool, `/login` shows its own form (email and password, a new password
+for invited accounts and recovery by code). The `POST /api/auth/password` route calls, from the server, the Cognito
+public API for clients without a secret (`InitiateAuth` with `USER_PASSWORD_AUTH`, `RespondToAuthChallenge`,
+`ForgotPassword`, `ConfirmForgotPassword`). The session is still the `id_token` in an `httpOnly` cookie that the API
+revalidates; the token of the `NEW_PASSWORD_REQUIRED` challenge travels in a 170 s `httpOnly` cookie. Other OIDC IdPs
+keep the redirect from ADR-015. The Cognito client now allows `ALLOW_USER_PASSWORD_AUTH`.
 
-**Consecuencias.**
-- La clave pasa por el servidor de la web (por TLS) antes de llegar a Cognito. Es el costo de controlar la pantalla; la
-  alternativa SRP evitaría ver la clave en el servidor, pero el formulario igualmente la recibe.
-- La ruta exige `Content-Type: application/json` y no distingue cuentas inexistentes de claves incorrectas.
-- Sin refresh tokens, la sesión dura lo que el `id_token` (una hora por defecto).
-- No hay página de Cognito que cerrar al salir; el logout solo borra la cookie.
+**Consequences.**
+- The password goes through the web server (over TLS) before reaching Cognito. It is the cost of controlling the screen;
+  the SRP alternative would avoid the server seeing the password, but the form receives it anyway.
+- The route requires `Content-Type: application/json` and does not distinguish nonexistent accounts from wrong
+  passwords.
+- Without refresh tokens, the session lasts as long as the `id_token` (one hour by default).
+- There is no Cognito page to close on exit; logout only deletes the cookie.
 
-**Revisar cuando** se necesite MFA, inicio de sesión social o federación: ahí conviene volver al flujo por redirección o
-adoptar el login administrado de Cognito, que exige el plan Essentials.
+**Revisit when** MFA, social sign-in or federation is needed: at that point it is worth going back to the redirect flow or
+adopting Cognito managed login, which requires the Essentials plan.
 
-## ADR-027 · Ensayo de infraestructura en Floci antes de AWS
+## ADR-027 · Infrastructure rehearsal in Floci before AWS
 
-**Contexto.** El piloto corre con créditos del plan FREE de AWS (USD 100, seis meses). Un recurso mal configurado o
-olvidado gasta créditos y cada intento en AWS real tarda más que en local.
+**Context.** The pilot runs on AWS FREE plan credits (USD 100, six months). A misconfigured or forgotten resource spends
+credits and each attempt on real AWS takes longer than locally.
 
-**Decisión.** Todo recurso o cambio de Terraform se aplica primero contra [Floci](https://github.com/floci-io/floci), el
-emulador local de AWS, con `scripts/aws-rehearsal.sh` (`make rehearse`). El script copia `infra/terraform` a
-`infra/terraform/.floci/`, agrega un override del proveedor que apunta al emulador y guarda un estado separado; nunca
-toca el estado de AWS real. Solo con el ensayo limpio se ejecuta `terraform plan` y `apply` en AWS. La aplicación local
-sigue usando SeaweedFS y ElasticMQ (ADR-012), no Floci.
+**Decision.** Every resource or Terraform change is applied first against [Floci](https://github.com/floci-io/floci), the
+local AWS emulator, with `scripts/aws-rehearsal.sh` (`make rehearse`). The script copies `infra/terraform` to
+`infra/terraform/.floci/`, adds a provider override that points to the emulator and keeps a separate state; it never
+touches the real AWS state. Only with a clean rehearsal are `terraform plan` and `apply` run on AWS. The local
+application keeps using SeaweedFS and ElasticMQ (ADR-012), not Floci.
 
-**Consecuencias.**
-- Floci valida la forma de las llamadas y las dependencias, no el comportamiento real de AWS: no comprueba precios,
-  cuotas, disponibilidad del tipo de instancia ni el `user_data`. El ensayo del piloto con Floci 2.4.0 crea los 28
-  recursos y un segundo `plan` queda sin cambios; ver [guides/floci.md](../guides/floci.md#límites-conocidos).
-- Su catálogo no incluye `m7i-flex.large`, así que el ensayo usa `m5.large` (misma forma: 2 vCPU y 8 GiB) y AWS real usa
-  el tipo de `main.tf`.
-- Con `AWS_ENDPOINT_URL` apuntando a Floci, el AWS CLI no llega a AWS real; hay que quitar la variable para operar allí.
+**Consequences.**
+- Floci validates the shape of the calls and the dependencies, not real AWS behavior: it does not check prices, quotas,
+  instance type availability or `user_data`. The pilot rehearsal with Floci 2.4.0 creates all 28 resources and a second
+  `plan` has no changes; see [guides/floci.md](../guides/floci.md#known-limits).
+- Its catalog does not include `m7i-flex.large`, so the rehearsal uses `m5.large` (same shape: 2 vCPU and 8 GiB) and
+  real AWS uses the type in `main.tf`.
+- With `AWS_ENDPOINT_URL` pointing to Floci, the AWS CLI does not reach real AWS; the variable must be removed to operate
+  there.
 
-**Revisar cuando** el emulador incorpore los tipos de instancia del piloto, o cuando el piloto se convierta en producción.
+**Revisit when** the emulator adds the pilot's instance types, or when the pilot becomes production.
 
-## ADR-028 · Historial de conversaciones de Ask
+## ADR-028 · Ask conversation history
 
-**Contexto.** Ask respondía bien pero la conversación vivía solo en la memoria de la página: al recargar o salir se
-perdía y no se podía volver a una respuesta anterior. La plataforma guardaba únicamente `query_runs` (traza, tiempos y el
-hash de la pregunta; el texto no se persistía a propósito).
+**Context.** Ask answered well but the conversation lived only in the page's memory: on reload or exit it was lost and you
+could not return to a previous answer. The platform stored only `query_runs` (trace, timings and the hash of the
+question; the text was deliberately not persisted).
 
-**Decisión.** Tablas `conversations` y `conversation_turns` (migración 0014), con RLS por organización y por autor: la
-conversación es **privada de quien la escribe**, ni los admins la ven. Cada turno guarda la pregunta, la fecha «a
-fecha de» y una instantánea de la respuesta (texto, citas y métricas visibles; nunca tiempos ni costes internos). El
-cliente genera el UUID de la conversación y lo envía en `POST …/query` como `conversation_id`; la API la crea al
-guardar el primer turno, así que no hay conversaciones vacías ni una llamada previa. Guardar ocurre después de
-responder y nunca bloquea la respuesta: si falla se registra y la respuesta vuelve sin `conversation_id`.
-`GET/PATCH/DELETE /conversations` listan (paginado por cursor), reabren, renombran y borran; borrar es definitivo,
-elimina los turnos en cascada y queda auditado. Las claves de servicio no usan el historial.
+**Decision.** Tables `conversations` and `conversation_turns` (migration 0014), with RLS by organization and by author:
+the conversation is **private to whoever writes it**, not even admins see it. Each turn stores the question, the "as of"
+date and a snapshot of the answer (text, citations and visible metrics; never internal timings or costs). The client
+generates the conversation UUID and sends it in `POST …/query` as `conversation_id`; the API creates it when saving the
+first turn, so there are no empty conversations and no prior call. Saving happens after answering and never blocks the
+answer: if it fails it is logged and the answer returns without `conversation_id`. `GET/PATCH/DELETE /conversations`
+list (cursor-paginated), reopen, rename and delete; deleting is permanent, cascades to the turns and is audited. Service
+keys do not use the history.
 
-**Gobierno de acceso al releer.** La instantánea contiene texto generado desde documentos que la persona pudo ver *ese
-día*. Al reabrir, la API vuelve a comprobar con RLS que cada documento citado siga siendo visible y activo; si alguno no
-lo es (permiso retirado, documento borrado) el turno se devuelve con `redacted: true` y sin respuesta. El resto de la
-conversación sigue legible. Así el historial no es una vía para leer lo que la ACL ya no permite.
+**Access governance on re-read.** The snapshot contains text generated from documents the person could see *that day*.
+On reopening, the API re-checks with RLS that each cited document is still visible and active; if any is not (permission
+withdrawn, document deleted) the turn is returned with `redacted: true` and without an answer. The rest of the
+conversation stays readable. This way the history is not a route to read what the ACL no longer allows.
 
-**Consecuencias.**
-- Ahora se guarda el texto de preguntas y respuestas (antes solo un hash). Es dato de usuario: se borra al borrar la
-  conversación, al borrar al usuario o la organización (cascada) y no se registra en logs (`req.body.question` sigue
-  redactado). La política de privacidad pública ya lo cubre («your questions and the answers generated» como contenido
-  del cliente, conservado mientras la organización lo mantenga).
-- La ocultación se evalúa en cada lectura y no se guarda: si el permiso vuelve a otorgarse, el turno reaparece.
-- Las preguntas siguen siendo independientes: reabrir una conversación y seguir preguntando no envía el contexto previo
-  al modelo (igual que antes). La memoria conversacional del modelo es un cambio aparte.
-- Sin retención automática ni opción por organización para desactivarlo; ambas son extensiones directas si algún cliente
-  con datos muy sensibles lo exige.
+**Consequences.**
+- The text of questions and answers is now stored (before, only a hash). It is user data: it is deleted when the
+  conversation is deleted, when the user or the organization is deleted (cascade), and it is not logged
+  (`req.body.question` is still redacted). The public privacy policy already covers it ("your questions and the answers
+  generated" as customer content, retained while the organization keeps it).
+- Hiding is evaluated on every read and is not stored: if the permission is granted again, the turn reappears.
+- Questions remain independent: reopening a conversation and continuing to ask does not send the previous context to the
+  model (same as before). Conversational memory for the model is a separate change.
+- No automatic retention or per-organization option to turn it off; both are direct extensions if a customer with very
+  sensitive data requires it.
 
-**Revisar cuando** un cliente pida retención máxima o desactivar el historial, o cuando Ask pase contexto previo al modelo
-(ahí hay que decidir qué turnos ocultados se excluyen del prompt).
+**Revisit when** a customer asks for maximum retention or to disable the history, or when Ask passes prior context to the
+model (then it must be decided which hidden turns are excluded from the prompt).

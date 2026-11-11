@@ -1,39 +1,40 @@
-# Ensayar infraestructura en Floci
+# Rehearsing infrastructure in Floci
 
-**Regla:** toda instancia, bucket, cola, usuario de Cognito o cambio de Terraform se crea primero en Floci. Solo cuando
-el ensayo pasa se aplica en AWS real. Así se cometen los errores donde no cuestan créditos.
+**Rule:** every instance, bucket, queue, Cognito user or Terraform change is created first in Floci. Only when the
+rehearsal passes is it applied in real AWS. This way mistakes are made where they cost no credits.
 
-[Floci](https://github.com/floci-io/floci) es un emulador de AWS que escucha en `http://localhost:4566` y acepta
-credenciales cualquiera. Funciona con el AWS CLI, los SDK y el proveedor `hashicorp/aws` de Terraform.
+[Floci](https://github.com/floci-io/floci) is an AWS emulator that listens on `http://localhost:4566` and accepts any
+credentials. It works with the AWS CLI, the SDKs and the Terraform `hashicorp/aws` provider.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../diagrams/environments-dark.svg">
-  <img alt="Local, ensayo en Floci y AWS real" src="../diagrams/environments.svg">
+  <img alt="Local, rehearsal in Floci and real AWS" src="../diagrams/environments.svg">
 </picture>
 
-## Qué es y qué no es Floci en este proyecto
+## What Floci is and is not in this project
 
-- **Sí:** el lugar donde se ensaya `infra/terraform/envs/*` y se prueban recursos de AWS sueltos.
-- **No:** el almacenamiento de la aplicación local. `make up` usa SeaweedFS (S3) y ElasticMQ (SQS), que arrancan en
-  segundos y no dependen de nada externo. Ver [environments.md](../environments.md).
+- **Is:** the place where `infra/terraform/envs/*` is rehearsed and individual AWS resources are tested.
+- **Is not:** the storage of the local application. `make up` uses SeaweedFS (S3) and ElasticMQ (SQS), which start in
+  seconds and depend on nothing external. See [environments.md](../environments.md).
 
-## Levantar Floci
+## Starting Floci
 
-Cualquiera de las dos formas sirve; lo importante es que `http://localhost:4566/_floci/health` responda.
+Either way works; what matters is that `http://localhost:4566/_floci/health` responds.
 
 ```bash
-# Desde el repositorio de Floci (como se ejecuta en esta máquina)
-cd ~/Dev/floci && make build                       # solo si falta target/quarkus-app
+# From the Floci repository (as it is run on this machine)
+cd ~/Dev/floci && make build                       # only if target/quarkus-app is missing
 cd ~/Dev/floci && java -jar target/quarkus-app/quarkus-run.jar
 
-# O con Docker
+# Or with Docker
 docker run --rm -p 4566:4566 -v /var/run/docker.sock:/var/run/docker.sock floci/floci:latest
 ```
 
-> **No recompiles Floci mientras corre.** `make build` borra `target/quarkus-app`; la JVM en marcha queda sin sus
-> jars y deja de responder KMS, ECR, Cognito y EC2 (S3 y SQS siguen porque ya estaban cargados).
+> **Do not rebuild Floci while it is running.** `make build` deletes `target/quarkus-app`; the running JVM is left
+> without its jars and stops answering KMS, ECR, Cognito and EC2 (S3 and SQS keep working because they were already
+> loaded).
 
-Variables para que el AWS CLI y los SDK hablen con Floci:
+Variables so the AWS CLI and the SDKs talk to Floci:
 
 ```bash
 export AWS_ENDPOINT_URL=http://localhost:4566
@@ -41,90 +42,93 @@ export AWS_DEFAULT_REGION=us-east-2
 export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test
 ```
 
-> **Cuidado.** Con `AWS_ENDPOINT_URL` exportado, todo `aws …` va a Floci. Para tocar AWS real usa una terminal sin esa
-> variable o `env -u AWS_ENDPOINT_URL aws …`.
+> **Careful.** With `AWS_ENDPOINT_URL` exported, every `aws …` goes to Floci. To touch real AWS use a terminal without
+> that variable or `env -u AWS_ENDPOINT_URL aws …`.
 
-## Ensayar el piloto
+## Rehearsing the pilot
 
 ```bash
-make rehearse-plan      # qué se crearía (no cambia nada)
-make rehearse           # aplica en Floci
-make rehearse-destroy   # borra lo creado en Floci
+make rehearse-plan      # what would be created (changes nothing)
+make rehearse           # applies in Floci
+make rehearse-destroy   # deletes what was created in Floci
 ```
 
-Equivale a `scripts/aws-rehearsal.sh {plan|apply|output|destroy}`. Variables opcionales:
+Equivalent to `scripts/aws-rehearsal.sh {plan|apply|output|destroy}`. Optional variables:
 
-| Variable | Por defecto | Uso |
+| Variable | Default | Use |
 |---|---|---|
-| `REHEARSAL_ENV` | `pilot` | Entorno de `infra/terraform/envs` a ensayar |
-| `FLOCI_ENDPOINT` | `http://localhost:4566` | Otro endpoint o puerto |
-| `REHEARSAL_HOSTNAME` | `piloto.ragsis.test` | DNS ficticio para el piloto |
-| `REHEARSAL_INSTANCE_TYPE` | `m5.large` | Tipo de EC2 solo para el ensayo (Floci no conoce `m7i-flex.large`) |
-| `REHEARSAL_TARGETS` | vacío | Direcciones de Terraform (separadas por espacio) para ensayar solo una parte |
+| `REHEARSAL_ENV` | `pilot` | Environment in `infra/terraform/envs` to rehearse |
+| `FLOCI_ENDPOINT` | `http://localhost:4566` | Another endpoint or port |
+| `REHEARSAL_HOSTNAME` | `piloto.ragsis.test` | Fictitious DNS name for the pilot |
+| `REHEARSAL_INSTANCE_TYPE` | `m5.large` | EC2 type for the rehearsal only (Floci does not know `m7i-flex.large`) |
+| `REHEARSAL_TARGETS` | empty | Terraform addresses (space-separated) to rehearse only part of it |
 
-Ejemplo, solo almacenamiento y permisos:
+Example, storage and permissions only:
 
 ```bash
 REHEARSAL_TARGETS="module.storage aws_iam_role_policy.runtime" scripts/aws-rehearsal.sh apply
 ```
 
-### Cómo funciona
+### How it works
 
-1. Comprueba que Floci responde; si no, se detiene con un mensaje claro.
-2. Copia `infra/terraform` a `infra/terraform/.floci/` (ignorado por Git). No copia estado ni plugins del entorno real.
-3. Agrega `providers_override.tf` con credenciales falsas, `skip_requesting_account_id` y `s3_use_path_style`. El
-   endpoint llega por `AWS_ENDPOINT_URL`, que el proveedor 6.x respeta.
-3. Si el entorno tiene `aws_instance.pilot`, agrega `instance_override.tf` con un tipo de instancia que Floci conozca
-   (`m5.large`, de la misma forma: 2 vCPU y 8 GiB). Solo cambia en el ensayo; AWS real usa el tipo de `main.tf`.
-4. Guarda el estado en `infra/terraform/.floci/state/<entorno>.tfstate`, separado del estado real.
+1. Checks that Floci responds; if not, it stops with a clear message.
+2. Copies `infra/terraform` to `infra/terraform/.floci/` (ignored by Git). It does not copy state or plugins from the
+   real environment.
+3. Adds `providers_override.tf` with fake credentials, `skip_requesting_account_id` and `s3_use_path_style`. The
+   endpoint arrives through `AWS_ENDPOINT_URL`, which provider 6.x honors.
+4. If the environment has `aws_instance.pilot`, adds `instance_override.tf` with an instance type that Floci knows
+   (`m5.large`, same shape: 2 vCPU and 8 GiB). It only changes in the rehearsal; real AWS uses the type in `main.tf`.
+5. Keeps the state in `infra/terraform/.floci/state/<environment>.tfstate`, separate from the real state.
 
-Nunca lee ni modifica `infra/terraform/envs/<entorno>/terraform.tfstate`.
+It never reads or modifies `infra/terraform/envs/<environment>/terraform.tfstate`.
 
-## Qué cuenta como «ensayo limpio»
+## What counts as a "clean rehearsal"
 
-- `plan` y `apply` terminan sin error y `destroy` deja el estado vacío.
-- Los recursos existen con el AWS CLI (`aws s3api list-buckets`, `aws sqs list-queues`…).
-- Un segundo `plan` no propone cambios.
+- `plan` and `apply` finish without error and `destroy` leaves the state empty.
+- The resources exist according to the AWS CLI (`aws s3api list-buckets`, `aws sqs list-queues`…).
+- A second `plan` proposes no changes.
 
-## Límites conocidos
+## Known limits
 
-Floci es un emulador: valida la forma de las llamadas y el grafo de dependencias, no el comportamiento real de AWS.
-Resultado del ensayo completo del piloto con Floci 2.4.0 en macOS con Docker Desktop (2026-11-10):
+Floci is an emulator: it validates the shape of the calls and the dependency graph, not real AWS behavior. Result of the
+full pilot rehearsal with Floci 2.4.0 on macOS with Docker Desktop (2026-11-10):
 
-| Área | Resultado |
+| Area | Result |
 |---|---|
-| `plan` y `apply` del piloto | Los 28 recursos se crean; un segundo `plan` no propone cambios |
-| EC2 | Arranca como contenedor Docker (`running` en unos 10 s). Solo con tipos de su catálogo: `m7i-flex.large` falla con `reading EC2 Instance Type: empty result`, por eso el ensayo usa `m5.large` |
-| IP elástica | Se asigna (`127.0.0.1`); no es una IP pública real |
-| S3, SQS, KMS, ECR, Cognito, IAM, grupos de seguridad | Se crean. SQS y el ciclo de vida de S3 tardan decenas de segundos |
-| `user_data` de la instancia | No se comprueba: el contenedor arranca, pero no hay garantía de que instale Docker ni los paquetes |
-| Rendimiento real, cuotas, precios y reglas de red | No se emulan; se validan solo en AWS |
+| Pilot `plan` and `apply` | All 28 resources are created; a second `plan` proposes no changes |
+| EC2 | Starts as a Docker container (`running` in about 10 s). Only with types in its catalog: `m7i-flex.large` fails with `reading EC2 Instance Type: empty result`, which is why the rehearsal uses `m5.large` |
+| Elastic IP | Assigned (`127.0.0.1`); not a real public IP |
+| S3, SQS, KMS, ECR, Cognito, IAM, security groups | Created. SQS and the S3 lifecycle take tens of seconds |
+| Instance `user_data` | Not checked: the container starts, but there is no guarantee it installs Docker or the packages |
+| Real performance, quotas, prices and network rules | Not emulated; validated only in AWS |
 
-Lo que el ensayo **no** puede decirte: si `m7i-flex.large` está disponible en la cuenta, si el plan FREE permite un
-servicio, o si el arranque del host termina bien. Eso se mira en el `terraform plan` de AWS real y en el primer
-arranque, con la instancia a la vista.
+What the rehearsal **cannot** tell you: whether `m7i-flex.large` is available in the account, whether the FREE plan
+allows a service, or whether the host boot finishes well. Those are checked in the real AWS `terraform plan` and on the
+first start, with the instance in view.
 
-## Problemas frecuentes
+## Common problems
 
-| Síntoma | Causa | Solución |
+The first row quotes the script's own message, which is printed in Spanish ("Floci is not responding at …").
+
+| Symptom | Cause | Fix |
 |---|---|---|
-| `Floci no responde en http://localhost:4566` | Floci apagado | Levantarlo (ver arriba) |
-| `Error acquiring the state lock` | Un `apply` anterior sigue vivo | `pgrep -fl 'terraform -chdir'` y detenerlo; luego repetir |
-| Recursos duplicados de pruebas anteriores | Aplicaciones interrumpidas | Reiniciar Floci y borrar `infra/terraform/.floci/` |
-| S3, SQS e IAM responden pero KMS, ECR, Cognito o EC2 se quedan colgados (`pending`, la llamada expira) | Se borró `target/quarkus-app` de Floci (`make build`, `mvn clean`) mientras corría: la JVM no puede cargar las clases que aún no usó | Reconstruir (`make build` en el repositorio de Floci), detener el proceso y arrancarlo de nuevo. No recompilar mientras corre |
-| `reading EC2 Instance Type (m7i-flex.large): empty result` | El tipo no está en el catálogo de Floci | El script ya lo sustituye por `m5.large`; cámbialo con `REHEARSAL_INSTANCE_TYPE` |
-| `apply` repetido sigue fallando con la instancia vieja | Quedó una instancia `tainted` en el estado del ensayo | Terminarla en Floci y `terraform state rm aws_instance.pilot` en el estado del ensayo, o borrar `infra/terraform/.floci/` |
-| `NoSuchBucket … api` al usar `aws` contra AWS real | `AWS_ENDPOINT_URL` apunta a Floci | `env -u AWS_ENDPOINT_URL aws …` |
-| El proveedor de Terraform no encuentra credenciales de AWS real | El proveedor no lee las sesiones de `aws login` | `eval "$(aws configure export-credentials --profile ragsis-pilot --format env)"` |
+| `Floci no responde en http://localhost:4566` | Floci is off | Start it (see above) |
+| `Error acquiring the state lock` | A previous `apply` is still alive | `pgrep -fl 'terraform -chdir'` and stop it; then repeat |
+| Duplicate resources from earlier tests | Interrupted applies | Restart Floci and delete `infra/terraform/.floci/` |
+| S3, SQS and IAM respond but KMS, ECR, Cognito or EC2 hang (`pending`, the call times out) | Floci's `target/quarkus-app` was deleted (`make build`, `mvn clean`) while it was running: the JVM cannot load the classes it has not used yet | Rebuild (`make build` in the Floci repository), stop the process and start it again. Do not rebuild while it runs |
+| `reading EC2 Instance Type (m7i-flex.large): empty result` | The type is not in Floci's catalog | The script already replaces it with `m5.large`; change it with `REHEARSAL_INSTANCE_TYPE` |
+| A repeated `apply` keeps failing with the old instance | A `tainted` instance was left in the rehearsal state | Terminate it in Floci and run `terraform state rm aws_instance.pilot` on the rehearsal state, or delete `infra/terraform/.floci/` |
+| `NoSuchBucket … api` when using `aws` against real AWS | `AWS_ENDPOINT_URL` points to Floci | `env -u AWS_ENDPOINT_URL aws …` |
+| The Terraform provider finds no real AWS credentials | The provider does not read `aws login` sessions | `eval "$(aws configure export-credentials --profile ragsis-pilot --format env)"` |
 
-## Para otros recursos
+## For other resources
 
-Para probar a mano un recurso suelto (por ejemplo una cola nueva) antes de ponerlo en Terraform:
+To try an individual resource by hand (for example a new queue) before putting it in Terraform:
 
 ```bash
-aws sqs create-queue --queue-name prueba          # va a Floci porque AWS_ENDPOINT_URL está exportado
+aws sqs create-queue --queue-name test            # goes to Floci because AWS_ENDPOINT_URL is exported
 aws sqs list-queues
-aws sqs delete-queue --queue-url http://localhost:4566/000000000000/prueba
+aws sqs delete-queue --queue-url http://localhost:4566/000000000000/test
 ```
 
-Después escríbelo en Terraform, ensáyalo con `make rehearse` y recién entonces aplícalo en AWS.
+Then write it in Terraform, rehearse it with `make rehearse` and only then apply it in AWS.

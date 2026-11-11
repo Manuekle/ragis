@@ -1,198 +1,199 @@
-# Guía de desarrollo
+# Development guide
 
-## Requisitos
+## Requirements
 
-| Herramienta | Versión | Para qué |
+| Tool | Version | Used for |
 |---|---|---|
-| Docker (Compose v2) | reciente | Stack local, ClamAV, Postgres |
-| `uv` | reciente | Entorno y dependencias de Python (3.12, ver `.python-version`) |
-| `pnpm` | 12.x (`packageManager`) | Workspace de Node |
-| Node | 24 o superior | API y web |
-| Terraform | 1.9.x | Infraestructura (CI usa 1.9.8) |
-| Floci | 2.x | Ensayo de infraestructura ([guía](guides/floci.md)) |
+| Docker (Compose v2) | recent | Local stack, ClamAV, Postgres |
+| `uv` | recent | Python environment and dependencies (3.12, see `.python-version`) |
+| `pnpm` | 12.x (`packageManager`) | Node workspace |
+| Node | 24 or later | API and web |
+| Terraform | 1.9.x | Infrastructure (CI uses 1.9.8) |
+| Floci | 2.x | Infrastructure rehearsal ([guide](guides/floci.md)) |
 
-## Primer arranque
+## First run
 
 ```bash
-make up            # crea .env con secretos aleatorios y levanta todo
+make up            # creates .env with random secrets and brings everything up
 ```
 
-- Web: <http://localhost:3000> (entra con cualquier correo)
-- API: <http://localhost:4000> (contrato en `packages/contracts/openapi.yaml`)
-- Con trazas: `make up-obs` y <http://localhost:16686>
+- Web: <http://localhost:3000> (sign in with any email)
+- API: <http://localhost:4000> (contract in `packages/contracts/openapi.yaml`)
+- With traces: `make up-obs` and <http://localhost:16686>
 
-Para reconstruir solo la API y la web tras un cambio:
+To rebuild only the API and web after a change:
 
 ```bash
 docker compose -f infra/docker/compose.yml --env-file .env up -d --build --wait api web
 ```
 
-Compose aplica las migraciones antes de iniciar la API.
+Compose applies the migrations before starting the API.
 
-## Usuario y datos de prueba
+## Test user and data
 
-Con el stack levantado (`make up`), crea una organización de ejemplo lista para probar Ask:
+With the stack up (`make up`), create a sample organization ready to try Ask:
 
 ```bash
-make seed        # idempotente: si ya existe, solo repite la prueba rápida de Ask
+make seed        # idempotent: if it already exists, it only repeats the quick Ask check
 ```
 
-| Qué | Valor |
+| What | Value |
 |---|---|
-| Entrada | <http://localhost:3000/login>, modo desarrollo: **sin clave**, escribe el correo |
-| Propietario | `prueba@ragsis.test`: ve todo, incluidos los documentos del grupo Socios |
-| Lector | `lector@ragsis.test`: miembro con rol de lector; **no** ve las actas de socios (para probar permisos) |
-| Organización | «ACME Demo (local)» con GraphRAG activado, nueve documentos del corpus `eval/corpus/acme` |
+| Sign-in | <http://localhost:3000/login>, development mode: **no password**, type the email |
+| Owner | `prueba@ragsis.test`: sees everything, including the documents of the Socios (partners) group |
+| Reader | `lector@ragsis.test`: member with the reader role; does **not** see the partners' minutes (to test permissions) |
+| Organization | "ACME Demo (local)" with GraphRAG enabled, nine documents from the `eval/corpus/acme` corpus |
 
-Estos correos solo existen en tu base local; no están en Cognito ni en AWS. Para empezar de cero: `make down` y borra
-el volumen de Postgres (`docker volume rm ragsis_pgdata`), luego `make up` y `make seed`.
+These emails exist only in your local database; they are not in Cognito or AWS. To start over: `make down` and delete
+the Postgres volume (`docker volume rm ragsis_pgdata`), then `make up` and `make seed`.
 
-Preguntas para probar en **Ask**:
+Questions to try in **Ask**. The sample corpus is in Spanish, so type the questions as written; the middle column is
+only a translation for reference.
 
-| Pregunta | Debe pasar |
-|---|---|
-| ¿Cuál es el monto máximo de viáticos nacionales por día? | Responde 180000 con cita a «Política de viáticos» |
-| ¿Cuántos días de vacaciones tiene cada colaborador por año de servicio? | 15 días hábiles, cita al reglamento |
-| ¿Cuál es el margen operativo de la región Caribe? | 12.5 %, cita a «Indicadores comerciales» (tabla de XLSX) |
-| ¿Quién está a cargo de la oficina que autoriza las suscripciones de software en la nube? | Camila Rojas (une dos documentos con el grafo) |
-| ¿Qué distribución de utilidades aprobó la junta de socios? | Propietario: 30 %. Lector: se abstiene (permisos) |
-| ¿Cuál es la política de teletrabajo para empleados en Japón? | Se abstiene: no hay evidencia |
-| hola · gracias · ¿qué puedes hacer? | Respuesta amable fija, sin citas ni consumo de modelo ni de cuota |
+| Question (type this) | Meaning | What should happen |
+|---|---|---|
+| ¿Cuál es el monto máximo de viáticos nacionales por día? | What is the maximum domestic per-diem amount per day? | Answers 180000 with a citation to «Política de viáticos» |
+| ¿Cuántos días de vacaciones tiene cada colaborador por año de servicio? | How many vacation days does each employee get per year of service? | 15 business days, cites the work regulations |
+| ¿Cuál es el margen operativo de la región Caribe? | What is the operating margin of the Caribbean region? | 12.5 %, cites «Indicadores comerciales» (XLSX table) |
+| ¿Quién está a cargo de la oficina que autoriza las suscripciones de software en la nube? | Who runs the office that authorizes cloud software subscriptions? | Camila Rojas (joins two documents through the graph) |
+| ¿Qué distribución de utilidades aprobó la junta de socios? | What profit distribution did the partners' board approve? | Owner: 30 %. Reader: abstains (permissions) |
+| ¿Cuál es la política de teletrabajo para empleados en Japón? | What is the remote-work policy for employees in Japan? | Abstains: no evidence |
+| hola · gracias · ¿qué puedes hacer? | hi · thanks · what can you do? | Fixed friendly reply, no citations, no model or quota usage |
 
-### Qué «AI» hay en local
+### What "AI" there is locally
 
-Por defecto el proveedor es **local y determinista** (ADR-010): la recuperación, los permisos, las citas y la
-abstención son reales, pero la respuesta es **extractiva** (copia la frase de la evidencia con el prefijo «According to
-the documents»); no redacta con un LLM. Sirve para probar el flujo completo sin red ni descargas.
+By default the provider is **local and deterministic** (ADR-010): retrieval, permissions, citations and abstention are
+real, but the answer is **extractive** (it copies the sentence from the evidence with the prefix "According to the
+documents"); it does not write with an LLM. It is enough to test the full flow with no network or downloads.
 
-### Respuestas redactadas con Ollama (qwen3:8b)
+### Answers written by Ollama (qwen3:8b)
 
-Para que un modelo real redacte la respuesta sin salir de tu máquina:
+To have a real model write the answer without leaving your machine:
 
 ```bash
-ollama pull qwen3:8b                    # unos 5 GB, una sola vez
-# en .env (los embeddings siguen locales: no hace falta reindexar)
+ollama pull qwen3:8b                    # about 5 GB, one time only
+# in .env (embeddings stay local: no need to reindex)
 AI_GENERATION_MODEL=ollama-qwen3-8b@v1
 docker compose -f infra/docker/compose.yml --env-file .env up -d --build --force-recreate --no-deps rag-engine
 ```
 
-`AI_DEFAULT_PROVIDER` no elige el modelo; lo eligen `AI_GENERATION_MODEL` y los demás `AI_*_MODEL`. Para volver al modo
-extractivo, borra esa línea de `.env` (o pon `local-extractive@v1`) y recrea `rag-engine`. Compose le pasa a los
-contenedores `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+`AI_DEFAULT_PROVIDER` does not choose the model; `AI_GENERATION_MODEL` and the other `AI_*_MODEL` variables do. To go
+back to extractive mode, delete that line from `.env` (or set `local-extractive@v1`) and recreate `rag-engine`. Compose
+passes `OLLAMA_BASE_URL=http://host.docker.internal:11434` to the containers.
 
-Lo observado con `qwen3:8b` en un Mac con Apple Silicon (2026-11-10), con el corpus de ACME Demo:
+What was observed with `qwen3:8b` on an Apple Silicon Mac (2026-11-10), with the ACME Demo corpus:
 
-| Aspecto | Resultado |
+| Aspect | Result |
 |---|---|
-| Latencia por pregunta | 2 a 4 s con el modelo ya cargado; la primera tras un rato de inactividad puede tardar más mientras Ollama lo carga |
-| Idioma | Responde en español cuando la pregunta está en español (el prompt lo refuerza) |
-| Citas, permisos y abstención | Igual que en modo extractivo: el verificador sigue exigiendo cita y cifras en la evidencia |
-| Multi-hop con grafo | Funciona (por ejemplo «Camila Rojas»), con acierto de 0,75 en las preguntas multi-hop del golden set |
-| Golden set (23 preguntas, `make eval`) | Cumple todas las metas del piloto: exactitud 1,00, acierto de evidencia 0,94, precisión de citas 1,00, abstención 1,00 / 1,00 y fuga de ACL 0 |
-| Latencia en el golden set | Mediana 7,7 s y p95 31 s: el contexto con saltos del grafo es mayor y el modelo corre en la misma máquina que el resto del stack |
+| Latency per question | 2 to 4 s with the model already loaded; the first one after a period of inactivity can take longer while Ollama loads it |
+| Language | Answers in Spanish when the question is in Spanish (the prompt reinforces it) |
+| Citations, permissions and abstention | Same as in extractive mode: the verifier still requires the citation and figures to be in the evidence |
+| Multi-hop with the graph | Works (for example "Camila Rojas"), with a hit rate of 0.75 on the golden set's multi-hop questions |
+| Golden set (23 questions, `make eval`) | Meets every pilot target: accuracy 1.00, evidence hit rate 0.94, citation precision 1.00, abstention 1.00 / 1.00 and ACL leakage 0 |
+| Latency on the golden set | Median 7.7 s and p95 31 s: the context with graph hops is larger and the model runs on the same machine as the rest of the stack |
 
-Si la máquina está saturada (Docker, simuladores y otras apps a la vez), una respuesta puede tardar decenas de
-segundos. La API espera hasta 2 minutos al motor de consulta y, si se agota, responde `504 rag_timeout` («The answer is
-taking too long…») en lugar de un error interno. Los servicios del stack local se reinician solos
-(`restart: unless-stopped`) y el pool de Postgres de la API tolera conexiones inactivas caídas.
+If the machine is saturated (Docker, simulators and other apps at the same time), an answer can take tens of seconds.
+The API waits up to 2 minutes for the query engine and, if that runs out, responds `504 rag_timeout` ("The answer is
+taking too long…") instead of an internal error. The local stack services restart on their own
+(`restart: unless-stopped`) and the API's Postgres pool tolerates dropped idle connections.
 
-Dos ajustes hicieron falta y ya están en el código: el proveedor de Ollama envía `think: false` (sin eso qwen3 gasta el
-presupuesto de tokens razonando: respuestas de 12 a 55 s y abstenciones intermitentes) y el prompt añade «Responde en
-español.» cuando detecta una pregunta en español.
+Two adjustments were needed and are already in the code: the Ollama provider sends `think: false` (without it qwen3
+spends the token budget reasoning: 12 to 55 s answers and intermittent abstentions) and the prompt adds "Responde en
+español." ("Answer in Spanish.") when it detects a Spanish question.
 
-## Comandos (`make`)
+## Commands (`make`)
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `make up` / `make down` / `make logs` | Levanta, apaga y sigue los logs del stack local |
-| `make up-obs` | Igual que `up`, con Jaeger |
-| `make infra` | Solo Postgres, S3 y SQS (para desarrollar sin contenedores de la app) |
-| `make test` | `test-py` + `test-api` contra Postgres y S3 reales |
-| `make e2e` | Provisiona dos tenants, ingesta el corpus y evalúa el golden set con las metas del piloto |
-| `make eval` | Golden set contra el stack levantado |
-| `make reindex ARGS="--org <uuid> --mode embeddings --model <id> --dry-run"` | Reindexado ([runbook](../ops/runbooks/reindex.md)) |
-| `make mock-oidc` | IdP OIDC de prueba en <http://localhost:9000> |
-| `make tf-validate` | `terraform validate` del entorno `dev` en Docker |
-| `make rehearse-plan` / `rehearse` / `rehearse-destroy` | Ensayo de Terraform en Floci |
-| `make diagrams` | Regenera los SVG de `docs/diagrams` |
+| `make up` / `make down` / `make logs` | Brings up, shuts down and follows the logs of the local stack |
+| `make up-obs` | Same as `up`, with Jaeger |
+| `make infra` | Only Postgres, S3 and SQS (to develop without the app containers) |
+| `make test` | `test-py` + `test-api` against real Postgres and S3 |
+| `make e2e` | Provisions two tenants, ingests the corpus and evaluates the golden set against the pilot targets |
+| `make eval` | Golden set against the running stack |
+| `make reindex ARGS="--org <uuid> --mode embeddings --model <id> --dry-run"` | Reindex ([runbook](../ops/runbooks/reindex.md)) |
+| `make mock-oidc` | Test OIDC IdP at <http://localhost:9000> |
+| `make tf-validate` | `terraform validate` of the `dev` environment in Docker |
+| `make rehearse-plan` / `rehearse` / `rehearse-destroy` | Terraform rehearsal in Floci |
+| `make diagrams` | Regenerates the SVGs in `docs/diagrams` |
 
-## Mapa del repositorio
+## Repository map
 
 ```
 apps/
-  web/                Next.js 16: interfaz y BFF (login, sesión, rutas /api/auth/*)
-  api/                Fastify: rutas, authZ, uploads, agentes, workflows, firmas, conectores
+  web/                Next.js 16: UI and BFF (login, session, /api/auth/* routes)
+  api/                Fastify: routes, authZ, uploads, agents, workflows, signatures, connectors
 services/
-  rag-engine/         FastAPI: consulta (recuperación, fusión, generación, verificador)
-  ingest-worker/      Consumidor de SQS: validación, parseo, OCR, chunking, embeddings, índice
-  ai-gateway/         Registro de modelos, política de residencia, proveedores (local, bedrock, ollama)
+  rag-engine/         FastAPI: query (retrieval, fusion, generation, verifier)
+  ingest-worker/      SQS consumer: validation, parsing, OCR, chunking, embeddings, index
+  ai-gateway/         Model registry, residency policy, providers (local, bedrock, ollama)
 packages/
-  ragsis-core/        Ajustes, BD con contexto RLS, token interno, telemetría
+  ragsis-core/        Settings, DB with RLS context, internal token, telemetry
   contracts/          OpenAPI v1
-  policy/             Índice de pruebas de autorización
-db/migrations/        0001…0013: esquema, RLS forzada, funciones acotadas
+  policy/             Authorization test index
+db/migrations/        0001…0013: schema, forced RLS, bounded functions
 infra/
-  docker/             compose.yml (local), compose.pilot.yml (piloto), Caddyfile.pilot
+  docker/             compose.yml (local), compose.pilot.yml (pilot), Caddyfile.pilot
   terraform/
     modules/          network, security, storage, database, compute, edge, observability
-    envs/dev          Entorno de referencia (ECS Fargate, ALB, RDS, WAF)
-    envs/pilot        Piloto de bajo costo (una EC2)
-ops/runbooks/         Procedimientos operativos
-eval/                 Golden set, corpus de muestra y harness de métricas
-docs/                 Esta documentación, ADR, diagramas e iconos
+    envs/dev          Reference environment (ECS Fargate, ALB, RDS, WAF)
+    envs/pilot        Low-cost pilot (one EC2)
+ops/runbooks/         Operational procedures
+eval/                 Golden set, sample corpus and metrics harness
+docs/                 This documentation, ADRs, diagrams and icons
 scripts/              dev-env.sh, e2e.py, aws-rehearsal.sh
-tests/python/         pytest: aislamiento, ingesta, RAG, multimodal, grafo, trazas
+tests/python/         pytest: isolation, ingestion, RAG, multimodal, graph, traces
 ```
 
-## Pruebas
+## Tests
 
-| Suite | Dónde | Cubre |
+| Suite | Where | Covers |
 |---|---|---|
-| Python | `tests/python/` | Aislamiento por RLS, ACL en recuperación, flujo RAG, multimodal, grafo, reindexado y OCR, trazas |
-| API | `apps/api/test/` | Tenancy y roles, OIDC, firmas, Agent Studio, workflows, conectores |
-| Tipos de la web | `pnpm --filter @ragsis/web lint` (`tsc --noEmit`) | La web no tiene suite de pruebas; se valida con tipos |
-| E2E | `make e2e` | Stack completo con el golden set (`eval/golden/sample.yaml`) |
+| Python | `tests/python/` | RLS isolation, ACL in retrieval, RAG flow, multimodal, graph, reindex and OCR, traces |
+| API | `apps/api/test/` | Tenancy and roles, OIDC, signatures, Agent Studio, workflows, connectors |
+| Web types | `pnpm --filter @ragsis/web lint` (`tsc --noEmit`) | The web has no test suite; it is validated with types |
+| E2E | `make e2e` | Full stack with the golden set (`eval/golden/sample.yaml`) |
 
-Las suites de Python y de la API necesitan `make infra` (o `make test`, que lo levanta).
+The Python and API suites need `make infra` (or `make test`, which brings it up).
 
-Metas del piloto medidas por `make e2e`: exactitud ≥ 0,85, acierto de evidencia ≥ 0,85, precisión de citas ≥ 0,95,
-abstención ≥ 0,90 y **fuga de ACL = 0**. El golden set de muestra es sintético y pequeño; las metas se miden con 100 a
-200 preguntas reales por vertical.
+Pilot targets measured by `make e2e`: accuracy ≥ 0.85, evidence hit rate ≥ 0.85, citation precision ≥ 0.95,
+abstention ≥ 0.90 and **ACL leakage = 0**. The sample golden set is synthetic and small; targets are measured with 100
+to 200 real questions per vertical.
 
-## Integración continua
+## Continuous integration
 
-`.github/workflows/ci.yml` corre en cada pull request y en `main`:
+`.github/workflows/ci.yml` runs on every pull request and on `main`:
 
-1. **test:** entorno efímero (Postgres, S3, SQS), `ruff`, `pytest`, tipos y pruebas de la API, tipos de la web, stack
-   completo y E2E con las metas del piloto.
-2. **terraform:** `terraform fmt -check` y `validate` del entorno `dev`.
-3. **supply-chain:** construye las cuatro imágenes y escanea la de la API con Trivy (CRITICAL y HIGH).
+1. **test:** ephemeral environment (Postgres, S3, SQS), `ruff`, `pytest`, API types and tests, web types, full stack and
+   E2E against the pilot targets.
+2. **terraform:** `terraform fmt -check` and `validate` of the `dev` environment.
+3. **supply-chain:** builds the four images and scans the API one with Trivy (CRITICAL and HIGH).
 
-## Convenciones
+## Conventions
 
-- **Decisiones:** cada cambio de fondo lleva un ADR en [adr/README.md](adr/README.md).
-- **Migraciones:** siempre hacia adelante y compatibles con la versión anterior (columna nullable, backfill, luego
-  restricción). Se aplican con el rol propietario.
-- **Seguridad primero:** una consulta nueva pasa por el tenant resuelto en la API y por RLS; nada de confiar en datos del
-  cliente. Añade una prueba negativa.
-- **Secretos:** nunca en Git ni en el historial; ver [security.md](security.md).
-- **Idioma:** documentación y comentarios en español; la interfaz, en inglés llano para personas no técnicas, con las
-  opciones de experto dentro de «Advanced» con valores por defecto sensatos.
-- **AWS:** todo cambio de infraestructura se ensaya antes en Floci ([guides/floci.md](guides/floci.md)).
+- **Decisions:** every substantial change comes with an ADR in [adr/README.md](adr/README.md).
+- **Migrations:** always forward-only and compatible with the previous version (nullable column, backfill, then
+  constraint). They are applied with the owner role.
+- **Security first:** a new query goes through the tenant resolved in the API and through RLS; never trust client data.
+  Add a negative test.
+- **Secrets:** never in Git or in its history; see [security.md](security.md).
+- **Language:** the README and all documentation are written in English; the UI is plain English for non-technical
+  people, with expert options inside "Advanced" with sensible defaults.
+- **AWS:** every infrastructure change is rehearsed first in Floci ([guides/floci.md](guides/floci.md)).
 
-## Recetas
+## Recipes
 
-**Agregar una migración.** Crea `db/migrations/00NN_nombre.sql`, aplícala con `make up` (o el servicio `migrate`) y
-añade una prueba en `tests/python/test_isolation.py` si toca tablas de cliente.
+**Add a migration.** Create `db/migrations/00NN_name.sql`, apply it with `make up` (or the `migrate` service) and add a
+test in `tests/python/test_isolation.py` if it touches customer tables.
 
-**Agregar una variable de configuración.** Declárala en `apps/api/src/config.ts` (API) o en `settings.py` (Python),
-pásala en `compose.yml` y `compose.pilot.yml` si hace falta, y documéntala en [configuration.md](configuration.md).
+**Add a configuration variable.** Declare it in `apps/api/src/config.ts` (API) or `settings.py` (Python), pass it in
+`compose.yml` and `compose.pilot.yml` if needed, and document it in [configuration.md](configuration.md).
 
-**Agregar un proveedor de modelos.** Implementa el proveedor en `services/ai-gateway/src/ragsis_ai/providers`, regístralo
-en `registry.py` y cubre su política de residencia en `policy.py`.
+**Add a model provider.** Implement the provider in `services/ai-gateway/src/ragsis_ai/providers`, register it in
+`registry.py` and cover its residency policy in `policy.py`.
 
-**Agregar un recurso de AWS.** Escríbelo en el módulo Terraform, ensáyalo con `make rehearse` y recién entonces
-`terraform plan` y `apply` en AWS real.
+**Add an AWS resource.** Write it in the Terraform module, rehearse it with `make rehearse` and only then run
+`terraform plan` and `apply` in real AWS.
 
-**Agregar un diagrama o un icono.** [diagrams/README.md](diagrams/README.md) y
+**Add a diagram or an icon.** [diagrams/README.md](diagrams/README.md) and
 [assets/icons/README.md](assets/icons/README.md).

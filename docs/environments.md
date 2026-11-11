@@ -1,132 +1,131 @@
-# Entornos
+# Environments
 
-Ragsis corre en tres lugares. La regla que los une: **toda infraestructura de AWS se crea primero en Floci y solo
-después en AWS real.**
+Ragsis runs in three places. The rule that ties them together: **all AWS infrastructure is created first in Floci and
+only then in real AWS.**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/environments-dark.svg">
-  <img alt="Local con Docker Compose, ensayo en Floci y AWS real" src="diagrams/environments.svg">
+  <img alt="Local with Docker Compose, rehearsal in Floci and real AWS" src="diagrams/environments.svg">
 </picture>
 
-| | Local | Ensayo en Floci | AWS real (piloto) |
+| | Local | Rehearsal in Floci | Real AWS (pilot) |
 |---|---|---|---|
-| Para qué | Desarrollar y probar la aplicación | Probar Terraform y recursos AWS sin cuenta ni costo | Mostrar el producto a un grupo pequeño |
-| Cómo se levanta | `make up` | `make rehearse` | `terraform apply` con el perfil `ragsis-pilot` |
-| Almacenamiento | SeaweedFS (API S3) | S3 emulado | S3 |
-| Cola | ElasticMQ (API SQS) | SQS emulado | SQS + DLQ |
-| Identidad | Login de desarrollo o IdP simulado | Cognito emulado | Cognito |
-| Modelos | Locales deterministas | n/a | Locales (Bedrock opcional) |
-| Costo | 0 | 0 | Créditos del plan FREE |
+| Purpose | Develop and test the application | Test Terraform and AWS resources with no account or cost | Show the product to a small group |
+| How it comes up | `make up` | `make rehearse` | `terraform apply` with the `ragsis-pilot` profile |
+| Storage | SeaweedFS (S3 API) | Emulated S3 | S3 |
+| Queue | ElasticMQ (SQS API) | Emulated SQS | SQS + DLQ |
+| Identity | Development login or simulated IdP | Emulated Cognito | Cognito |
+| Models | Local, deterministic | n/a | Local (Bedrock optional) |
+| Cost | 0 | 0 | FREE plan credits |
 
-El stack de aplicación local **no** usa Floci: usa SeaweedFS y ElasticMQ porque arrancan en segundos y no dependen de
-nada externo. Floci se usa para ensayar la infraestructura (Terraform), no para correr la aplicación.
+The local application stack does **not** use Floci: it uses SeaweedFS and ElasticMQ because they start in seconds and
+depend on nothing external. Floci is used to rehearse the infrastructure (Terraform), not to run the application.
 
 ## 1. Local
 
 ```bash
-make up           # genera .env con secretos aleatorios y levanta todo
-make up-obs       # igual, con Jaeger (http://localhost:16686)
-make infra        # solo Postgres, S3 y SQS, para desarrollar o probar
+make up           # generates .env with random secrets and brings everything up
+make up-obs       # same, with Jaeger (http://localhost:16686)
+make infra        # only Postgres, S3 and SQS, to develop or test
 make down
 ```
 
-Servicios de `infra/docker/compose.yml`:
+Services in `infra/docker/compose.yml`:
 
-| Servicio | Imagen | Puerto en el host |
+| Service | Image | Host port |
 |---|---|---|
 | `postgres` | `pgvector/pgvector:pg17` | `127.0.0.1:55432` |
 | `seaweedfs` | `chrislusf/seaweedfs:3.80` | `127.0.0.1:8333` |
 | `elasticmq` | `softwaremill/elasticmq-native:1.6.11` | `127.0.0.1:9324` |
-| `migrate`, `bootstrap` | imagen de la API | ninguno; terminan al acabar |
+| `migrate`, `bootstrap` | API image | none; they exit when done |
 | `api` | `apps/api/Dockerfile` | `127.0.0.1:4000` |
-| `rag-engine` | `services/rag-engine/Dockerfile` | ninguno |
-| `ingest-worker` | `services/ingest-worker/Dockerfile` | ninguno |
+| `rag-engine` | `services/rag-engine/Dockerfile` | none |
+| `ingest-worker` | `services/ingest-worker/Dockerfile` | none |
 | `web` | `apps/web/Dockerfile` | `127.0.0.1:3000` |
-| `jaeger` (perfil `observability`) | `jaegertracing/jaeger:2.5.0` | `127.0.0.1:16686`, `4318` |
+| `jaeger` (profile `observability`) | `jaegertracing/jaeger:2.5.0` | `127.0.0.1:16686`, `4318` |
 
-Por defecto no necesita red ni credenciales: usa el proveedor de modelos local. La web arranca con
-`AUTH_MODE=dev` (cualquier correo entra). Para probar SSO sin un IdP real, `make mock-oidc` levanta uno en
-<http://localhost:9000>.
+By default it needs no network or credentials: it uses the local model provider. The web starts with `AUTH_MODE=dev`
+(any email signs in). To test SSO without a real IdP, `make mock-oidc` brings one up at <http://localhost:9000>.
 
-## 2. Ensayo en Floci
+## 2. Rehearsal in Floci
 
-[Floci](https://github.com/floci-io/floci) es un emulador local de AWS (puerto 4566). Con él se puede aplicar el mismo
-Terraform del piloto sin cuenta de AWS y sin costo. La guía completa, con límites conocidos, está en
-[guides/floci.md](guides/floci.md).
+[Floci](https://github.com/floci-io/floci) is a local AWS emulator (port 4566). With it the same pilot Terraform can be
+applied with no AWS account and no cost. The full guide, with known limits, is in [guides/floci.md](guides/floci.md).
 
 ```bash
-make rehearse-plan      # qué se crearía
-make rehearse           # crea los recursos en Floci
-make rehearse-destroy   # los borra
+make rehearse-plan      # what would be created
+make rehearse           # creates the resources in Floci
+make rehearse-destroy   # deletes them
 ```
 
-## 3. AWS real: el piloto
+## 3. Real AWS: the pilot
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/aws-pilot-dark.svg">
-  <img alt="Piloto en AWS: una EC2 con Docker Compose, S3, SQS, KMS, ECR, Cognito y Systems Manager en us-east-2" src="diagrams/aws-pilot.svg">
+  <img alt="Pilot on AWS: one EC2 with Docker Compose, S3, SQS, KMS, ECR, Cognito and Systems Manager in us-east-2" src="diagrams/aws-pilot.svg">
 </picture>
 
-Una sola instancia EC2 `m7i-flex.large` (2 vCPU, 8 GiB, Ubuntu 24.04, EBS gp3 de 30 GB cifrado) ejecuta todo con
-`infra/docker/compose.pilot.yml`. Caddy termina TLS en los puertos 80 y 443 y es lo único expuesto. Los datos
-administrados viven en servicios regionales.
+A single `m7i-flex.large` EC2 instance (2 vCPU, 8 GiB, Ubuntu 24.04, 30 GB encrypted gp3 EBS) runs everything with
+`infra/docker/compose.pilot.yml`. Caddy terminates TLS on ports 80 and 443 and is the only thing exposed. Managed data
+lives in regional services.
 
-| Recurso | Detalle |
+| Resource | Detail |
 |---|---|
-| Región | `us-east-2` (Ohio). Todos los recursos regionales deben crearse ahí. |
-| EC2 | `m7i-flex.large`, IMDSv2 obligatorio, IP elástica, acceso por Session Manager (sin SSH) |
-| S3 | Bucket privado, versionado, SSE-KMS, solo TLS, CORS hacia el origen del piloto, ciclo de vida de versiones |
-| SQS | Cola de ingesta y DLQ cifradas con KMS |
-| KMS | Una clave con rotación anual |
-| ECR | Cuatro repositorios (`api`, `ingest-worker`, `rag-engine`, `web`) con tags inmutables y escaneo al subir |
-| Cognito | User pool (plan LITE) con solo cuentas invitadas, cliente público con `USER_PASSWORD_AUTH` |
-| IAM | Rol `ragsis-pilot-ec2` con permisos mínimos por recurso |
+| Region | `us-east-2` (Ohio). All regional resources must be created there. |
+| EC2 | `m7i-flex.large`, IMDSv2 required, Elastic IP, access through Session Manager (no SSH) |
+| S3 | Private, versioned bucket, SSE-KMS, TLS only, CORS to the pilot origin, version lifecycle |
+| SQS | Ingestion queue and DLQ encrypted with KMS |
+| KMS | One key with annual rotation |
+| ECR | Four repositories (`api`, `ingest-worker`, `rag-engine`, `web`) with immutable tags and scan on push |
+| Cognito | User pool (LITE plan) with invited accounts only, public client with `USER_PASSWORD_AUTH` |
+| IAM | `ragsis-pilot-ec2` role with least privilege per resource |
 
-El procedimiento paso a paso (perfil, Terraform, imágenes, `.env.pilot`, primer arranque y prueba de aceptación) está en
-el runbook [piloto-aws.md](../ops/runbooks/piloto-aws.md).
+The step-by-step procedure (profile, Terraform, images, `.env.pilot`, first start and acceptance test) is in the runbook
+[piloto-aws.md](../ops/runbooks/piloto-aws.md).
 
-### Costo y créditos
+### Cost and credits
 
-El piloto usa el plan **FREE** de AWS: no genera cobros mientras duren los créditos (USD 100) y el plan (seis meses). Al
-terminar, AWS suspende la cuenta y conserva los datos 90 días para que pases a un plan de pago. Unirse a AWS
-Organizations sube la cuenta a plan de pago automáticamente.
+The pilot uses the AWS **FREE** plan: it incurs no charges while the credits (USD 100) and the plan (six months) last.
+When they end, AWS suspends the account and keeps the data for 90 days so you can move to a paid plan. Joining AWS
+Organizations upgrades the account to a paid plan automatically.
 
-`m7i-flex.large` es elegible para el plan FREE, pero **consume créditos**: elegible no significa gratis. Estimación con
-precios de lista de us-east-2 consultados el 2026-11-10 (instancia + EBS de 30 GB + IP pública):
+`m7i-flex.large` is eligible for the FREE plan, but it **consumes credits**: eligible does not mean free. Estimate with
+us-east-2 list prices checked on 2026-11-10 (instance + 30 GB EBS + public IP):
 
-| Uso | Costo al mes | Duración de USD 100 |
+| Usage | Cost per month | How long USD 100 lasts |
 |---|---|---|
-| 24 horas, 7 días | 75,95 USD | 1,3 meses |
-| 8 h por 22 días, con IP elástica | 22,90 USD | 4,4 meses |
-| 8 h por 22 días, sin IP elástica | 20,13 USD | 5,0 meses |
+| 24 hours, 7 days | USD 75.95 | 1.3 months |
+| 8 h for 22 days, with Elastic IP | USD 22.90 | 4.4 months |
+| 8 h for 22 days, without Elastic IP | USD 20.13 | 5.0 months |
 
-Qué hacer:
+What to do:
 
-- **Apaga la instancia cuando no pruebes.** Detenida no cobra cómputo, pero el disco y la IP elástica siguen cobrando.
-- Si aceptas que la IP cambie en cada arranque, libera la IP elástica.
-- Los documentos casi no pesan en el costo: 20 GB en S3 cuestan unos 0,46 USD al mes.
-- PostgreSQL corre en la instancia, sobre el EBS (2,40 USD al mes por 30 GB); no hay RDS.
-- Los modelos de Meta, Anthropic u otros proveedores externos se facturan aparte; los créditos de AWS no los cubren.
-- Si una operación que antes funcionaba da `AccessDenied`, revisa en *AWS Settings → Billing* si el proyecto llegó a su
-  límite de gasto.
+- **Shut the instance down when you are not testing.** A stopped instance does not charge for compute, but the disk and
+  the Elastic IP keep charging.
+- If you accept that the IP changes on every start, release the Elastic IP.
+- Documents barely affect the cost: 20 GB in S3 costs about USD 0.46 per month.
+- PostgreSQL runs on the instance, on the EBS volume (USD 2.40 per month for 30 GB); there is no RDS.
+- Models from Meta, Anthropic or other external providers are billed separately; AWS credits do not cover them.
+- If an operation that used to work returns `AccessDenied`, check in *AWS Settings → Billing* whether the project has
+  reached its spend limit.
 
-### Sobre `AWS_ENDPOINT_URL`
+### About `AWS_ENDPOINT_URL`
 
-Si tu shell exporta `AWS_ENDPOINT_URL=http://localhost:4566` (lo habitual al trabajar con Floci), **cualquier comando
-`aws` va al emulador, no a AWS real**. Para AWS real usa `env -u AWS_ENDPOINT_URL aws …` o una terminal limpia. Terraform
-necesita además credenciales exportadas desde la sesión de `aws login`:
+If your shell exports `AWS_ENDPOINT_URL=http://localhost:4566` (usual when working with Floci), **any `aws` command goes
+to the emulator, not to real AWS**. For real AWS use `env -u AWS_ENDPOINT_URL aws …` or a clean terminal. Terraform also
+needs credentials exported from the `aws login` session:
 
 ```bash
 unset AWS_ENDPOINT_URL AWS_PROFILE
 eval "$(aws configure export-credentials --profile ragsis-pilot --format env)"
-terraform -chdir=infra/terraform/envs/pilot plan -var aws_account_id=<id-de-la-cuenta> -var pilot_hostname=<dns>
+terraform -chdir=infra/terraform/envs/pilot plan -var aws_account_id=<account-id> -var pilot_hostname=<dns>
 ```
 
-## Promoción: de Floci a AWS
+## Promotion: from Floci to AWS
 
-1. Cambia el Terraform o el compose.
-2. `make rehearse-plan` y `make rehearse` en Floci. Corrige hasta que apliquen sin errores.
-3. `terraform plan` contra AWS real. Revisa que sea un cambio mínimo y sin destrucciones inesperadas.
-4. `terraform apply` en AWS real.
-5. Si algo falla en Floci por una limitación del emulador (no del código), anótalo en
-   [guides/floci.md](guides/floci.md#límites-conocidos) y valida esa parte directamente en AWS con un cambio acotado.
+1. Change the Terraform or the compose file.
+2. `make rehearse-plan` and `make rehearse` in Floci. Fix until they apply without errors.
+3. `terraform plan` against real AWS. Check that it is a minimal change with no unexpected destructions.
+4. `terraform apply` in real AWS.
+5. If something fails in Floci because of an emulator limitation (not the code), note it in
+   [guides/floci.md](guides/floci.md#known-limits) and validate that part directly in AWS with a bounded change.

@@ -1,31 +1,31 @@
-# Reindexado (cambio de parser, chunking, OCR o modelo de embeddings)
+# Reindex (change of parser, chunking, OCR or embedding model)
 
-Regla: cada cambio de parser, embedding, LLM o prompt requiere evaluación de regresión con el
-golden set **antes** de activarse (sección 13). CLI: `python -m ragsis_ingest.reindex` (imagen `ingest-worker`,
-credencial del worker; RLS por tenant). `--dry-run` cuenta sin encolar; `--inline` procesa sin SQS.
+Rule: every change of parser, embedding, LLM or prompt requires a regression evaluation with the golden set **before**
+it is activated (section 13). CLI: `python -m ragsis_ingest.reindex` (`ingest-worker` image, worker credential; RLS per
+tenant). `--dry-run` counts without enqueueing; `--inline` processes without SQS.
 
-## Cambio de modelo de embeddings (dual-write, sin downtime)
+## Embedding model change (dual-write, no downtime)
 
-1. Registrar el modelo en `ModelRegistry` con un `model_id` versionado nuevo (1024 dims).
-2. Agregar vectores del modelo nuevo a los chunks activos (coexisten con los actuales):
+1. Register the model in `ModelRegistry` with a new versioned `model_id` (1024 dims).
+2. Add vectors from the new model to the active chunks (they coexist with the current ones):
    ```bash
-   python -m ragsis_ingest.reindex --org <uuid> --mode embeddings --model <nuevo_model_id> --dry-run
-   python -m ragsis_ingest.reindex --org <uuid> --mode embeddings --model <nuevo_model_id>
+   python -m ragsis_ingest.reindex --org <uuid> --mode embeddings --model <new_model_id> --dry-run
+   python -m ragsis_ingest.reindex --org <uuid> --mode embeddings --model <new_model_id>
    ```
-   Repetir hasta que `--dry-run` reporte 0 versiones pendientes (idempotente).
-3. `make eval` en staging con `AI_EMBEDDING_MODEL=<nuevo>` en rag-engine; comparar con el baseline de `eval/reports/`.
-4. Swap: desplegar rag-engine **y** workers con `AI_EMBEDDING_MODEL=<nuevo>`.
-5. Rollback: volver la variable; los vectores viejos siguen presentes.
-6. Tras la ventana de observación: `python -m ragsis_ingest.reindex --org <uuid> --purge-model <viejo>`
-   (se rechaza purgar el modelo activo).
+   Repeat until `--dry-run` reports 0 pending versions (idempotent).
+3. `make eval` in staging with `AI_EMBEDDING_MODEL=<new>` on the rag-engine; compare with the baseline in
+   `eval/reports/`.
+4. Swap: deploy the rag-engine **and** workers with `AI_EMBEDDING_MODEL=<new>`.
+5. Rollback: revert the variable; the old vectors are still present.
+6. After the observation window: `python -m ragsis_ingest.reindex --org <uuid> --purge-model <old>`
+   (purging the active model is rejected).
 
-## Cambio de parser / chunking / OCR (full)
+## Parser / chunking / OCR change (full)
 
 ```bash
 python -m ragsis_ingest.reindex --org <uuid> --mode full --only-stale
 ```
-Re-parsea desde el original en S3 y reemplaza los chunks de cada versión vigente en **una transacción**
-(las consultas ven el índice viejo hasta el COMMIT). Solo recalcula vectores del modelo activo: si hay un
-dual-write en curso, repetir el paso `--mode embeddings` después. Versiones que dejaron de ser vigentes
-durante el proceso se omiten (`skipped:not_current`). Un fallo no altera la versión servida
-(evento `document.reindex_failed`).
+Re-parses from the original in S3 and replaces the chunks of each current version in **one transaction** (queries see
+the old index until COMMIT). It only recomputes vectors of the active model: if a dual-write is in progress, repeat the
+`--mode embeddings` step afterwards. Versions that stopped being current during the process are skipped
+(`skipped:not_current`). A failure does not alter the served version (`document.reindex_failed` event).

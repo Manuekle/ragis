@@ -2,16 +2,16 @@ DC = docker compose -f infra/docker/compose.yml --env-file .env
 
 .PHONY: env up up-obs down logs test test-py test-api eval build-web tf-validate mock-oidc reindex rehearse-plan rehearse rehearse-destroy diagrams seed
 
-env:            ## Genera .env con secretos aleatorios (no sobrescribe)
+env:            ## Generate .env with random secrets (does not overwrite)
 	@test -f .env || ./scripts/dev-env.sh
 
-up: env         ## Levanta todo el stack local
+up: env         ## Bring up the whole local stack
 	$(DC) up -d --build --wait
 
-up-obs: env     ## Stack + Jaeger con trazas OTel (UI http://localhost:16686)
+up-obs: env     ## Stack + Jaeger with OTel traces (UI http://localhost:16686)
 	OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318 $(DC) --profile observability up -d --build --wait
 
-mock-oidc:      ## IdP OIDC de prueba en http://localhost:9000 (client_id ragsis-web)
+mock-oidc:      ## Test OIDC IdP at http://localhost:9000 (client_id ragsis-web)
 	cd apps/api && MOCK_OIDC_CLIENT_ID=ragsis-web npx tsx src/scripts/mock-oidc.ts
 
 reindex:        ## make reindex ARGS="--org <uuid> --mode embeddings --model <id> --dry-run"
@@ -23,7 +23,7 @@ down:
 logs:
 	$(DC) logs -f --tail=100
 
-infra: env      ## Solo dependencias (Postgres, S3, SQS) para desarrollo/tests
+infra: env      ## Dependencies only (Postgres, S3, SQS) for development/tests
 	$(DC) up -d --wait postgres seaweedfs elasticmq
 
 test: test-py test-api
@@ -34,27 +34,27 @@ test-py: infra
 test-api: infra
 	cd apps/api && pnpm test
 
-e2e:            ## Prueba end-to-end contra el stack levantado (make up)
+e2e:            ## End-to-end test against the running stack (make up)
 	uv run python scripts/e2e.py
 
-eval:           ## Golden set contra el stack levantado
+eval:           ## Golden set against the running stack
 	uv run python -m ragsis_eval.run --golden eval/golden/sample.yaml
 
 tf-validate:
 	docker run --rm -v $(PWD)/infra/terraform:/tf -w /tf/envs/dev hashicorp/terraform:1.9.8 init -backend=false -input=false
 	docker run --rm -v $(PWD)/infra/terraform:/tf -w /tf/envs/dev hashicorp/terraform:1.9.8 validate
 
-rehearse-plan:  ## Ensayo en Floci: qué crearía Terraform (docs/guides/floci.md)
+rehearse-plan:  ## Floci rehearsal: what Terraform would create (docs/guides/floci.md)
 	./scripts/aws-rehearsal.sh plan
 
-rehearse:       ## Ensayo en Floci: crea la infraestructura del piloto en el emulador, antes de AWS real
+rehearse:       ## Floci rehearsal: create the pilot infrastructure in the emulator, before real AWS
 	./scripts/aws-rehearsal.sh apply
 
-rehearse-destroy: ## Ensayo en Floci: borra lo creado en el emulador
+rehearse-destroy: ## Floci rehearsal: delete what was created in the emulator
 	./scripts/aws-rehearsal.sh destroy
 
-diagrams:       ## Regenera los SVG de docs/diagrams
+diagrams:       ## Regenerate the SVGs in docs/diagrams
 	python3 docs/diagrams/build.py
 
-seed:           ## Usuario y datos de prueba locales (org ACME Demo + 9 documentos); idempotente
+seed:           ## Local test user and data (ACME Demo org + 9 documents); idempotent
 	uv run python scripts/seed-dev.py
