@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { useOrg } from "../layout";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 import { ClickUpLogo, GmailLogo, SlackLogo } from "@/components/brand-logos";
-import { IconAlert, IconBuilding, IconLock, IconPause, IconPlay, IconPlus, IconRefresh, IconSpinner, IconTrash, IconUser, IconX } from "@/components/icons";
+import { IconAlert, IconBuilding, IconLock, IconPause, IconPlay, IconPlug, IconPlus, IconRefresh, IconSpinner, IconTrash, IconUser, IconX } from "@/components/icons";
 import { Checkbox, Seg, Toast } from "@/components/motion";
 import { Disclosure, Select, useConfirm } from "@/components/ui";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
@@ -100,6 +100,29 @@ function StatusBadge({ c }: { c: Connection }) {
   if (c.status === "error") return <span className="badge err"><span className="dot" />Needs attention</span>;
   if (c.syncing || !c.last_success_at) return <span className="badge accent"><IconSpinner size={11} />Updating…</span>;
   return <span className="badge ok"><span className="dot" />Up to date</span>;
+}
+
+/** Shown above the apps while nothing is connected yet: what happens after pressing Connect. */
+const STEPS: [string, string][] = [
+  ["Connect", "Sign in on the app's own login page. Disconnect anytime."],
+  ["Choose what to include", "Pick what to bring in and how far back."],
+  ["Ask", "Answers cite the original email, message or task."],
+];
+
+function HowItWorks() {
+  return (
+    <ol className="conn-steps" aria-label="How connecting works">
+      {STEPS.map(([title, detail], i) => (
+        <li key={title}>
+          <span className="conn-step-n" aria-hidden="true">{i + 1}</span>
+          <div>
+            <strong>{title}</strong>
+            <small className="muted">{detail}</small>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 /* ───────────── Settings editor ───────────── */
@@ -372,15 +395,26 @@ function AppCard({
   }
 
   const editingConn = mine.find((c) => c.id === editing) ?? null;
+  const idle = mine.length === 0;
+  // Nothing connected yet: say so, instead of leaving the card without any state.
+  const idleState = !p.available ? "Not available yet" : !p.allowed ? "Turned off by your administrator" : "Not connected";
 
   return (
-    <article className={`card conn-card${mine.length === 0 ? " is-idle" : ""}${editingConn ? " is-editing" : ""}`} data-provider={p.id}>
+    <article className={`card conn-card${idle ? " is-idle" : ""}${editingConn ? " is-editing" : ""}`} data-provider={p.id}>
       <header className="conn-head">
         <span className="conn-logo" aria-hidden="true">
           <Logo size={26} />
         </span>
         <div className="conn-title">
-          <h2>{p.name}</h2>
+          <div className="conn-title-row">
+            <h2>{p.name}</h2>
+            {idle && (
+              <span className="badge conn-state">
+                <span className="dot" />
+                {idleState}
+              </span>
+            )}
+          </div>
           <p className="muted">{blurb}</p>
         </div>
       </header>
@@ -474,16 +508,9 @@ function AppCard({
         {!p.available ? (
           <p className="conn-note">
             <IconAlert size={14} />
-            Not available yet. {canManage ? `Your technical team needs to finish setting up ${p.name} on the server.` : "Ask your administrator."}
+            {canManage ? `Your technical team needs to finish setting up ${p.name} on the server.` : "Ask your administrator."}
           </p>
-        ) : !p.allowed ? (
-          mine.length === 0 && (
-            <p className="conn-note">
-              <IconLock size={14} />
-              Turned off by your administrator.
-            </p>
-          )
-        ) : (
+        ) : !p.allowed ? null : (
           canConnect && (
             <div className={`conn-connect${mine.length ? " is-extra" : ""}`}>
               {folders.length > 1 && (
@@ -498,15 +525,19 @@ function AppCard({
                   />
                 </label>
               )}
-              <button type="button" className={mine.length ? "quiet small" : "primary small"} onClick={connect} disabled={!!busy || !folder}>
-                {busy === "connect" ? <IconSpinner size={14} /> : mine.length > 0 && <IconPlus size={14} />}
+              {/* Self-serve app = the one loud button; company apps (administrators only) stay neutral until they need attention. */}
+              <button type="button" className={mine.length ? "quiet small" : personal ? "primary small" : "ghost small"} onClick={connect} disabled={!!busy || !folder}>
+                {busy === "connect" ? <IconSpinner size={14} /> : mine.length > 0 ? <IconPlus size={14} /> : <IconPlug size={14} />}
                 {mine.length ? `Connect another ${p.name} account` : `Connect ${p.name}`}
               </button>
             </div>
           )
         )}
-        {!personal && !canManage && mine.length === 0 && p.available && p.allowed && (
-          <p className="muted conn-hint">An administrator can connect {p.name} for your company.</p>
+        {!personal && !canManage && idle && p.available && p.allowed && (
+          <p className="muted conn-hint conn-next">
+            <IconLock size={13} />
+            An administrator can connect {p.name} for your company.
+          </p>
         )}
       </div>
 
@@ -658,6 +689,8 @@ function ConnectionsView() {
             </button>
           </div>
         )}
+
+        {data && data.connectors.length === 0 && <HowItWorks />}
 
         {data === undefined ? (
           <SkeletonStatus label="Loading connected apps…">
