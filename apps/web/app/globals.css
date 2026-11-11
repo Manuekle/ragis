@@ -3,10 +3,10 @@
    Motion: transitions.dev tokens + better-ui values (press 0.96, enter 300ms, exit 150ms). */
 
 /* Brand fonts (Universal Sans Display, Lanterne, Basier Square Mono).
-   Trial files live in public/fonts/ (git-ignored, NOT docker-ignored): every image built from this checkout —
-   local compose and the pilot — bakes them in, so local and prod render the same type.
-   Absolute /fonts/ URLs are not resolved by the bundler: on a clean clone without the files they just 404 and
-   the system stacks in --font / --serif / --mono take over, instead of breaking `next build`. */
+   Trial files live in public/fonts/ and are committed, so every build renders the same type: local compose,
+   the AWS pilot image and Vercel deploys from Git (mvp). Never git-ignore or docker-ignore them.
+   Absolute /fonts/ URLs are not resolved by the bundler: if a file goes missing it just 404s and the system
+   stacks in --font / --serif / --mono take over, instead of breaking `next build`. */
 @font-face { font-family: "Universal Sans"; src: url("/fonts/UniversalSans-Display-450-Trial.ttf") format("truetype"); font-weight: 450; font-style: normal; font-display: swap; }
 
 @font-face { font-family: "Lanterne"; src: url("/fonts/Lanterne-Light-Trial.woff2") format("woff2"); font-weight: 300; font-style: normal; font-display: swap; }

@@ -23,7 +23,6 @@ eval/reports/
 /.agents/
 /.claude/
 /.gstack/
-/apps/web/public/fonts/
 /system-design/
 /transitions/
 /skills-lock.json
