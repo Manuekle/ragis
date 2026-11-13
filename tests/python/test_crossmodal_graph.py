@@ -20,7 +20,7 @@ from ragsis_ingest.multimodal import MultimodalEnricher, split_entity_summary
 from ragsis_ingest.parsers.model import Block, ParsedDocument
 from ragsis_ingest.pipeline import IngestPipeline, JobMessage
 from ragsis_ingest.reindex import enqueue, plan_versions, purge_model
-from ragsis_ingest.table_graph import table_graph, table_rows
+from ragsis_ingest.table_graph import looks_like_proper_name, table_graph, table_rows
 from ragsis_rag import orchestrator as orch_mod
 from ragsis_rag.orchestrator import QueryOrchestrator
 from ragsis_rag.prompting import render_prompt
@@ -71,6 +71,20 @@ def test_table_graph_rows_columns_cells_and_units():
     # Las dos filas "Total" conservan sus dos valores de 2020.
     totals = [r["description"] for r in rels if r["keywords"] == "celda Total 2020"]
     assert len(totals) == 2 and len({r["src_key"] for r in rels if r["keywords"] == "celda Total 2020"}) == 2
+
+
+def test_proper_name_rows_also_mention_the_global_entity():
+    hours = ("| Abogado | Rol | Horas |\n| --- | --- | --- |\n"
+             "| Mariana Ortiz Lozano | Socia | 64 |\n| Total | | 219 |")
+    ents, rels = table_graph(hours, ANCHOR, "", normalize_name)
+    glob = [e for e in ents if e["key"] == normalize_name("Mariana Ortiz Lozano")]
+    assert len(glob) == 1 and "Horas = 64" in glob[0]["description"]
+    row = next(e["key"] for e in ents if e["type"] == "fila" and e["name"] == "Mariana Ortiz Lozano")
+    assert any(r["src_key"] == row and r["dst_key"] == glob[0]["key"] for r in rels)
+    # "Total" no es un nombre propio: queda solo como fila de su tabla.
+    assert normalize_name("Total") not in {e["key"] for e in ents}
+    assert [looks_like_proper_name(x) for x in ("Banco de Bogotá", "Sueldos y salarios", "Región Caribe 2025")] == [
+        True, False, False]
 
 
 def test_table_graph_column_unit_and_degenerate_tables():

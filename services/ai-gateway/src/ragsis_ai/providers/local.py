@@ -167,13 +167,27 @@ def _sentence_entities(sentence: str) -> list[tuple[int, int, str, str]]:
     return out
 
 
+def _graph_sentences(prose: str) -> list[str]:
+    """Oraciones para el grafo: una etiqueta que termina en ":" se une a su valor ("Responsable de X: Ana Ruiz.").
+
+    Sin esto la mención queda con la descripción "Ana Ruiz." y pierde el rol que la conecta con las preguntas.
+    """
+    out: list[str] = []
+    for part in split_sentences(prose):
+        if out and out[-1].endswith(":"):
+            out[-1] = f"{out[-1]} {part}"
+        else:
+            out.append(part)
+    return out
+
+
 def graph_heuristic(text: str) -> dict:
     entities: dict[str, dict] = {}
     relations: dict[tuple[str, str], dict] = {}
     # Las filas de tablas Markdown no son prosa: sus celdas las modela el grafo intra-tabla (ADR-029), no este
     # extractor de nombres propios, que leería "Región | Margen" como una entidad.
     prose, _ = split_tables(_SECTION_PREFIX.sub("", text))
-    for sentence in split_sentences(prose):
+    for sentence in _graph_sentences(prose):
         found = _sentence_entities(sentence)
         for _, _, name, etype in found:
             key = fold(name)

@@ -4,6 +4,9 @@
 - Cada oración citada debe compartir contenido con su fuente (overlap lexical mínimo).
 - Toda cifra de una oración debe aparecer literalmente en alguna de sus fuentes citadas.
 - Oraciones sustantivas sin cita válida se eliminan; si no queda respaldo, se abstiene.
+- Citas incompletas se completan: si una oración encadena hechos de dos fuentes (multi-hop) pero el modelo cita solo
+  una, y otra fuente entregada cubre los términos que la citada no tiene, se agrega su [n]. Los modelos pequeños
+  suelen citar una sola fuente aunque la respuesta use dos.
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ _CITE = re.compile(r"\[(\d{1,2})\]")
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _AFTER_CITE = re.compile(r"(?<=\])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])")
 MIN_OVERLAP = 0.2
+# Términos de la oración ausentes en sus fuentes citadas que otra fuente debe cubrir para agregarla como cita.
+MIN_COMPLETION_TERMS = 2
 
 
 @dataclass
@@ -55,8 +60,29 @@ def _supported(sentence: str, sources: list[Evidence]) -> bool:
     return True
 
 
+def _completion(sentence: str, valid: list[int], terms: dict[int, set[str]]) -> list[int]:
+    """Fuentes no citadas que cubren lo que la oración afirma y sus fuentes citadas no contienen."""
+    missing = set(content_terms(_CITE.sub("", sentence))) - set().union(*(terms[n] for n in valid))
+    extra: list[int] = []
+    while len(missing) >= MIN_COMPLETION_TERMS:
+        gain, n = max(((len(missing & t), n) for n, t in terms.items() if n not in valid and n not in extra),
+                      default=(0, 0))
+        if gain < MIN_COMPLETION_TERMS:
+            break
+        extra.append(n)
+        missing -= terms[n]
+    return extra
+
+
+def _add_citations(sentence: str, extra: list[int]) -> str:
+    last = list(_CITE.finditer(sentence))[-1]
+    marks = "".join(f"[{n}]" for n in extra)
+    return sentence[:last.end()] + marks + sentence[last.end():]
+
+
 def verify(answer: str, evidence: list[Evidence]) -> Verification:
     by_n = {e.n: e for e in evidence}
+    terms = {e.n: set(content_terms(e.text)) for e in evidence}
     text = answer.strip()
     if not text or is_abstention(text):
         return Verification(text or "", [], True, "model_abstained")
@@ -81,6 +107,10 @@ def verify(answer: str, evidence: list[Evidence]) -> Verification:
         if not _supported(clean, [by_n[n] for n in valid]):
             dropped += 1
             continue
+        extra = _completion(clean, valid, terms)
+        if extra:
+            clean = _add_citations(clean, extra)
+            valid = valid + extra
         kept.append(clean)
         cited.extend(n for n in valid if n not in cited)
 

@@ -144,7 +144,20 @@ components:
         effective_from: { type: [string, "null"], format: date }
         snippet: { type: string }
         display_url: { const: signed-on-demand, description: Request a signed URL from /download }
-        kind: { type: string, enum: [text, table, figure, equation, audio] }
+        kind: { type: string, enum: [text, table, figure, equation, audio, public_record, web] }
+        external:
+          type: boolean
+          description: >-
+            ADR-036. A public record or web page looked up for this question through Croma. Document fields
+            (document_id, version_id, chunk_id, filename, page…) are null on these.
+        url: { type: [string, "null"], description: "External citations: the official page or web page" }
+        source: { type: string, description: "External citations: register or web site (RUES, OFAC, example.org…)" }
+        country: { type: string, description: "External citations: ISO 3166 alpha-2 code, or `global`" }
+        country_name: { type: string }
+        as_of: { type: [string, "null"], description: "External citations: date of the source's data, when reported" }
+        retrieved_at: { type: string, format: date, description: "External citations: day of the lookup" }
+        no_match: { type: boolean, description: "External citations: the search found no records in that register" }
+        demo: { type: boolean, description: "External citations: sample data (CROMA_DEMO)" }
         t_start: { type: [number, "null"], description: "Recordings: second where the cited span starts" }
         t_end: { type: [number, "null"] }
         bbox:
@@ -164,13 +177,67 @@ components:
         abstained: { type: boolean }
         abstain_reason: { type: [string, "null"], enum: [insufficient_evidence, no_verified_citations, model_abstained, smalltalk, null] }
         citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
-        retrieval_strategy: { type: string, enum: [hybrid, hybrid_rerank, smalltalk] }
-        question_class: { type: string, enum: [factual, numeric, comparative, exact_lookup, smalltalk] }
+        retrieval_strategy: { type: string, description: "hybrid | hybrid_rerank | smalltalk, plus suffixes such as +graph_hybrid or +public" }
+        question_class: { type: string, enum: [factual, numeric, comparative, exact_lookup, smalltalk, document] }
         generation_model: { type: [string, "null"] }
         embedding_model: { type: string }
         latency_ms: { type: integer }
         timings: { type: object }
         usage: { type: object }
+        document:
+          oneOf: [{ $ref: '#/components/schemas/GeneratedDocument' }, { type: "null" }]
+          description: Present when the query produced a file (ADR-034); `answer` is then a short note about it
+        public_sources:
+          oneOf: [{ $ref: '#/components/schemas/PublicSourcesSummary' }, { type: "null" }]
+          description: Present when the request asked for public records (ADR-036)
+    PublicSourcesSummary:
+      type: object
+      properties:
+        requested: { type: boolean }
+        lookups: { type: integer, description: Lookups made for this question (counted against the monthly limit) }
+        countries: { type: array, items: { type: string } }
+        sources: { type: array, items: { type: string }, description: Registers or web sites the citations come from }
+        unavailable:
+          type: [string, "null"]
+          enum: [off, limit, restricted, not_configured, credits_exhausted, rate_limited, source_unavailable, timeout, unavailable, invalid_request, null]
+          description: Why nothing was looked up; the answer then uses the documents only
+        demo: { type: boolean }
+    PublicSourcesSettings:
+      type: object
+      properties:
+        available: { type: boolean, description: The platform has Croma set up (key or demo mode) }
+        demo: { type: boolean }
+        restricted: { type: boolean, description: "Data classified `restricted`: public records cannot be turned on (PUT enabled=true → 403)" }
+        enabled: { type: boolean }
+        country: { type: [string, "null"], description: "Effective default country: the setting, else the onboarding profile" }
+        country_setting: { type: [string, "null"] }
+        country_from_profile: { type: [string, "null"] }
+        web: { type: boolean, description: Web search and research allowed }
+        monthly_limit: { type: integer }
+        used_this_month: { type: integer }
+        remaining: { type: integer }
+        can_manage: { type: boolean }
+        countries: { type: array, items: { type: object, properties: { code: { type: string }, name: { type: string } } } }
+    GeneratedDocument:
+      type: object
+      description: >-
+        A file written from the documents the caller can read (ADR-034). The source is verified Markdown in which
+        every fact cites its source [n]; any format is produced on download from the same Markdown.
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        format: { type: string, enum: [pdf, docx, pptx, xlsx, csv, md], description: Format requested or detected }
+        kind: { type: string, enum: [report, presentation, table] }
+        filename: { type: string }
+        markdown: { type: string, description: "Only in the query response; history keeps the card without it" }
+        outline: { type: array, items: { type: string }, description: Top-level section (or slide) titles }
+        sections: { type: integer }
+        words: { type: integer }
+        sources: { type: integer, description: Number of cited sources }
+        documents: { type: integer, description: Distinct documents behind the citations }
+        slides: { type: integer, description: "PowerPoint: slides in the deck, cover and sources included" }
+        rows: { type: integer, description: Rows across the document's tables }
+        formats: { type: array, items: { type: string, enum: [pdf, docx, pptx, xlsx, csv, md] } }
 paths:
   /healthz:
     get:
@@ -223,6 +290,28 @@ paths:
         content: { application/json: { schema: { type: object, required: [graph_mode], additionalProperties: false, properties: { graph_mode: { type: string, enum: [inherit, "on", "off"], description: inherit = the plan's default } } } } }
       responses:
         "200": { description: "{ graph_mode, graph_enabled }" }
+        "403": { description: Requires admin }
+  /v1/organizations/{org}/public-sources:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get:
+      summary: Public records settings and this month's usage (any member; ADR-036)
+      responses: { "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PublicSourcesSettings' } } } } }
+    put:
+      summary: Turns public records on or off, sets the default country, web results and monthly limit (admin, audited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                enabled: { type: boolean }
+                country: { type: [string, "null"], enum: [co, mx, pe, cl, us, br, sv, gt, bo, ve, jp, null], description: null = use the onboarding profile }
+                web: { type: boolean }
+                monthly_limit: { type: integer, minimum: 0, maximum: 100000 }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PublicSourcesSettings' } } } }
         "403": { description: Requires admin }
   /v1/organizations/{org}/workspaces:
     parameters: [{ $ref: '#/components/parameters/org' }]
@@ -410,12 +499,30 @@ paths:
                 question: { type: string, maxLength: 2000 }
                 as_of: { type: string, format: date, description: Filter by effective date }
                 top_k: { type: integer, minimum: 1, maximum: 8 }
+                output:
+                  type: string
+                  enum: [answer, auto, pdf, docx, pptx, xlsx, csv, md]
+                  default: answer
+                  description: >-
+                    ADR-034. `answer` returns a chat answer (default). `auto` detects requests for a file ("make a
+                    PowerPoint about…", "crea un informe en PDF…") and answers with `document`. A format forces a
+                    generated document of that kind; retrieval then uses the topic without the instruction words.
                 conversation_id:
                   type: string
                   format: uuid
                   description: >-
                     History (ADR-028). Client-generated UUID; when present, the turn is saved in that conversation
                     (created with its first turn). Not available to service keys (400).
+                public_sources:
+                  type: boolean
+                  description: >-
+                    ADR-036. Also look up official public records and the web through Croma. Only when the
+                    organization has it on and lookups left this month; otherwise the answer uses the documents and
+                    `public_sources.unavailable` says why. Names and keywords from the question are sent to Croma.
+                country:
+                  type: string
+                  enum: [co, mx, pe, cl, us, br, sv, gt, bo, ve, jp, global]
+                  description: "With public_sources: country to check instead of the organization's (`global` = worldwide only)"
       responses:
         "200":
           description: >-
@@ -449,6 +556,26 @@ paths:
     delete:
       summary: Deletes the conversation and all its turns (audited)
       responses: { "204": { description: Deleted }, "404": { description: Not found or not the caller's } }
+  /v1/organizations/{org}/generated-documents/{id}:
+    x-api-key-scopes: [query]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get:
+      summary: >-
+        A generated document of the caller (private, ADR-034) with its Markdown and citations. If a cited document is
+        no longer visible, it comes back with redacted=true and markdown=null
+      responses: { "200": { description: OK }, "404": { description: Not found or not the caller's } }
+  /v1/organizations/{org}/generated-documents/{id}/file:
+    x-api-key-scopes: [query]
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get:
+      summary: Converts the document to a file and returns it (audited)
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [pdf, docx, pptx, xlsx, csv, md] }, description: Defaults to the requested format }
+        - { name: disposition, in: query, schema: { type: string, enum: [attachment, inline], default: attachment } }
+      responses:
+        "200": { description: The file (PDF, DOCX, PPTX, CSV in UTF-8 with BOM, or Markdown) }
+        "404": { description: Not found or not the caller's }
+        "410": { description: A cited document is no longer visible to the caller }
   /v1/organizations/{org}/query-runs/{trace}:
     x-api-key-scopes: [query]
     parameters: [{ $ref: '#/components/parameters/org' }, { name: trace, in: path, required: true, schema: { type: string } }]
@@ -640,7 +767,7 @@ paths:
     post: { summary: Cancels (initiator or admin); revokes pending approvals, responses: { "200": { description: CANCELLED } } }
   /v1/organizations/{org}/inbox:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: Pending approvals for my roles (with invalidated and blocked_by_sod) and my runs that need attention, responses: { "200": { description: OK } } }
+    get: { summary: "Pending approvals for my roles (with invalidated and blocked_by_sod), my runs that need attention, and counts { agents, people, total } (people = team requests that need me, ADR-035)", responses: { "200": { description: OK } } }
   /v1/organizations/{org}/approvals/{id}/decision:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     post:
@@ -662,6 +789,63 @@ paths:
       summary: Replaces the member's functional roles (admin, audited)
       requestBody: { content: { application/json: { schema: { type: object, required: [roles], properties: { roles: { type: array, items: { type: string, enum: [reviewer, approver, signatory, auditor, agent_designer, knowledge_manager] } } } } } } }
       responses: { "200": { description: OK } }
+  # ---------------------------------------------------------------- Teams and requests between teams (ADR-035)
+  /v1/organizations/{org}/teams:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: "Team directory (visible to the whole org): people, leads, my membership, open requests for my teams; suggested teams for admins", responses: { "200": { description: OK } } }
+    post:
+      summary: Creates a team and its private space (admin). A space with the same name is adopted with its people
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [name], additionalProperties: false, properties: { name: { type: string, maxLength: 80 }, description: { type: string, maxLength: 280 }, color: { type: string, enum: [blue, green, amber, red, violet, teal, pink, slate] }, lead_user_id: { type: string, format: uuid } } }
+      responses: { "201": { description: Created }, "403": { description: Not an admin }, "409": { description: Name taken } }
+  /v1/organizations/{org}/teams/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    patch:
+      summary: "Renames (also renames its space), describes, recolors or archives a team (admin, from Governance)"
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, properties: { name: { type: string }, description: { type: string }, color: { type: string }, archived: { type: boolean } } }
+      responses: { "200": { description: OK }, "403": { description: Not an admin }, "409": { description: Name taken } }
+  /v1/organizations/{org}/teams/{id}/members/{user}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }, { name: user, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      summary: Puts a member in the team, changes their access or makes them a lead (admin)
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false, properties: { lead: { type: boolean }, access: { type: string, enum: [editor, reader] } } } } } }
+      responses: { "204": { description: OK } }
+    delete: { summary: "Takes a member out of the team (admin); their open assignments in the team go back to the queue", responses: { "204": { description: OK } } }
+  /v1/organizations/{org}/requests:
+    parameters:
+      - { $ref: '#/components/parameters/org' }
+      - { name: view, in: query, schema: { type: string, enum: [for_me, team, sent, all], default: for_me } }
+      - { name: team_id, in: query, schema: { type: string, format: uuid } }
+      - { name: closed, in: query, schema: { type: string, enum: [recent, all, none], default: recent } }
+    get: { summary: "Requests the caller may see (requester, assignee, sending or receiving team; RLS). Each item says what the caller may do (`my.transitions`, `can_assign`, `can_edit`, `attention`)", responses: { "200": { description: OK } } }
+    post:
+      summary: Asks a team for something. `from_team_id` must be one of the caller's teams (default when they are in exactly one). Viewers can't
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [to_team_id, title], additionalProperties: false, properties: { to_team_id: { type: string, format: uuid }, from_team_id: { type: [string, "null"], format: uuid }, title: { type: string, minLength: 3, maxLength: 160 }, body: { type: string, maxLength: 8000 }, priority: { type: string, enum: [low, normal, high, urgent] }, due_on: { type: [string, "null"], format: date } } }
+      responses: { "201": { description: Created with its per-organization number }, "400": { description: Team archived }, "403": { description: Viewer, or not a member of from_team_id } }
+  /v1/organizations/{org}/requests/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    get: { summary: "Request with its timeline (comments, status, assignment, priority and due changes) and, for the receiving team, who it can be assigned to", responses: { "200": { description: OK }, "404": { description: Not involved } } }
+    patch:
+      summary: "Moves (status), assigns, reprioritizes or reschedules. The receiving team works it; the requester cancels or reopens. `waiting` and `declined` need a `note`"
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, properties: { status: { type: string, enum: [open, in_progress, waiting, done, declined, cancelled] }, assignee_id: { type: [string, "null"], format: uuid }, priority: { type: string, enum: [low, normal, high, urgent] }, due_on: { type: [string, "null"], format: date }, note: { type: string, maxLength: 4000 } } }
+      responses: { "200": { description: OK }, "400": { description: Missing note or assignee outside the team }, "403": { description: Change not allowed for the caller } }
+  /v1/organizations/{org}/requests/{id}/comments:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    post:
+      summary: "Replies in the timeline. A requester's reply to a request waiting on them moves it back to in_progress"
+      requestBody: { content: { application/json: { schema: { type: object, required: [body], additionalProperties: false, properties: { body: { type: string, minLength: 1, maxLength: 4000 } } } } } }
+      responses: { "201": { description: "{ status }" } }
   # ---------------------------------------------------------------- Signatures and sharing (ADR-023)
   /v1/organizations/{org}/external-policy:
     parameters: [{ $ref: '#/components/parameters/org' }]

@@ -20,6 +20,7 @@ import {
 } from "../lib/workflow-dsl.js";
 import { emit, WorkflowRunner } from "../lib/workflow-runner.js";
 import { blockedRecipients, loadPolicy, normalizeEmails } from "../lib/external-actions.js";
+import { peopleAttentionCount } from "./teams.js";
 
 const CreateWorkflow = z.object({ template: z.string().max(64).optional(), name: z.string().trim().min(2).max(80).optional() }).strict();
 const SaveDraft = z.object({ graph: Graph, name: z.string().trim().min(2).max(80).optional(), description: z.string().trim().max(400).optional() }).strict();
@@ -436,7 +437,10 @@ export async function workflowRoutes(app: FastifyInstance, deps: Deps, runner: W
           [t.userId],
         )
       ).rows;
-      return { roles: t.functionalRoles, approvals: items, my_runs: mine, counts: { actionable: items.filter((i) => !i.blocked_by_sod).length } };
+      const agents = items.filter((i) => !i.blocked_by_sod).length;
+      // Two inboxes (ADR-035): what agents/workflows need from you, and what colleagues ask you (team requests).
+      const people = await peopleAttentionCount(db, t.userId);
+      return { roles: t.functionalRoles, approvals: items, my_runs: mine, counts: { actionable: agents, agents, people, total: agents + people } };
     });
   });
 

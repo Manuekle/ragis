@@ -1,0 +1,5899 @@
+{
+ "generated_from": "https://api.croma.run/catalog",
+ "version": "1.0.0",
+ "endpoints": [
+  {
+   "id": "rues-entities-by-name",
+   "name": "RUES Entities by Name",
+   "path": "/co/rues/entities-by-name/v1",
+   "country": "co",
+   "source": "RUES",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Search Colombian businesses in RUES by name, paginated, each result enriched with its full registry record.",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/rues",
+   "text_param": "name",
+   "params": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "minLength": 3,
+     "maxLength": 200,
+     "description": "Entity name (razón social) to search for."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    }
+   ]
+  },
+  {
+   "id": "rues-entity-by-nit",
+   "name": "RUES Entity by NIT",
+   "path": "/co/rues/entity-by-nit/v1",
+   "country": "co",
+   "source": "RUES",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Resolve a Colombian business by NIT and return its full RUES record: registry detail, financial statements, renewal history, related parties and registry notices.",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/rues",
+   "text_param": null,
+   "params": [
+    {
+     "name": "document_number",
+     "type": "string",
+     "required": true,
+     "minLength": 4,
+     "maxLength": 15,
+     "pattern": "^\\d{4,15}$",
+     "description": "Colombian NIT (numeric, no verification digit). 4-15 digits."
+    }
+   ]
+  },
+  {
+   "id": "supersociedades-companies-search",
+   "name": "Supersociedades Companies Search",
+   "path": "/co/supersociedades/companies-search/v1",
+   "country": "co",
+   "source": "Supersociedades",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Every company that files annual financial statements with Colombia's Superintendencia de Sociedades (about 30,000 a year since fiscal 2015), searchable by name, fiscal year, macrosector (`construccion`, `comercio`, `manu",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/supersociedades",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional words matched against the company name (razón social) as filed."
+    },
+    {
+     "name": "fiscal_year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional fiscal year (2015 or later). 0 searches the latest year available."
+    },
+    {
+     "name": "macrosector",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "agropecuario",
+      "minero",
+      "manufactura",
+      "construccion",
+      "comercio",
+      "servicios",
+      "transporte"
+     ],
+     "default": "any",
+     "description": "Optional macrosector as the Superintendencia groups activities: `agropecuario`, `minero` (mining and hydrocarbons), `man"
+    },
+    {
+     "name": "ciiu_code",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Ua-u]|\\d{2,4})?$",
+     "default": "",
+     "description": "Optional CIIU Rev. 4 A.C. filter: a section letter (`F` for construction), a two-digit division (`42`), or a full four-d"
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional department of the company's domicile, e.g. `ANTIOQUIA`, `BOGOTA D.C.`. Case and accents are ignored."
+    },
+    {
+     "name": "region",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "bogota_cundinamarca",
+      "antioquia",
+      "costa_pacifica",
+      "region_caribe",
+      "centro_oriente",
+      "eje_cafetero",
+      "centro_sur",
+      "llanos"
+     ],
+     "default": "any",
+     "description": "Optional region as the Superintendencia groups departments."
+    },
+    {
+     "name": "supervision_status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "inspeccion",
+      "vigilancia",
+      "control",
+      "cancelada",
+      "exenta",
+      "nueva",
+      "camara_de_comercio"
+     ],
+     "default": "any",
+     "description": "Optional standing before the Superintendencia: `inspeccion`, `vigilancia`, `control`, `cancelada`, `exenta`, `nueva` (ro"
+    },
+    {
+     "name": "min_revenue",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Optional revenue floor for the fiscal year, in thousands of COP (`1000000` is one billion pesos). 0 applies no floor."
+    },
+    {
+     "name": "include_all_filings",
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "description": "`false` (default) returns one filing per company and fiscal year (the individual books when filed, else the separado, el"
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "supersociedades-insolvency-processes-search",
+   "name": "Supersociedades Insolvency Processes Search",
+   "path": "/co/supersociedades/insolvency-processes-search/v1",
+   "country": "co",
+   "source": "Supersociedades",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Every insolvency process a company reports in its annual filings with the Superintendencia de Sociedades (reorganización, liquidación judicial, acuerdos de reestructuración, concordatos, liquidación obligatoria, validaci",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/supersociedades",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "document_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{4,15})?$",
+     "default": "",
+     "description": "Optional Colombian NIT (numeric, no verification digit) to restrict the search to one company."
+    },
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional words matched against the company name (razón social) as filed."
+    },
+    {
+     "name": "process_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "reorganizacion",
+      "liquidacion_judicial",
+      "acuerdos_de_reestructuracion",
+      "concordatos",
+      "liquidacion_obligatoria",
+      "validacion"
+     ],
+     "default": "any",
+     "description": "Optional process type: `reorganizacion`, `liquidacion_judicial`, `acuerdos_de_reestructuracion` (Ley 550), `concordatos`"
+    },
+    {
+     "name": "active_only",
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "description": "`true` returns only processes with no closing date reported."
+    },
+    {
+     "name": "admitted_from",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{4}-\\d{2}-\\d{2})?$",
+     "default": "",
+     "description": "Optional earliest admission date, `yyyy-mm-dd`, inclusive."
+    },
+    {
+     "name": "admitted_to",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{4}-\\d{2}-\\d{2})?$",
+     "default": "",
+     "description": "Optional latest admission date, `yyyy-mm-dd`, inclusive."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "rama-judicial-cases-by-entity",
+   "name": "Rama Judicial Cases by Entity",
+   "path": "/co/rama-judicial/cases-by-entity/v1",
+   "country": "co",
+   "source": "Rama Judicial",
+   "category": "courts",
+   "served_from": "live",
+   "description": "Search Colombian judicial cases by entity name. Optional filters narrow by entity type, court code, recent activity, and page.",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/rama-judicial",
+   "text_param": "name",
+   "params": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "minLength": 3,
+     "maxLength": 200,
+     "description": "Entity name to search for. Letters, digits, spaces, .,'&- allowed."
+    },
+    {
+     "name": "entity_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "natural",
+      "juridical"
+     ],
+     "default": "natural",
+     "description": "Entity type: `natural` or `juridical`. Defaults to `natural`."
+    },
+    {
+     "name": "active_only",
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "description": "When true, only return cases with activity in the last 30 days."
+    },
+    {
+     "name": "court_code",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Optional court code to scope the search to one court."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    }
+   ]
+  },
+  {
+   "id": "corte-constitucional-rulings-search",
+   "name": "Corte Constitucional Rulings Search",
+   "path": "/co/corte-constitucional/rulings-search/v1",
+   "country": "co",
+   "source": "Corte Constitucional",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search every ruling the Corte Constitucional de Colombia has published since 1992: tutela (T), constitutionality (C) and unification (SU) judgments and autos (A). Free text matches the ruling's number, case file number, ",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/corte-constitucional",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the ruling's number, case file number, topics, synopsis, decision and full text."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional kind of ruling: `T` (tutela), `C` (constitucionalidad), `SU` (unificación) or `A` (auto). The Spanish names wor"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the ruling (the 2025 of T-013/25). 0 searches every year."
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional case file number (expediente) as the court writes it: `T-10417884`, `D-15234`, `CJU-6063`. Case and spaces are "
+    },
+    {
+     "name": "reporting_judge",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional magistrado ponente, by full name as it appears in `reporting_judges`. Case and accents are ignored."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "corte-suprema-rulings-search",
+   "name": "Corte Suprema Rulings Search",
+   "path": "/co/corte-suprema/rulings-search/v1",
+   "country": "co",
+   "source": "Corte Suprema de Justicia",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search every ruling the Corte Suprema de Justicia de Colombia has published since 1886, from every chamber, tutelas included. Free text matches the ruling's number, case file number, ponente, summary, topics and full tex",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/corte-suprema",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the ruling's number, case file number, ponente, summary, topics and full text."
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional chamber: `civil`, `laboral`, `penal`, `plena`, or the historic `constitucional` and `negocios-generales`."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional kind of ruling as the court names it (`SENTENCIA`, `AUTO`, `AUTO INTERLOCUTORIO`), matched from the start of th"
+    },
+    {
+     "name": "is_tutela",
+     "type": [
+      "boolean",
+      "null"
+     ],
+     "required": false,
+     "default": null,
+     "description": "Optional: `true` for tutela decisions only, `false` for the chambers' own matters only. Omit it for both."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the ruling. 0 searches every year."
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional case file number (radicado), with or without dashes: `11001-02-03-000-2026-04999-00`. Only the digits are compa"
+    },
+    {
+     "name": "reporting_judge",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional magistrado ponente, by full name as it appears in `reporting_judges`. Case and accents are ignored."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "samai-rulings-search",
+   "name": "SAMAI Rulings Search",
+   "path": "/co/samai-rulings/search/v1",
+   "country": "co",
+   "source": "SAMAI / Consejo de Estado",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search every ruling of the Consejo de Estado dated since December 2021 that its relatoría has titled: sentencias, autos, aclaraciones and salvamentos de voto and conceptos, each with the relatoría's headnotes (descriptor",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/samai-rulings",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the ruling's headnotes (descriptors, legal problem, thesis, sources, relatoría not"
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional chamber (sección or sala), matched from the start of its name: `Sección Tercera` also matches its subsecciones."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional kind of ruling, matched from the start of its name: `Sentencia`, `Auto` (every kind of auto), `Salvamento voto`"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the ruling date. 0 searches every year."
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional 23-digit case number (radicado). Spaces, dots and dashes are ignored."
+    },
+    {
+     "name": "reporting_judge",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional consejero ponente, by full name as it appears in `reporting_judges`. Case and accents are ignored."
+    },
+    {
+     "name": "plaintiff",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional plaintiff, matched from the start of the name as the court lists it. Case and accents are ignored."
+    },
+    {
+     "name": "defendant",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional defendant, matched from the start of the name as the court lists it. Case and accents are ignored."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "legalize-laws-search",
+   "name": "Colombia Laws Search",
+   "path": "/co/legalize/laws/v1",
+   "country": "co",
+   "source": "Legalize",
+   "category": "laws",
+   "served_from": "live",
+   "description": "Search Colombian legislation as structured data, sourced from Legalize. Filter by free text, law type, publication year, status, and jurisdiction. Returns paginated law summaries; use `per_page` and `page` to page. Drill",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/legalize",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Free-text search over law titles and content. Omit to list all."
+    },
+    {
+     "name": "law_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Filter by law type (e.g. `ley`, `decreto`). Omit for all types."
+    },
+    {
+     "name": "year",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Filter by publication year (yyyy). Omit for all years."
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Filter by law status (e.g. `in_force`). Omit for any status."
+    },
+    {
+     "name": "jurisdiction",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Filter by jurisdiction. Omit for all jurisdictions."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 50,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "funcion-publica-norms-search",
+   "name": "Función Pública Norms Search",
+   "path": "/co/funcion-publica/norms-search/v1",
+   "country": "co",
+   "source": "Función Pública",
+   "category": "laws",
+   "served_from": "dataset",
+   "description": "Search the Gestor Normativo, the Colombian state's register of the norms that govern public administration: laws, decrees, conceptos, rulings, circulares and acuerdos from 1620 to today, across every kind and year at onc",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/funcion-publica",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the norm's citation, the register's one-line description and the full text of the "
+    },
+    {
+     "name": "document_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional kind of instrument: `ley`, `decreto`, `concepto`, `sentencia`, `acuerdo`, `resolucion`, `circular`, `circular-e"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year in the norm's own designation (the 2008 of `Ley 1266 de 2008`). 0 searches every year."
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional norm number, with or without leading zeros (`1266`, `007`, `100-010`, `2017-00230`)."
+    },
+    {
+     "name": "entity",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional issuing entity, matched from the start of the name: `congreso` finds the Congreso de la República, `ministerio-"
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional subject heading the register files the norm under, matched exactly as it publishes it, e.g. `HABEAS DATA`, `CAR"
+    },
+    {
+     "name": "issued_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "issued_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "imprenta-diarios-search",
+   "name": "Diario Oficial Issues",
+   "path": "/co/imprenta/diarios-search/v1",
+   "country": "co",
+   "source": "Imprenta Nacional",
+   "category": "laws",
+   "served_from": "dataset",
+   "description": "Browse the Diario Oficial, the gazette where Colombian law takes effect: every issue the Imprenta Nacional lists, from number 23,962 of 2 January 1939 to this week's, by number, edition and publication date.",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/imprenta",
+   "text_param": null,
+   "params": [
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 15,
+     "default": "",
+     "description": "Optional Diario Oficial issue number. The thousands separator is ignored, so `53.609` and `53609` match the same issue."
+    },
+    {
+     "name": "edition",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "ordinaria",
+      "extraordinaria",
+      "especial",
+      "oficio_tributario",
+      "otra"
+     ],
+     "default": "any",
+     "description": "Edition: `ordinaria` (the daily edition), `extraordinaria`, `especial`, `oficio_tributario`, `otra`, or `any`."
+    },
+    {
+     "name": "published_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "published_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "dian-doctrina-search",
+   "name": "DIAN Doctrina Search",
+   "path": "/co/dian/doctrina-search/v1",
+   "country": "co",
+   "source": "DIAN",
+   "category": "tax",
+   "served_from": "live",
+   "description": "Full-text search over DIAN's published tax doctrine and related legal compilation: oficios, conceptos, decretos, resoluciones, leyes and high-court rulings. Each hit carries the `document_id` used by `dian-doctrina-docum",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/dian",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": true,
+     "minLength": 2,
+     "maxLength": 300,
+     "description": "Términos de búsqueda en el texto de la doctrina (p. ej. `dividendos`)."
+    },
+    {
+     "name": "document_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Filtro por tipo de documento (p. ej. `Oficios`, `Conceptos`). Vacío para todos."
+    },
+    {
+     "name": "year",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Filtro por año de expedición (yyyy). Vacío para todos."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Resultados por página (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "superfinanciera-regulations-search",
+   "name": "Superfinanciera Regulations Search",
+   "path": "/co/superfinanciera/regulations-search/v1",
+   "country": "co",
+   "source": "Superfinanciera",
+   "category": "regulation",
+   "served_from": "dataset",
+   "description": "Search every Circular Externa, Carta Circular and Resolución the Superintendencia Financiera de Colombia has issued since 2005, across all kinds and years at once. Filter by free text over the official description, by `k",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/superfinanciera",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the official description of the act and its number."
+    },
+    {
+     "name": "kind",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "circular_externa",
+      "carta_circular",
+      "resolucion"
+     ],
+     "default": "any",
+     "description": "Kind of act: `circular_externa` (binding instructions), `carta_circular` (informative), `resolucion` (administrative act"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the act was issued (2005 or later). 0 searches every year."
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional act number, with or without leading zeros (`7`, `007`, `1195`). A few acts carry a written number, e.g. `Conjun"
+    },
+    {
+     "name": "bulletin",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional issue number of the Boletín del Ministerio de Hacienda y Crédito Público the act was published in."
+    },
+    {
+     "name": "issued_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "issued_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "secop-contracts-search",
+   "name": "SECOP Contracts Search",
+   "path": "/co/secop/contracts-search/v1",
+   "country": "co",
+   "source": "SECOP",
+   "category": "procurement",
+   "served_from": "dataset",
+   "description": "Search every contract the Colombian state has signed, across SECOP II (2015 onward) and SECOP I (2004 onward), in one shape. Full-text over the contract object and the parties, plus filters on the contractor's document (",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/secop",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the free text of the record (what is being bought, the entity and the supplier). L"
+    },
+    {
+     "name": "platform",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "secop_i",
+      "secop_ii"
+     ],
+     "default": "any",
+     "description": "Restrict to one system: `secop_ii` (the transactional platform, 2015 onward), `secop_i` (the publication register, 2004 "
+    },
+    {
+     "name": "entity_nit",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document filter: a NIT or a cédula, with or without dots and verification digit (`900195855`, `900.195.855-1` a"
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional department of the contracting entity, as SECOP writes it (`Antioquia`, `Bogotá D.C.`, ...). Empty for the whole"
+    },
+    {
+     "name": "modality",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional modalidad de contratación, exactly as SECOP writes it (`Contratación directa`, `Licitación pública`, `Mínima cu"
+    },
+    {
+     "name": "contract_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional tipo de contrato, exactly as SECOP writes it (`Prestación de servicios`, `Obra`, `Suministros`, ...). Empty for"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional estado, exactly as SECOP writes it (`Adjudicado`, `Celebrado`, `En ejecución`, `Terminado`, ...). Empty for eve"
+    },
+    {
+     "name": "unspsc_code",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional main UNSPSC category code of the purchase (`V1.80101500`). Empty for every category."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional calendar year. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "min_value",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Optional lower bound on the amount, in COP. 0 means no lower bound."
+    },
+    {
+     "name": "max_value",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Optional upper bound on the amount, in COP. 0 means no upper bound."
+    },
+    {
+     "name": "sort",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "recent",
+      "oldest",
+      "value_desc",
+      "value_asc"
+     ],
+     "default": "recent",
+     "description": "Order of the results: `recent` (newest first, the default), `oldest`, `value_desc` (largest amount first) or `value_asc`"
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    },
+    {
+     "name": "provider_document",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document filter: a NIT or a cédula, with or without dots and verification digit (`900195855`, `900.195.855-1` a"
+    },
+    {
+     "name": "legal_rep_document",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document filter: a NIT or a cédula, with or without dots and verification digit (`900195855`, `900.195.855-1` a"
+    },
+    {
+     "name": "sector",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional sector of the contracting entity (`Salud y Protección Social`, `Educación Nacional`, ...). Published on SECOP I"
+    }
+   ]
+  },
+  {
+   "id": "secop-processes-search",
+   "name": "SECOP Processes Search",
+   "path": "/co/secop/processes-search/v1",
+   "country": "co",
+   "source": "SECOP",
+   "category": "procurement",
+   "served_from": "dataset",
+   "description": "Search every Colombian public procurement process from SECOP II (2015 onward) and SECOP I (2004 onward) in one place. Full-text over what is being bought, plus filters on the buying entity's NIT, department, modality, co",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/secop",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the free text of the record (what is being bought, the entity and the supplier). L"
+    },
+    {
+     "name": "platform",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "secop_i",
+      "secop_ii"
+     ],
+     "default": "any",
+     "description": "Restrict to one system: `secop_ii` (the transactional platform, 2015 onward), `secop_i` (the publication register, 2004 "
+    },
+    {
+     "name": "entity_nit",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document filter: a NIT or a cédula, with or without dots and verification digit (`900195855`, `900.195.855-1` a"
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional department of the contracting entity, as SECOP writes it (`Antioquia`, `Bogotá D.C.`, ...). Empty for the whole"
+    },
+    {
+     "name": "modality",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional modalidad de contratación, exactly as SECOP writes it (`Contratación directa`, `Licitación pública`, `Mínima cu"
+    },
+    {
+     "name": "contract_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional tipo de contrato, exactly as SECOP writes it (`Prestación de servicios`, `Obra`, `Suministros`, ...). Empty for"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional estado, exactly as SECOP writes it (`Adjudicado`, `Celebrado`, `En ejecución`, `Terminado`, ...). Empty for eve"
+    },
+    {
+     "name": "unspsc_code",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional main UNSPSC category code of the purchase (`V1.80101500`). Empty for every category."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional calendar year. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "min_value",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Optional lower bound on the amount, in COP. 0 means no lower bound."
+    },
+    {
+     "name": "max_value",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Optional upper bound on the amount, in COP. 0 means no upper bound."
+    },
+    {
+     "name": "sort",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "recent",
+      "oldest",
+      "value_desc",
+      "value_asc"
+     ],
+     "default": "recent",
+     "description": "Order of the results: `recent` (newest first, the default), `oldest`, `value_desc` (largest amount first) or `value_asc`"
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    },
+    {
+     "name": "awarded",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "yes",
+      "no"
+     ],
+     "default": "any",
+     "description": "Restrict to processes that reached an award (`yes`), that did not (`no`), or `any`. Processes whose outcome the source d"
+    }
+   ]
+  },
+  {
+   "id": "secop-sanctions-search",
+   "name": "SECOP Sanctions Search",
+   "path": "/co/secop/sanctions-search/v1",
+   "country": "co",
+   "source": "SECOP",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Search the fines and sanctions Colombian public entities have imposed on their contractors: who was sanctioned, under which contract, for how much, and when the sanction became final. Filter by the contractor's document,",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/secop",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the free text of the record (what is being bought, the entity and the supplier). L"
+    },
+    {
+     "name": "provider_document",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document filter: a NIT or a cédula, with or without dots and verification digit (`900195855`, `900.195.855-1` a"
+    },
+    {
+     "name": "entity_nit",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document filter: a NIT or a cédula, with or without dots and verification digit (`900195855`, `900.195.855-1` a"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional calendar year. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "sic-sanctions-sanctions-search",
+   "name": "SIC Sanctions Search",
+   "path": "/co/sic-sanctions/sanctions-search/v1",
+   "country": "co",
+   "source": "SIC Sanctions",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Search every final (en firme) fine Colombia's Superintendencia de Industria y Comercio (SIC) has imposed through its consumer-protection investigations directorate since 2013: about 4,000 fines with the case, the resolut",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/sic-sanctions",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional search terms matched against the party fined, the conduct and the sector."
+    },
+    {
+     "name": "party",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional name of the party fined, matched from the start. Case and accents are ignored."
+    },
+    {
+     "name": "sector",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional sector, e.g. `Servicios de financiación`, `Turismo`, `Comercio electrónico`, matched from the start. Case and a"
+    },
+    {
+     "name": "case_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 30,
+     "default": "",
+     "description": "Optional case (radicado), e.g. `24 503714` or `24-503714`."
+    },
+    {
+     "name": "resolution_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional number of the resolution that imposed the fine, e.g. `40639`."
+    },
+    {
+     "name": "issued_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "issued_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "sic-ip-trademarks-search",
+   "name": "SIC Trademarks Search",
+   "path": "/co/sic-ip/trademarks-search/v1",
+   "country": "co",
+   "source": "SIC, Registro de la Propiedad Industrial",
+   "category": "ip",
+   "served_from": "dataset",
+   "description": "Search Colombia's trademark register (SIC), about 0.9 million cases filed since 1930, by words of the sign or the owner's name, narrowed by `status` (as the register words it, e.g. `Registrada`), `nice_class` (1-45), `ce",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/sic-ip",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional words to find in the sign or in the owner's name, e.g. `credisander`, `bancolombia`. Every word must appear."
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional status exactly as the register words it, e.g. `Registrada`, `Publicada`, `Concedida`, `Negada`, `Caducado`, `Ba"
+    },
+    {
+     "name": "nice_class",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[1-9]|[1-3]\\d|4[0-5])?$",
+     "default": "",
+     "description": "Optional Nice class of the goods or services, 1 to 45, e.g. `36` (financial services), `25` (clothing)."
+    },
+    {
+     "name": "certificate_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^\\d{0,9}$",
+     "default": "",
+     "description": "Optional registration certificate number, e.g. `612592`."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "invima-registrations-search",
+   "name": "INVIMA Registrations Search",
+   "path": "/co/invima/registrations-search/v1",
+   "country": "co",
+   "source": "INVIMA",
+   "category": "health",
+   "served_from": "dataset",
+   "description": "Search every sanitary registration (registro sanitario) and mandatory notification (NSO) INVIMA, Colombia's food and drug authority, has issued or let expire: about 385,000 across medicines, food and drinks, cosmetics, m",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/invima",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional search terms matched against the product names, the holder and the companies and people in every role of the re"
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional registration or notification number in any spelling, e.g. `INVIMA 2020M-0019848`, `2020M-0019848` or `NSO-PC-C "
+    },
+    {
+     "name": "holder",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional holder (titular) of the registration, matched from the start. Case and accents are ignored."
+    },
+    {
+     "name": "product_group",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional product group as INVIMA names it: `MEDICAMENTOS`, `ALIMENTOS`, `COSMETICOS`, `MEDICO QUIRURGICOS`, `REACTIVO DI"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional status as INVIMA states it: `vigente` (in force) or `vencido` (expired). Case and accents are ignored."
+    },
+    {
+     "name": "expires_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "expires_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "banrep-series-search",
+   "name": "Banco de la República Series Search",
+   "path": "/co/banrep/series-search/v1",
+   "country": "co",
+   "source": "Banco de la República",
+   "category": "stats",
+   "served_from": "dataset",
+   "description": "Search the catalog of statistical series the Banco de la República, Colombia's central bank, publishes: about 850 series covering the TRM exchange rate, the monetary policy rate, IBR, DTF and deposit rates, lending rates",
+   "docs_url": "https://docs.usecroma.com/guides/colombia/banrep",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional search terms matched against the series name, description, keywords and categories, e.g. `TRM`, `tasa de políti"
+    },
+    {
+     "name": "frequency",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "daily",
+      "weekly",
+      "monthly",
+      "quarterly",
+      "semiannual",
+      "annual"
+     ],
+     "default": "",
+     "description": "Optional native frequency of the series: `daily`, `weekly`, `monthly`, `quarterly`, `semiannual` or `annual`."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "dof-publications-by-date",
+   "name": "DOF Publications by Date",
+   "path": "/mx/dof/publications-by-date/v1",
+   "country": "mx",
+   "source": "DOF",
+   "category": "laws",
+   "served_from": "live",
+   "description": "Everything published in Mexico's official federal gazette (Diario Oficial de la Federación) on a given date: decrees, law reforms, and regulator disposiciones across the morning, evening, and extraordinary editions, each",
+   "docs_url": "https://docs.usecroma.com/guides/mexico/dof",
+   "text_param": null,
+   "params": [
+    {
+     "name": "date",
+     "type": "string",
+     "required": true,
+     "format": "date",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+     "description": "Gazette date (yyyy-mm-dd). The index reaches back to 1917; machine-readable text starts with the 1973 volume, and earlie"
+    }
+   ]
+  },
+  {
+   "id": "scjn-tesis-search",
+   "name": "SCJN Tesis Search",
+   "path": "/mx/scjn/tesis-search/v1",
+   "country": "mx",
+   "source": "SCJN",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the Mexican Supreme Court's case law: every tesis and jurisprudencia the Semanario Judicial de la Federación has published since 1911 (300k+), each in full. Match words in the title and text (`query`, optional; ev",
+   "docs_url": "https://docs.usecroma.com/guides/mexico/scjn",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words to match in the title and text of the tesis."
+    },
+    {
+     "name": "tesis_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "jurisprudencia",
+      "aislada"
+     ],
+     "default": "any",
+     "description": "Filter by tesis type: binding `jurisprudencia`, non-binding `aislada`, or `any`."
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional subject filter (e.g. `Civil`, `Constitucional`)."
+    },
+    {
+     "name": "epoch",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Optional época number filter (`5` through `12`)."
+    },
+    {
+     "name": "year",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Optional 4-digit year filter."
+    },
+    {
+     "name": "instance",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional deciding level, exactly as the source names it (e.g. `Suprema Corte de Justicia de la Nación`, `Tribunales Cole"
+    },
+    {
+     "name": "court",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional court or chamber, exactly as `court` reads in results (e.g. `Primera Sala`, `Pleno`)."
+    },
+    {
+     "name": "formation",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional way the criterion was formed, exactly as the source names it (e.g. `Reiteración`, `Contradicción de criterios ("
+    },
+    {
+     "name": "published_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "published_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "updated_after",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50). Every result carries the full text of the tesis."
+    }
+   ]
+  },
+  {
+   "id": "diputados-federal-laws",
+   "name": "Mexican Federal Laws",
+   "path": "/mx/diputados/federal-laws/v1",
+   "country": "mx",
+   "source": "Cámara de Diputados",
+   "category": "laws",
+   "served_from": "live",
+   "description": "The Cámara de Diputados catalog of federal laws and codes (315+), each with its official name, abbreviation, original DOF publication date, most recent reform date, consolidated PDF/DOC text, and whether it is still in f",
+   "docs_url": "https://docs.usecroma.com/guides/mexico/diputados",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional name filter (case- and accent-insensitive substring)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    }
+   ]
+  },
+  {
+   "id": "siem-establishments",
+   "name": "SIEM Establishments Search",
+   "path": "/mx/siem/establishments/v1",
+   "country": "mx",
+   "source": "SIEM",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Search Mexican business establishments in the SIEM directory by commercial name or razón social. Optional filters narrow by state (INEGI code) and SCIAN activity. SIEM is a self-declared directory: registration is volunt",
+   "docs_url": "https://docs.usecroma.com/guides/mexico/siem",
+   "text_param": "name",
+   "params": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "minLength": 2,
+     "maxLength": 200,
+     "description": "Commercial name or razón social to search for. Matched case-insensitively as a substring."
+    },
+    {
+     "name": "state_code",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 32,
+     "default": 0,
+     "description": "INEGI state code (1-32) to filter by. Omit or 0 searches all states."
+    },
+    {
+     "name": "activity_code",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 999999,
+     "default": 0,
+     "description": "SCIAN activity code to filter by (exact match). Omit or 0 searches all activities."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    }
+   ]
+  },
+  {
+   "id": "cnbv-regulations",
+   "name": "CNBV Regulations",
+   "path": "/mx/cnbv/regulations/v1",
+   "country": "mx",
+   "source": "CNBV",
+   "category": "regulation",
+   "served_from": "live",
+   "description": "The CNBV's current regulatory catalog (~113 normas: leyes, disposiciones de carácter general including the Circular Única de Bancos, circulares, acuerdos, reglas), each with type, DOF publication date, applicable sectors",
+   "docs_url": "https://docs.usecroma.com/guides/mexico/cnbv",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional name filter (case- and accent-insensitive substring)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    }
+   ]
+  },
+  {
+   "id": "banxico-circulars",
+   "name": "Banxico Circulars",
+   "path": "/mx/banxico/circulars/v1",
+   "country": "mx",
+   "source": "Banco de México",
+   "category": "regulation",
+   "served_from": "live",
+   "description": "The chronological index of every circular and disposición issued by Banco de México (1,200+ entries back to 1969), each with subject, abrogation status, and which base circular it modifies. One row per index entry: a cir",
+   "docs_url": "https://docs.usecroma.com/guides/mexico/banxico",
+   "text_param": null,
+   "params": [
+    {
+     "name": "year",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Optional 4-digit year filter."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    }
+   ]
+  },
+  {
+   "id": "sunat-name",
+   "name": "SUNAT Taxpayer Search by Name",
+   "path": "/pe/sunat/name/v1",
+   "country": "pe",
+   "source": "SUNAT",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Search Peruvian taxpayers by name or razón social. Returns up to 30 matches (SUNAT's cap).",
+   "docs_url": "https://docs.usecroma.com/guides/peru/sunat",
+   "text_param": "name",
+   "params": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "minLength": 3,
+     "maxLength": 100,
+     "description": "Taxpayer name or razón social to search for."
+    }
+   ]
+  },
+  {
+   "id": "sunat-ruc",
+   "name": "SUNAT Taxpayer by RUC",
+   "path": "/pe/sunat/ruc/v1",
+   "country": "pe",
+   "source": "SUNAT",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Look up a Peruvian taxpayer's full record by RUC (11 digits). `found: false` when the RUC is not registered.",
+   "docs_url": "https://docs.usecroma.com/guides/peru/sunat",
+   "text_param": null,
+   "params": [
+    {
+     "name": "ruc",
+     "type": "string",
+     "required": true,
+     "pattern": "^\\d{11}$",
+     "description": "11-digit RUC."
+    }
+   ]
+  },
+  {
+   "id": "oece-processes-search",
+   "name": "OECE Processes Search",
+   "path": "/pe/oece/processes-search/v1",
+   "country": "pe",
+   "source": "OECE Contrataciones Abiertas",
+   "category": "procurement",
+   "served_from": "dataset",
+   "description": "Search Peru's public-procurement procedures (SEACE, published by OECE) by free text over title and description, buyer RUC, awarded supplier RUC, department, category (goods/services/works), procedure type, publication-da",
+   "docs_url": "https://docs.usecroma.com/guides/peru/oece",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en el título y la descripción del proceso (opcional)."
+    },
+    {
+     "name": "buyer_ruc",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{11})?$",
+     "default": "",
+     "description": "RUC de 11 dígitos (opcional)."
+    },
+    {
+     "name": "supplier_ruc",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{11})?$",
+     "default": "",
+     "description": "RUC de 11 dígitos (opcional)."
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Departamento de la entidad compradora, p. ej. `LIMA` (opcional)."
+    },
+    {
+     "name": "category",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "goods",
+      "services",
+      "works"
+     ],
+     "default": "",
+     "description": "Categoría principal: `goods`, `services` o `works` (opcional)."
+    },
+    {
+     "name": "method",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Tipo de procedimiento tal como lo nombra la fuente, p. ej. `Licitación Pública` (opcional)."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "updated_after",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "tribunal-constitucional-rulings-search",
+   "name": "Tribunal Constitucional Rulings Search",
+   "path": "/pe/tribunal-constitucional/rulings-search/v1",
+   "country": "pe",
+   "source": "Tribunal Constitucional",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search every resolution the Tribunal Constitucional del Perú has published since 1996: sentencias, autos and sentencias interlocutorias. Free text matches the case file number, the resolution number and the full text. Fi",
+   "docs_url": "https://docs.usecroma.com/guides/peru/tribunal-constitucional",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the case file number, the resolution number and the full text."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "sentencia",
+      "auto",
+      "sentencia_interlocutoria"
+     ],
+     "default": "",
+     "description": "Optional kind of resolution: `sentencia`, `auto` (autos and decretos) or `sentencia_interlocutoria`."
+    },
+    {
+     "name": "proceeding_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional kind of proceeding, by code or by name: `AA` (amparo), `HC` (hábeas corpus), `HD` (hábeas data), `AC` (cumplimi"
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional chamber: `Pleno`, `Sala Primera` or `Sala Segunda`."
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional case file number (expediente) as the court writes it, e.g. `05005-2025-HC`. Returns every document of that case"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of publication. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "servir-tsc-resolutions-search",
+   "name": "Tribunal del Servicio Civil Resolutions Search",
+   "path": "/pe/servir-tsc/resolutions-search/v1",
+   "country": "pe",
+   "source": "Tribunal del Servicio Civil",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search every resolution Peru's Tribunal del Servicio Civil (SERVIR) has issued since 2010, across both chambers. Free text matches the resolution number, the entity, the tribunal's summary and the full text. Filter by `c",
+   "docs_url": "https://docs.usecroma.com/guides/peru/servir-tsc",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the resolution number, the entity, the summary and the full text."
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional chamber: `primera_sala` or `segunda_sala`."
+    },
+    {
+     "name": "resolution_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional resolution number, with or without its year, e.g. `05763-2025` or `5763`. Leading zeros are ignored."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the resolution. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "sec-companies-search",
+   "name": "SEC EDGAR Companies Search",
+   "path": "/us/sec/companies-search/v1",
+   "country": "us",
+   "source": "SEC EDGAR",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Search every filer EDGAR knows, about a million companies, funds, trusts and people, by current or former name, EIN, ticker, exchange, SIC code, state or country of incorporation, state of the business address and entity",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/sec",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en el nombre actual y en los nombres anteriores del filer (opcional)."
+    },
+    {
+     "name": "ein",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{2}-?\\d{7})?$",
+     "default": "",
+     "description": "FEI/EIN de nueve dígitos de la entidad (opcional)."
+    },
+    {
+     "name": "ticker",
+     "type": "string",
+     "required": false,
+     "pattern": "^[A-Za-z0-9.\\-]{0,12}$",
+     "default": "",
+     "description": "Ticker bursátil, p. ej. `AAPL` (opcional)."
+    },
+    {
+     "name": "exchange",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Bolsa donde cotiza, como la nombra EDGAR: `NYSE`, `Nasdaq`, `OTC` o `CBOE` (opcional)."
+    },
+    {
+     "name": "sic",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{3,4})?$",
+     "default": "",
+     "description": "Código SIC de la actividad, p. ej. `3571` (opcional)."
+    },
+    {
+     "name": "state_of_incorporation",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z][A-Za-z0-9])?$",
+     "default": "",
+     "description": "Código de estado o país de EDGAR, p. ej. `DE` o `E9` (opcional)."
+    },
+    {
+     "name": "state",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z][A-Za-z0-9])?$",
+     "default": "",
+     "description": "Código de estado o país de EDGAR, p. ej. `DE` o `E9` (opcional)."
+    },
+    {
+     "name": "entity_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "operating",
+      "investment",
+      "other"
+     ],
+     "default": "",
+     "description": "Tipo de filer en EDGAR: `operating`, `investment` u `other` (opcional)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "sec-filing-events-search",
+   "name": "SEC EDGAR Filing Events Search",
+   "path": "/us/sec/filing-events-search/v1",
+   "country": "us",
+   "source": "SEC EDGAR",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Search every event filing on EDGAR since 2020: 8-K current reports with their items (bankruptcy, acquisition completed, delisting notice, officer change, ...), mergers and tender offers (S-4, F-4, 425, merger proxies), d",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/sec",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en el nombre actual y en los nombres anteriores del filer (opcional)."
+    },
+    {
+     "name": "cik",
+     "type": "string",
+     "required": false,
+     "pattern": "^\\d{0,10}$",
+     "default": "",
+     "description": "CIK del emisor en EDGAR, con o sin ceros a la izquierda (opcional)."
+    },
+    {
+     "name": "event_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "current_report",
+      "merger_or_acquisition",
+      "delisting_or_deregistration",
+      "registration",
+      "late_filing_notice",
+      "beneficial_ownership"
+     ],
+     "default": "",
+     "description": "Tipo de evento: `current_report`, `merger_or_acquisition`, `delisting_or_deregistration`, `registration`, `late_filing_n"
+    },
+    {
+     "name": "form",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Tipo de formulario exactamente como lo escribe EDGAR, p. ej. `8-K`, `S-4`, `25-NSE`, `SC 13D` (opcional)."
+    },
+    {
+     "name": "item",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d\\.\\d{2})?$",
+     "default": "",
+     "description": "Ítem del 8-K, p. ej. `3.01` (aviso de exclusión de cotización) o `5.02` (cambio de directivos) (opcional)."
+    },
+    {
+     "name": "filed_from",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "filed_to",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "delaware-entities-search",
+   "name": "Delaware Entities Search",
+   "path": "/us/delaware/entities-search/v1",
+   "country": "us",
+   "source": "Delaware Division of Corporations",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Search the Delaware Division of Corporations registry of business entities by name: corporations, LLCs, limited partnerships, statutory trusts and partnerships, domestic and foreign, active and inactive. Returns up to 50",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/delaware",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 120,
+     "description": "Nombre de la entidad a buscar, p. ej. `GOOGLE LLC`. Por palabras, sin distinguir mayúsculas."
+    },
+    {
+     "name": "exact",
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "description": "Si es `true`, solo entidades cuyo nombre es exactamente el buscado (opcional)."
+    }
+   ]
+  },
+  {
+   "id": "ofac-sanctions-screen",
+   "name": "OFAC Sanctions Screening",
+   "path": "/us/ofac/sanctions-screen/v1",
+   "country": "us",
+   "source": "OFAC Sanctions",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Screen one person or company against the US Treasury's OFAC sanctions lists. Send a name, and optionally a date of birth, a country and an identity number; get back the parties that may be the same one, each with a 0 to ",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/ofac",
+   "text_param": "name",
+   "params": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "minLength": 2,
+     "maxLength": 200,
+     "description": "Nombre de la persona o empresa a verificar, en cualquier orden y con o sin tildes, p. ej. `Aero Caribbean Airlines`."
+    },
+    {
+     "name": "birth_date",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{4}(?:-\\d{2}(?:-\\d{2})?)?)?$",
+     "default": "",
+     "description": "Fecha de nacimiento, `yyyy-mm-dd`, `yyyy-mm` o solo el año `yyyy` (opcional)."
+    },
+    {
+     "name": "country",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "País de la persona o empresa: nombre en inglés o código ISO de dos letras, p. ej. `Cuba` o `CU` (opcional)."
+    },
+    {
+     "name": "id_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Número de pasaporte, documento de identidad, identificación tributaria o registro (opcional). Se compara sin espacios ni"
+    },
+    {
+     "name": "party_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "individual",
+      "entity",
+      "vessel",
+      "aircraft"
+     ],
+     "default": "",
+     "description": "Tipo de parte: `individual`, `entity` (empresa u organización), `vessel` o `aircraft` (opcional)."
+    },
+    {
+     "name": "list",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "sdn",
+      "non_sdn"
+     ],
+     "default": "",
+     "description": "`sdn` para la lista de Specially Designated Nationals, `non_sdn` para la lista consolidada de los demás programas (opcio"
+    },
+    {
+     "name": "threshold",
+     "type": "integer",
+     "required": false,
+     "minimum": 50,
+     "maximum": 100,
+     "default": 85,
+     "description": "Puntaje mínimo, de 50 a 100, para que un candidato cuente como posible coincidencia. Por defecto `85`."
+    },
+    {
+     "name": "limit",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 10,
+     "description": "Máximo de coincidencias a devolver (1-50). Por defecto `10`."
+    }
+   ]
+  },
+  {
+   "id": "csl-parties-search",
+   "name": "Consolidated Screening List Search",
+   "path": "/us/csl/parties-search/v1",
+   "country": "us",
+   "source": "Consolidated Screening List",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Screen a name against every US export and sanctions screening list at once: OFAC's, the Entity List, the Denied Persons List and the other Commerce and State Department lists. Filter by name or alias, list, agency, progr",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/csl",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en los nombres (opcional)."
+    },
+    {
+     "name": "list",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "sdn",
+      "ssi",
+      "plc",
+      "ns_mbs",
+      "cmic",
+      "cap",
+      "fse",
+      "el",
+      "dpl",
+      "uvl",
+      "meu",
+      "isn",
+      "dtc"
+     ],
+     "default": "",
+     "description": "Lista: `sdn`, `ssi`, `plc`, `ns_mbs`, `cmic`, `cap`, `fse` (Tesoro, OFAC), `el`, `dpl`, `uvl`, `meu` (Comercio, BIS), `i"
+    },
+    {
+     "name": "agency",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "treasury",
+      "commerce",
+      "state"
+     ],
+     "default": "",
+     "description": "Agencia que publica la lista: `treasury` (OFAC), `commerce` (Bureau of Industry and Security) o `state` (Departamento de"
+    },
+    {
+     "name": "party_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "individual",
+      "entity",
+      "vessel",
+      "aircraft"
+     ],
+     "default": "",
+     "description": "Tipo de parte: `individual`, `entity` (empresa u organización), `vessel` o `aircraft` (opcional)."
+    },
+    {
+     "name": "program",
+     "type": "string",
+     "required": false,
+     "pattern": "^[A-Za-zÀ-ÿ0-9 ._/()'’&,-]{0,120}$",
+     "default": "",
+     "description": "Programa de sanciones o ley tal como lo escribe la lista, p. ej. `SDGT`, `CMIC-EO13959` (opcional)."
+    },
+    {
+     "name": "country",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z]{2})?$",
+     "default": "",
+     "description": "Código de país de dos letras de alguna dirección de la parte, p. ej. `CN`, `VE` (opcional)."
+    },
+    {
+     "name": "identifier",
+     "type": "string",
+     "required": false,
+     "maxLength": 100,
+     "default": "",
+     "description": "Número de identificación (tributario, de registro, pasaporte, SWIFT, dirección de criptomoneda…); se compara sin espacio"
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "sam-exclusions-search",
+   "name": "SAM.gov Exclusions Search",
+   "path": "/us/sam/exclusions-search/v1",
+   "country": "us",
+   "source": "SAM.gov",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Search every party excluded from US federal contracts, grants and programs: people, firms, clinics, pharmacies and vessels excluded by HHS, OPM, DOJ, EPA and some fifty other agencies. Filter by name, classification, exc",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/sam",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en los nombres (opcional)."
+    },
+    {
+     "name": "classification",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "individual",
+      "firm",
+      "special_entity_designation",
+      "vessel"
+     ],
+     "default": "",
+     "description": "Tipo de parte excluida: `individual`, `firm`, `special_entity_designation` o `vessel` (opcional)."
+    },
+    {
+     "name": "agency",
+     "type": "string",
+     "required": false,
+     "pattern": "^[A-Za-z]{0,8}$",
+     "default": "",
+     "description": "Sigla de la agencia que excluyó, p. ej. `HHS`, `OPM`, `DOJ`, `EPA` (opcional)."
+    },
+    {
+     "name": "exclusion_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "prohibition_restriction",
+      "ineligible_proceedings_completed",
+      "ineligible_proceedings_pending",
+      "voluntary_exclusion"
+     ],
+     "default": "",
+     "description": "Tipo de exclusión: `prohibition_restriction`, `ineligible_proceedings_completed`, `ineligible_proceedings_pending` o `vo"
+    },
+    {
+     "name": "state",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Estado o provincia de la dirección: el código de dos letras para un estado de EE. UU., p. ej. `FL` (opcional)."
+    },
+    {
+     "name": "uei",
+     "type": "string",
+     "required": false,
+     "pattern": "^[A-Za-z0-9]{0,12}$",
+     "default": "",
+     "description": "Unique Entity ID de SAM.gov, p. ej. `HHB9E7U2YFM4` (opcional)."
+    },
+    {
+     "name": "cage",
+     "type": "string",
+     "required": false,
+     "pattern": "^[A-Za-z0-9]{0,5}$",
+     "default": "",
+     "description": "Código CAGE, p. ej. `L0KT7` (opcional)."
+    },
+    {
+     "name": "npi",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{10})?$",
+     "default": "",
+     "description": "National Provider Identifier de diez dígitos de un proveedor de salud (opcional)."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "uspto-trademarks-search",
+   "name": "USPTO Trademarks Search",
+   "path": "/us/uspto/trademarks-search/v1",
+   "country": "us",
+   "source": "United States Patent and Trademark Office",
+   "category": "ip",
+   "served_from": "dataset",
+   "description": "Search US federal trademark applications and registrations at the USPTO (every live mark and every mark filed since 2016) by any words of the mark, the owner's name or the goods and services, narrowed by `owner` (the ful",
+   "docs_url": "https://docs.usecroma.com/guides/united-states/uspto",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional words to find in the mark, the owner's name or the goods and services, e.g. `coffee`, `nintendo`. Every word mu"
+    },
+    {
+     "name": "owner",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional owner's full name as the register records it, e.g. `Nintendo of America Inc.`. Case and punctuation do not matt"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "live",
+      "dead",
+      "registered",
+      "pending"
+     ],
+     "default": "",
+     "description": "Optional status: `live` (a pending application or an active registration), `dead` (abandoned, cancelled or expired), `re"
+    },
+    {
+     "name": "international_class",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{1,3}|[ABab])?$",
+     "default": "",
+     "description": "Optional international (Nice) class of the goods or services, 1 to 45, e.g. `9` (software, electronics), `25` (clothing)"
+    },
+    {
+     "name": "owner_country",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional country of the owner's address as the register writes it, e.g. `UNITED STATES`, `COLOMBIA`, `JAPAN`, `REPUBLIC "
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{1,8})?$",
+     "default": "",
+     "description": "Optional registration number the USPTO issued when the mark registered, e.g. `7726306`."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "djen-publications-search",
+   "name": "DJEN Publications Search",
+   "path": "/br/djen/publications-search/v1",
+   "country": "br",
+   "source": "Diário de Justiça Eletrônico Nacional (CNJ)",
+   "category": "courts",
+   "served_from": "live",
+   "description": "Search Brazil's national court publications (Diário de Justiça Eletrônico Nacional, CNJ) by party name, lawyer name, OAB number, CNJ case number, court, free text and availability date: intimações, citações, editais and ",
+   "docs_url": "https://docs.usecroma.com/guides/brazil/djen",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "party_name",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Nombre de una parte tal como aparece en la publicación, p. ej. `BANCO DO BRASIL` (opcional). Coincide por palabras compl"
+    },
+    {
+     "name": "lawyer_name",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Nombre de un abogado destinatario de la publicación (opcional). Coincide por palabras completas, sin distinguir mayúscul"
+    },
+    {
+     "name": "oab_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^\\d{0,7}$",
+     "default": "",
+     "description": "Número de inscripción en la OAB de un abogado destinatario, solo dígitos, p. ej. `123456` (opcional)."
+    },
+    {
+     "name": "oab_state",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z]{2})?$",
+     "default": "",
+     "description": "Sigla del estado (UF) de la inscripción en la OAB, p. ej. `SP` (opcional)."
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{20}|\\d{7}-\\d{2}\\.\\d{4}\\.\\d\\.\\d{2}\\.\\d{4})?$",
+     "default": "",
+     "description": "Número único del proceso (CNJ): 20 dígitos o con el formato NNNNNNN-DD.AAAA.J.TR.OOOO, p. ej. `0001234-56.2026.8.26.0100"
+    },
+    {
+     "name": "court_code",
+     "type": "string",
+     "required": false,
+     "default": "",
+     "description": "Sigla del tribunal en el DJEN, p. ej. `TJSP`, `TRT2`, `TRF1`, `STJ`, `TST`; los electorales llevan guion, `TRE-SP` (opci"
+    },
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Texto a buscar en el cuerpo de la publicación (opcional)."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "medium",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "diario",
+      "edital"
+     ],
+     "default": "any",
+     "description": "`diario` para el Diário de Justiça Eletrônico Nacional, `edital` para la Plataforma Nacional de Editais, `any` para ambo"
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 6,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (6-50)."
+    }
+   ]
+  },
+  {
+   "id": "cgu-sanctions-search",
+   "name": "CGU Sanctions Search",
+   "path": "/br/cgu/sanctions-search/v1",
+   "country": "br",
+   "source": "Controladoria-Geral da União (CGU)",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Search Brazil's federal integrity registers kept by the Controladoria-Geral da União (CEIS, CNEP, CEAF, CEPIM and the leniency agreements) by free text over every name the register gives the party, by CNPJ or CPF (exact;",
+   "docs_url": "https://docs.usecroma.com/guides/brazil/cgu",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en los nombres (opcional)."
+    },
+    {
+     "name": "document_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d{11}|\\d{14}|\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}|\\d{2}\\.\\d{3}\\.\\d{3}\\/\\d{4}-\\d{2})?$",
+     "default": "",
+     "description": "CPF o CNPJ de la parte sancionada, con o sin puntuación, p. ej. `12.345.678/0001-90` (opcional). Coincidencia exacta."
+    },
+    {
+     "name": "list",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "ceis",
+      "cnep",
+      "ceaf",
+      "cepim",
+      "leniency"
+     ],
+     "default": "",
+     "description": "Registro: `ceis` (inidóneas y suspendidas), `cnep` (Ley Anticorrupción), `ceaf` (servidores federales expulsados), `cepi"
+    },
+    {
+     "name": "party_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "individual",
+      "company"
+     ],
+     "default": "",
+     "description": "Tipo de parte: `individual` (persona) o `company` (empresa u organización) (opcional)."
+    },
+    {
+     "name": "sanctioning_body_state",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z]{2})?$",
+     "default": "",
+     "description": "Sigla del estado (UF) del órgano que impuso la sanción, p. ej. `SP` (opcional). No es el estado de la parte."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "planalto-laws-search",
+   "name": "Planalto Laws Search",
+   "path": "/br/planalto/laws-search/v1",
+   "country": "br",
+   "source": "Presidência da República (Planalto)",
+   "category": "laws",
+   "served_from": "dataset",
+   "description": "Search Brazil's federal legislation as the Presidência da República publishes it: the Constitution of 1988 and its amendments, and every lei complementar, lei ordinária, lei delegada, decreto-lei, decreto and medida prov",
+   "docs_url": "https://docs.usecroma.com/guides/brazil/planalto",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Términos de búsqueda en el nombre, la ementa y el texto completo del acto (opcional)."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "constitution",
+      "constitutional_amendment",
+      "complementary_law",
+      "ordinary_law",
+      "delegated_law",
+      "decree_law",
+      "decree",
+      "provisional_measure"
+     ],
+     "default": "",
+     "description": "Tipo de acto: `constitution` (la Constitución de 1988), `constitutional_amendment` (enmiendas constitucionales, incluida"
+    },
+    {
+     "name": "measure_status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "pending",
+      "converted",
+      "lapsed",
+      "rejected",
+      "prejudiced",
+      "revoked"
+     ],
+     "default": "",
+     "description": "Situación de una medida provisória: `pending` (en trámite), `converted` (convertida en ley), `lapsed` (vigencia terminad"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:\\d[\\d.]{0,9}(?:\\s*-?\\s*[A-Za-z0-9]{1,3})?)?$",
+     "default": "",
+     "description": "Número del acto, con o sin punto de miles, p. ej. `13105` o `13.105` (opcional). Coincidencia exacta."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Año en que se firmó el acto, p. ej. `2015`; `0` sin filtro (opcional). Distingue actos que comparten número."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "ibge-tables-search",
+   "name": "IBGE Statistical Tables Search",
+   "path": "/br/ibge/tables-search/v1",
+   "country": "br",
+   "source": "IBGE",
+   "category": "stats",
+   "served_from": "dataset",
+   "description": "Search the catalog of Brazil's official statistics from IBGE: 9,000+ aggregate tables from PNAD Contínua, IPCA, PIB dos Municípios, Censo Demográfico and some 70 other surveys. Filter by words in the title, survey or var",
+   "docs_url": "https://docs.usecroma.com/guides/brazil/ibge",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Words to find in the table's name, its survey, its subject or its variables, e.g. `desocupação` (optional)."
+    },
+    {
+     "name": "survey",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "The survey, by the two-character `survey_id` a search result returns (e.g. `DD` for PNAD Contínua trimestral, `IA` for I"
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "The subject, as IBGE names it, e.g. `Trabalho` or `Índices de preços`; case and accents ignored (optional)."
+    },
+    {
+     "name": "periodicity",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "How often the table is published: `monthly`, `quarterly`, `annual`, and the rarer periodicities a search result shows (o"
+    },
+    {
+     "name": "territory_level",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "country",
+      "region",
+      "state",
+      "municipality"
+     ],
+     "default": "",
+     "description": "Only tables with data at this level: `country`, `region`, `state` or `municipality` (optional)."
+    },
+    {
+     "name": "table_id",
+     "type": "string",
+     "required": false,
+     "pattern": "^\\d{0,6}$",
+     "default": "",
+     "description": "One table by its number, e.g. `4099` (optional)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 20,
+     "default": 10,
+     "description": "Tables per page (1-20)."
+    }
+   ]
+  },
+  {
+   "id": "pgfn-debts-search",
+   "name": "PGFN Debts Search",
+   "path": "/br/pgfn/debts-search/v1",
+   "country": "br",
+   "source": "Procuradoria-Geral da Fazenda Nacional (PGFN)",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Search the active debts Brazilian companies owe the Union in the dívida ativa (Procuradoria-Geral da Fazenda Nacional): federal taxes, social security contributions and the FGTS, by company name, CNPJ or its 8-character ",
+   "docs_url": "https://docs.usecroma.com/guides/brazil/pgfn",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en los nombres (opcional)."
+    },
+    {
+     "name": "document_number",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z0-9]{8}|[A-Za-z0-9]{12}\\d{2}|[A-Za-z0-9]{2}\\.[A-Za-z0-9]{3}\\.[A-Za-z0-9]{3}(?:\\/[A-Za-z0-9]{4}-\\d{2})?)?$",
+     "default": "",
+     "description": "CNPJ de la empresa deudora, con o sin puntuación, p. ej. `12.345.678/0001-90`, o su raíz de 8 caracteres para todos sus "
+    },
+    {
+     "name": "regime",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "nao_previdenciario",
+      "previdenciario",
+      "fgts"
+     ],
+     "default": "",
+     "description": "Tipo de deuda: `nao_previdenciario` (tributos y demás), `previdenciario` (contribuciones a la seguridad social) o `fgts`"
+    },
+    {
+     "name": "state",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z]{2})?$",
+     "default": "",
+     "description": "Sigla del estado (UF) de la empresa deudora, p. ej. `SP` (opcional)."
+    },
+    {
+     "name": "status_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "in_collection",
+      "tax_benefit",
+      "guaranteed",
+      "suspended_by_court",
+      "in_negotiation"
+     ],
+     "default": "",
+     "description": "Situación: `in_collection` (en cobro), `tax_benefit` (beneficio fiscal), `guaranteed` (garantizada), `suspended_by_court"
+    },
+    {
+     "name": "debtor_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "principal",
+      "co_responsible",
+      "joint"
+     ],
+     "default": "",
+     "description": "Papel de la empresa en la deuda: `principal`, `co_responsible` (corresponsable) o `joint` (solidaria) (opcional)."
+    },
+    {
+     "name": "in_court",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "yes",
+      "no"
+     ],
+     "default": "any",
+     "description": "`yes` solo deudas en ejecución judicial, `no` solo las que no, `any` ambas."
+    },
+    {
+     "name": "amount_min",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Monto mínimo de la deuda en reales (opcional)."
+    },
+    {
+     "name": "amount_max",
+     "type": "number",
+     "required": false,
+     "minimum": 0,
+     "default": 0,
+     "description": "Monto máximo de la deuda en reales; `0` sin límite (opcional)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "csj-sv-rulings-search",
+   "name": "Corte Suprema de Justicia de El Salvador Rulings Search",
+   "path": "/sv/csj-sv/rulings-search/v1",
+   "country": "sv",
+   "source": "Corte Suprema de Justicia de El Salvador",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the jurisprudencia the Corte Suprema de Justicia de El Salvador publishes: every resolution since 1951 from the Corte Plena and its Salas to the Cámaras, Tribunales de Sentencia and Juzgados. Free text matches the",
+   "docs_url": "https://docs.usecroma.com/guides/el-salvador/csj",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the reference number, the court, the decision, the facts, the headnotes and the fu"
+    },
+    {
+     "name": "court_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "corte_plena",
+      "sala",
+      "camara",
+      "tribunal_de_sentencia",
+      "juzgado"
+     ],
+     "default": "",
+     "description": "Optional level of the court: `corte_plena`, `sala` (the Salas of the Corte Suprema), `camara` (the second-instance Cámar"
+    },
+    {
+     "name": "court",
+     "type": "string",
+     "required": false,
+     "maxLength": 160,
+     "default": "",
+     "description": "Optional court as `court` names it, e.g. `Sala de lo Constitucional`, matched from the start of the name. Case and accen"
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional area of law as `subject` names it, e.g. `Penal`, `Familia`, `Civil y Mercantil`, `Constitucional`, `Laboral`, m"
+    },
+    {
+     "name": "proceeding_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 160,
+     "default": "",
+     "description": "Optional kind of proceeding as `proceeding_type` names it, e.g. `Amparo`, `Hábeas corpus`, `Inconstitucionalidad`, match"
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional kind of resolution as `type` names it, e.g. `Sentencias definitivas`, `Interlocutorias`, `Improcedencias`, matc"
+    },
+    {
+     "name": "crime",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional crime as it appears in `crimes`, e.g. `Homicidio agravado`, matched in full. Case and accents are ignored."
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional reference number (N°) as the court prints it, e.g. `49COMP2026` or `86-CAC-2026`. Returns every resolution of t"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the resolution. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "csj-sv-laws-search",
+   "name": "Corte Suprema de Justicia de El Salvador Laws Search",
+   "path": "/sv/csj-sv/laws-search/v1",
+   "country": "sv",
+   "source": "Corte Suprema de Justicia de El Salvador",
+   "category": "laws",
+   "served_from": "dataset",
+   "description": "Search El Salvador's legislation as the Corte Suprema de Justicia's documentation center keeps it: more than 10,000 legal texts published in the Diario Oficial since 1821, from the codes and laws to executive decrees, re",
+   "docs_url": "https://docs.usecroma.com/guides/el-salvador/csj",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the act's name, the documentation center's summary and the full text."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional kind of document as `type` names it: `Decretos Legislativos`, `Decretos Ejecutivos`, `Decretos Institucionales`"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "vigente",
+      "caducada",
+      "derogada"
+     ],
+     "default": "",
+     "description": "Optional status: `vigente` (in force), `caducada` (expired) or `derogada` (repealed)."
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional area of law as `subject` names it, e.g. `Penal`, `Tributaria`, `Laboral`, matched from the start. Case and acce"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional decree or agreement number, e.g. `1030`. Case, spaces and punctuation are ignored."
+    },
+    {
+     "name": "municipality",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional municipality of an ordinance, e.g. `San Salvador Centro`, matched from the start. Case and accents are ignored."
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional department of an ordinance, e.g. `La Libertad`, matched from the start. Case and accents are ignored."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of publication in the Diario Oficial. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "asamblea-sv-decrees-search",
+   "name": "Asamblea Legislativa de El Salvador Decrees Search",
+   "path": "/sv/asamblea-sv/decrees-search/v1",
+   "country": "sv",
+   "source": "Asamblea Legislativa de El Salvador",
+   "category": "laws",
+   "served_from": "dataset",
+   "description": "Search every decree of El Salvador's Asamblea Legislativa. Its register holds the laws, codes and regulations and every other legislative decree, from loan authorizations and tax exemptions to elections of officials and ",
+   "docs_url": "https://docs.usecroma.com/guides/el-salvador/asamblea",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the decree's title, the Asamblea's summary and the full text."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional kind of act as `type` names it: `Decreto`, `Ley`, `Código` or `Reglamento`. Case and accents are ignored."
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional subject as `subject` names it, e.g. `Hacienda y Presupuesto`, `Asamblea Legislativa`, `Seguridad Pública`, matc"
+    },
+    {
+     "name": "subtopic",
+     "type": "string",
+     "required": false,
+     "maxLength": 160,
+     "default": "",
+     "description": "Optional subtopic as `subtopic` names it, e.g. `Autorizaciones para Préstamos`, `Exenciones (Franquicias)`, `Distincione"
+    },
+    {
+     "name": "area_of_law",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional area of law as `area_of_law` names it, e.g. `Derecho Administrativo`, `Derecho Penal`, `Derecho Tributario o Fi"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional decree number, e.g. `632`. Numbers restart with each legislature, so combine it with `year` or dates."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the Asamblea issued the decree. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "cnr-sv-filings-search",
+   "name": "El Salvador Company Filings Search",
+   "path": "/sv/cnr-sv/filings-search/v1",
+   "country": "sv",
+   "source": "Centro Nacional de Registros (CNR)",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Search the company filings El Salvador's Registro de Comercio (Centro Nacional de Registros) publishes in its bimonthly bulletin: commercial registrations (matrículas), transfers and cancellations, deposited balance shee",
+   "docs_url": "https://docs.usecroma.com/guides/el-salvador/cnr",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional company name, matched by spelling against the legal name, the abbreviation and the trade name, so a typo or a m"
+    },
+    {
+     "name": "filing_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "matricula_registration",
+      "matricula_transfer",
+      "matricula_cancellation",
+      "opening_balance",
+      "balance",
+      "liquidation_balance",
+      "incorporation",
+      "amendment",
+      "liquidation",
+      "dissolution",
+      "transformation",
+      "merger"
+     ],
+     "default": "",
+     "description": "Optional kind of filing: `matricula_registration`, `matricula_transfer`, `matricula_cancellation` (a company's commercia"
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "Ahuachapán",
+      "Cabañas",
+      "Chalatenango",
+      "Cuscatlán",
+      "La Libertad",
+      "La Paz",
+      "La Unión",
+      "Morazán",
+      "San Miguel",
+      "San Salvador",
+      "San Vicente",
+      "Santa Ana",
+      "Sonsonate",
+      "Usulután"
+     ],
+     "default": "",
+     "description": "Optional department of El Salvador, e.g. `La Libertad`, `Santa Ana`, `Usulután`."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "comprasal-sv-awards-search",
+   "name": "El Salvador COMPRASAL Awards Search",
+   "path": "/sv/comprasal-sv/awards-search/v1",
+   "country": "sv",
+   "source": "COMPRASAL (DINAC)",
+   "category": "procurement",
+   "served_from": "dataset",
+   "description": "Search every contract award published on COMPRASAL, El Salvador's public procurement system, since December 2024. Free text matches what was bought, the process code, the supplier and the contracting entity. Filter by `s",
+   "docs_url": "https://docs.usecroma.com/guides/el-salvador/compras-publicas",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional words matched against what was bought, the process code, the supplier and the contracting entity, e.g. `uniform"
+    },
+    {
+     "name": "supplier_id",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 100000000,
+     "default": 0,
+     "description": "Optional supplier `id` from the suppliers search, e.g. `392`: only that supplier's awards."
+    },
+    {
+     "name": "entity_id",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 100000000,
+     "default": 0,
+     "description": "Optional contracting entity `entity_id`, as awards carry it, e.g. `438`."
+    },
+    {
+     "name": "process_code",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional process code, e.g. `1000009-2026-P0003`: only the awards of that process."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 100,
+     "default": 20,
+     "description": "Results per page (1-100)."
+    }
+   ]
+  },
+  {
+   "id": "tcp-bo-rulings-search",
+   "name": "Tribunal Constitucional Plurinacional de Bolivia Rulings Search",
+   "path": "/bo/tcp-bo/rulings-search/v1",
+   "country": "bo",
+   "source": "Tribunal Constitucional Plurinacional de Bolivia",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the jurisprudencia of Bolivia's Tribunal Constitucional Plurinacional and its predecessor: every sentencia, auto, declaración and vote since 1999. Free text matches the resolution number, the case numbers, the cha",
+   "docs_url": "https://docs.usecroma.com/guides/bolivia/tcp",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the resolution number, the case number, the chamber, the action and the full text."
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "sentencia",
+      "auto",
+      "declaracion",
+      "voto_disidente",
+      "voto_aclaratorio",
+      "decreto"
+     ],
+     "default": "",
+     "description": "Optional kind of resolution: `sentencia` (SC, SCP), `auto` (AC, ACP, RCA, ECA...), `declaracion` (DCP), `voto_disidente`"
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional chamber as `chamber` names it, e.g. `Sala Primera`, `Sala Plena` or `Comisión de Admisión`, matched from the st"
+    },
+    {
+     "name": "proceeding_type",
+     "type": "string",
+     "required": false,
+     "maxLength": 160,
+     "default": "",
+     "description": "Optional constitutional action as `proceeding_type` names it, e.g. `Acción de amparo constitucional`, `Acción de liberta"
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional resolution number as the court prints it, e.g. `0050/2024-S2` or `0437/2013`. Returns every resolution of that "
+    },
+    {
+     "name": "case_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional case file number (expediente) as the court prints it, e.g. `60836-2024-122-AL`. Case, spaces and punctuation ar"
+    },
+    {
+     "name": "reporting_judge",
+     "type": "string",
+     "required": false,
+     "maxLength": 160,
+     "default": "",
+     "description": "Optional reporting justice (magistrado relator) as `reporting_judge` names them, matched from the start of the name. Cas"
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional department the case came from, e.g. `La Paz`, `Santa Cruz`, `Cochabamba`, matched from the start. Case and acce"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the resolution. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "tsj-bo-rulings-search",
+   "name": "Tribunal Supremo de Justicia de Bolivia Rulings Search",
+   "path": "/bo/tsj-bo/rulings-search/v1",
+   "country": "bo",
+   "source": "Tribunal Supremo de Justicia de Bolivia",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the jurisprudencia of Bolivia's Tribunal Supremo de Justicia: every auto supremo, sentencia and resolución its chambers have published since 2001. Free text matches the resolution and case numbers, the chamber, th",
+   "docs_url": "https://docs.usecroma.com/guides/bolivia/tsj",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the resolution number, the case number, the chamber, the jurisprudence notes (desc"
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional chamber as `chamber` names it, e.g. `Sala Civil`, `Sala Penal`, `Sala Plena` or `Sala Contenciosa`, matched fro"
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "auto_supremo",
+      "sentencia",
+      "resolucion"
+     ],
+     "default": "",
+     "description": "Optional kind of resolution: `auto_supremo`, `sentencia` or `resolucion`."
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional area of law as `subject` names it, e.g. `Civil`, `Penal`, `Familia`, `Social`, `Agrario`, matched from the star"
+    },
+    {
+     "name": "outcome",
+     "type": "string",
+     "required": false,
+     "maxLength": 120,
+     "default": "",
+     "description": "Optional outcome as `outcome` names it, e.g. `Infundado`, `Casa`, `Improcedente`, `Anula`, matched from the start. Case "
+    },
+    {
+     "name": "registration_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional resolution number as the court prints it, e.g. `AS/0001/2013` or `SE/0001/2023`. Each chamber numbers its own r"
+    },
+    {
+     "name": "case_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional case file number (expediente) as the court prints it. Case, spaces and punctuation are ignored."
+    },
+    {
+     "name": "reporting_judge",
+     "type": "string",
+     "required": false,
+     "maxLength": 160,
+     "default": "",
+     "description": "Optional reporting justice (magistrado relator) as `reporting_judge` names them, matched from the start of the name. Cas"
+    },
+    {
+     "name": "department",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional department the case came from, e.g. `La Paz`, `Santa Cruz`, `Chuquisaca`, matched from the start. Case and acce"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the resolution. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "nta-companies-search",
+   "name": "National Tax Agency Companies Search",
+   "path": "/jp/nta/companies-search/v1",
+   "country": "jp",
+   "source": "National Tax Agency of Japan",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Search Japan's corporate number register (法人番号), about six million companies and other legal entities, by any part of the name in kanji, kana or English, narrowed by `prefecture` (name or JIS code), `city`, `entity_type`",
+   "docs_url": "https://docs.usecroma.com/guides/japan/nta",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional company name, or any part of it, as the register spells it: in Japanese (`トヨタ自動車`, `トヨタ`), in its reading (`トヨタ"
+    },
+    {
+     "name": "prefecture",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional prefecture of the head office, as the register prints it (`東京都`, `大阪府`, `北海道`, `沖縄県`) or as its two-digit JIS c"
+    },
+    {
+     "name": "city",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional city, ward, town or village of the head office as the register prints it, e.g. `千代田区`, `横浜市西区`, `豊田市`, matched "
+    },
+    {
+     "name": "entity_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "national_government",
+      "local_government",
+      "kabushiki_kaisha",
+      "yugen_kaisha",
+      "gomei_kaisha",
+      "goshi_kaisha",
+      "godo_kaisha",
+      "other_registered",
+      "foreign_company",
+      "other"
+     ],
+     "default": "",
+     "description": "Optional legal form: `kabushiki_kaisha` (株式会社), `yugen_kaisha` (有限会社), `gomei_kaisha` (合名会社), `goshi_kaisha` (合資会社), `go"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "active",
+      "closed"
+     ],
+     "default": "",
+     "description": "Optional registration status: `active` (the register record is open) or `closed` (closed after liquidation, a merger or "
+    },
+    {
+     "name": "change_type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "new",
+      "name_change",
+      "address_change",
+      "foreign_address_change",
+      "closed",
+      "revived",
+      "merger",
+      "merger_annulled",
+      "trade_name_erased",
+      "deleted"
+     ],
+     "default": "",
+     "description": "Optional kind of the last change the register recorded for the company: `new` (number assigned), `name_change`, `address"
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "courts-jp-rulings-search",
+   "name": "Courts of Japan Rulings Search",
+   "path": "/jp/courts-jp/rulings-search/v1",
+   "country": "jp",
+   "source": "Courts of Japan",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the case law the courts of Japan publish: about 68,000 rulings of the Supreme Court, the high courts and the lower courts since 1947, across the administrative, labour and intellectual property collections too. Fr",
+   "docs_url": "https://docs.usecroma.com/guides/japan/courts",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words, in Japanese, matched against the case name, the court's summary (判示事項, 裁判要旨), the statutes cited and the"
+    },
+    {
+     "name": "collection",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "supreme",
+      "high",
+      "lower",
+      "administrative",
+      "labor",
+      "ip",
+      "ip_high"
+     ],
+     "default": "",
+     "description": "Optional collection: `supreme` (最高裁判所判例集), `high` (高等裁判所判例集), `lower` (下級裁判所裁判例速報), `administrative` (行政事件裁判例集), `labor`"
+    },
+    {
+     "name": "court",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional court as `court` names it, e.g. `最高裁判所第一小法廷`, `東京高等裁判所`, `大阪地方裁判所`, matched from the start, so `最高裁判所` finds ev"
+    },
+    {
+     "name": "case_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional case number as the court prints it, e.g. `平成21(オ)257` or `令和7(あ)868`. Spaces and the width of the characters ar"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the ruling was handed down (Gregorian). 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "leychile-norms-search",
+   "name": "Ley Chile Norms Search",
+   "path": "/cl/leychile/norms-search/v1",
+   "country": "cl",
+   "source": "Ley Chile (Biblioteca del Congreso Nacional)",
+   "category": "laws",
+   "served_from": "dataset",
+   "description": "Search Chile's laws, codes, DFL, DL, autos acordados, treaties and supreme decrees from Ley Chile (Biblioteca del Congreso Nacional). Free text matches the name, number, title, common names, subjects and summary. Filter ",
+   "docs_url": "https://docs.usecroma.com/guides/chile/leychile",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words in Spanish matched against the norm's name, number, title, common names, subjects and summary, e.g. `prot"
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "ley",
+      "codigo",
+      "dfl",
+      "dl",
+      "auto_acordado",
+      "tratado",
+      "decreto"
+     ],
+     "default": "",
+     "description": "Optional kind of norm: `ley`, `codigo`, `dfl` (decreto con fuerza de ley), `dl` (decreto ley), `auto_acordado`, `tratado"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 30,
+     "default": "",
+     "description": "Optional number of the norm as BCN lists it, e.g. `21450` for Ley 21.450. Dots and spaces are ignored. Add `type` to nam"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the norm was published (or promulgated, for the few norms without a publication date). 0 searches every ye"
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "in_force",
+      "repealed"
+     ],
+     "default": "",
+     "description": "Optional status: `in_force` for norms not repealed, `repealed` for repealed (derogadas) ones."
+    },
+    {
+     "name": "modified_by",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional `norm_id` of a modifying norm, e.g. `1219906`: only the norms whose version history lists it among the norms th"
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "sii-oficios-search",
+   "name": "SII Oficios Search",
+   "path": "/cl/sii/oficios-search/v1",
+   "country": "cl",
+   "source": "Servicio de Impuestos Internos (SII)",
+   "category": "tax",
+   "served_from": "dataset",
+   "description": "Search the oficios (administrative rulings, jurisprudencia administrativa) of Chile's Servicio de Impuestos Internos from 1994 on: the answers SII gives to taxpayers' questions on income tax (`renta`), VAT (`iva`) and ev",
+   "docs_url": "https://docs.usecroma.com/guides/chile/sii",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the summary, the cited norms and the full text."
+    },
+    {
+     "name": "subject",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "any",
+      "renta",
+      "iva",
+      "otras"
+     ],
+     "default": "any",
+     "description": "The tax the oficio answers about: `renta` (income tax), `iva` (VAT, ventas y servicios), `otras` (every other norm), or "
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document number, e.g. `2815`. Dots and leading zeros are ignored. Numbers restart every year, so combine it wit"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the document belongs to. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "sii-circulars-search",
+   "name": "SII Circulars Search",
+   "path": "/cl/sii/circulars-search/v1",
+   "country": "cl",
+   "source": "Servicio de Impuestos Internos (SII)",
+   "category": "tax",
+   "served_from": "dataset",
+   "description": "Search the circulares of Chile's Servicio de Impuestos Internos from 1975 on: its instructions on how the tax laws apply, from the monthly tables of readjustments and the Unidad de Fomento to the rules implementing each ",
+   "docs_url": "https://docs.usecroma.com/guides/chile/sii",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional search terms matched against the summary, the cited norms and the full text."
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional document number, e.g. `2815`. Dots and leading zeros are ignored. Numbers restart every year, so combine it wit"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the document belongs to. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "cmf-regulations-search",
+   "name": "CMF Regulations Search",
+   "path": "/cl/cmf/regulations-search/v1",
+   "country": "cl",
+   "source": "CMF",
+   "category": "regulation",
+   "served_from": "dataset",
+   "description": "Search Chile's financial regulation: the CMF's Normas de Carácter General, Circulares and Oficios Circulares since 1979 for every market, and the SBIF's banking circulars from 1956 to 2019. Free text in Spanish matches t",
+   "docs_url": "https://docs.usecroma.com/guides/chile/cmf",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words in Spanish, matched against the title, the description and the resolution of each record, e.g. `deuda con"
+    },
+    {
+     "name": "collection",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "cmf",
+      "sbif"
+     ],
+     "default": "",
+     "description": "Optional collection: `cmf` for the general regulation the CMF (and before it the SVS) issues for every market, `sbif` fo"
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional kind of norm as `type` names it: `NCG` (Norma de Carácter General), `CIR` (Circular) or `OFC` (Oficio Circular)"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional number of the norm, e.g. `577` or `3644`. Numbers repeat across years and kinds, so combine it with `type` and "
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the record was issued. 0 searches every year."
+    },
+    {
+     "name": "market",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "banking",
+      "securities",
+      "insurance",
+      "other"
+     ],
+     "default": "",
+     "description": "Optional market the norm applies to: `banking`, `securities`, `insurance` or `other`. A norm can apply to several."
+    },
+    {
+     "name": "related_to",
+     "type": "string",
+     "required": false,
+     "maxLength": 40,
+     "default": "",
+     "description": "Optional `id` of a norm, e.g. `ncg-30-1989`: returns every norm that amends or repeals it, or that it amends or repeals."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "cmf-sanctions-search",
+   "name": "CMF Sanctions Search",
+   "path": "/cl/cmf/sanctions-search/v1",
+   "country": "cl",
+   "source": "CMF",
+   "category": "sanctions",
+   "served_from": "dataset",
+   "description": "Search the sanction resolutions Chile's Comisión para el Mercado Financiero (and the Superintendencia de Valores y Seguros before it) has published since 2002. Free text in Spanish matches what the resolution does and th",
+   "docs_url": "https://docs.usecroma.com/guides/chile/cmf",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words in Spanish, matched against the title, the description and the resolution of each record, e.g. `deuda con"
+    },
+    {
+     "name": "kind",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "sanction",
+      "appeal",
+      "other"
+     ],
+     "default": "",
+     "description": "Optional kind of resolution: `sanction` (it imposes a sanction), `appeal` (it decides an appeal against one) or `other`."
+    },
+    {
+     "name": "resolution_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional number of the resolution, e.g. `11220`. Numbering restarts every year, so combine it with `year`."
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year the record was issued. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "pjud-supreme-court-rulings-search",
+   "name": "Poder Judicial Corte Suprema Rulings Search",
+   "path": "/cl/pjud/supreme-court-rulings-search/v1",
+   "country": "cl",
+   "source": "Poder Judicial de Chile",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the rulings of Chile's Corte Suprema: about 310,000 since 2005. Free text matches the case number, case title, matters, descriptors and full text. Filter by `chamber`, `case_number` (rol), `year`, `matter` and the",
+   "docs_url": "https://docs.usecroma.com/guides/chile/pjud",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words matched against the ruling's case number, case title, matters, descriptors and full text, e.g. `prescripc"
+    },
+    {
+     "name": "case_number",
+     "type": "string",
+     "required": false,
+     "maxLength": 30,
+     "default": "",
+     "description": "Optional case number (rol) with its year, as the court writes it, e.g. `13194-2026`, or with its letter prefix in a firs"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the case (the year in its rol, which can be earlier than the ruling). 0 searches every year."
+    },
+    {
+     "name": "matter",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional matter, exactly as it appears in a result's `matters`, e.g. `PATERNIDAD, RECONOCIMIENTO DE` or `HURTO SIMPLE PO"
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    },
+    {
+     "name": "chamber",
+     "type": "string",
+     "required": false,
+     "maxLength": 80,
+     "default": "",
+     "description": "Optional chamber (sala) of the Corte Suprema, as the court names it, e.g. `PRIMERA, CIVIL`, `SEGUNDA, PENAL`, `TERCERA, "
+    }
+   ]
+  },
+  {
+   "id": "contraloria-cl-dictamenes-search",
+   "name": "Contraloría Chile Dictámenes Search",
+   "path": "/cl/contraloria-cl/dictamenes-search/v1",
+   "country": "cl",
+   "source": "Contraloría General de la República (Chile)",
+   "category": "regulation",
+   "served_from": "dataset",
+   "description": "Search the dictámenes of Chile's Contraloría General de la República: about 158,000 administrative-law opinions since 1949. Free text matches the number, subject, descriptors, legal sources and full text. Filter by `numb",
+   "docs_url": "https://docs.usecroma.com/guides/chile/contraloria",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words matched against the dictamen's number, subject, descriptors, legal sources and full text, e.g. `pensión d"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 20,
+     "default": "",
+     "description": "Optional dictamen number, with its letter prefix when it has one, e.g. `428`, `E152884`, `OF197180`. Leading zeros, spac"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year of the dictamen. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "criterion",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "generates",
+      "applies"
+     ],
+     "default": "",
+     "description": "Optional criterion: `generates` for dictámenes that set new jurisprudence (Genera Jurisprudencia), `applies` for those t"
+    },
+    {
+     "name": "status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "new",
+      "applied",
+      "reconsidered",
+      "partially_reconsidered",
+      "clarified",
+      "altered",
+      "confirmed",
+      "complemented",
+      "reactivated"
+     ],
+     "default": "",
+     "description": "Optional status flag the dictamen carries today: `new`, `applied`, `reconsidered`, `partially_reconsidered`, `clarified`"
+    },
+    {
+     "name": "references",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional dictamen `id`, e.g. `022127N09`: only the dictámenes that act on it (apply, reconsider, clarify, complement...)"
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "dt-cl-pronouncements-search",
+   "name": "Dirección del Trabajo Chile Pronouncements Search",
+   "path": "/cl/dt-cl/pronouncements-search/v1",
+   "country": "cl",
+   "source": "Dirección del Trabajo (Chile)",
+   "category": "regulation",
+   "served_from": "dataset",
+   "description": "Search the administrative labour-law doctrine of Chile's Dirección del Trabajo: about 5,000 dictámenes since 1990, 7,900 ordinarios, and its circulares, órdenes de servicio and resoluciones. Free text in Spanish matches ",
+   "docs_url": "https://docs.usecroma.com/guides/chile/direccion-del-trabajo",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words in Spanish matched against the title, the materias, the summary, the descriptors and the full text, e.g. "
+    },
+    {
+     "name": "type",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "dictamen",
+      "ordinario",
+      "circular",
+      "orden_de_servicio",
+      "resolucion"
+     ],
+     "default": "",
+     "description": "Optional kind: `dictamen` (sets doctrine), `ordinario` (answers a consultation), `circular`, `orden_de_servicio` or `res"
+    },
+    {
+     "name": "number",
+     "type": "string",
+     "required": false,
+     "maxLength": 30,
+     "default": "",
+     "description": "Optional number, e.g. `388/32` (a dictamen with its correlative) or `388` (every pronouncement numbered 388). Numbers re"
+    },
+    {
+     "name": "year",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional year it was issued. 0 searches every year."
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "tc-cl-rulings-search",
+   "name": "Tribunal Constitucional Chile Rulings Search",
+   "path": "/cl/tc-cl/rulings-search/v1",
+   "country": "cl",
+   "source": "Tribunal Constitucional (Chile)",
+   "category": "courts",
+   "served_from": "dataset",
+   "description": "Search the sentencias of Chile's Tribunal Constitucional: about 13,000 cases since 1981, one result per case (rol). Free text matches the rol, caption, requesters, pending proceeding, challenged laws, constitutional arti",
+   "docs_url": "https://docs.usecroma.com/guides/chile/tribunal-constitucional",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 300,
+     "default": "",
+     "description": "Optional words matched against the rol, the case caption, the requesters, the pending proceeding, the challenged laws, t"
+    },
+    {
+     "name": "rol",
+     "type": "string",
+     "required": false,
+     "maxLength": 30,
+     "default": "",
+     "description": "Optional rol of the case, e.g. `16770`, `16.770-25` or `16770-2025-INA`: only its number counts."
+    },
+    {
+     "name": "procedure",
+     "type": "string",
+     "required": false,
+     "maxLength": 10,
+     "default": "",
+     "description": "Optional procedure code, e.g. `INA` (inaplicabilidad, art. 93 N° 6), `INC` (inconstitucionalidad), `CPR` (control preven"
+    },
+    {
+     "name": "outcome",
+     "type": "string",
+     "required": false,
+     "maxLength": 60,
+     "default": "",
+     "description": "Optional outcome as the Tribunal records it, e.g. `Acoge`, `Rechaza`, `Acoge parcialmente`, `Empate`, `Inadmisible`. Acc"
+    },
+    {
+     "name": "from_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "to_date",
+     "type": "string",
+     "required": false,
+     "format": "date",
+     "default": "",
+     "description": "Optional date filter in yyyy-mm-dd format."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Results per page (1-50)."
+    }
+   ]
+  },
+  {
+   "id": "seniat-rif",
+   "name": "SENIAT RIF",
+   "path": "/ve/seniat/rif/v1",
+   "country": "ve",
+   "source": "SENIAT",
+   "category": "companies",
+   "served_from": "live",
+   "description": "Look up a Venezuelan taxpayer by RIF in SENIAT's Registro de Información Fiscal. Returns the registered name and trade name, the economic activity, the VAT condition (ordinary or special taxpayer, withholding agent) and ",
+   "docs_url": "https://docs.usecroma.com/guides/venezuela/seniat",
+   "text_param": null,
+   "params": [
+    {
+     "name": "rif",
+     "type": "string",
+     "required": true,
+     "pattern": "^[VEJPGCvejpgc][-\\s]?\\d{8}[-\\s]?\\d$",
+     "description": "RIF: the type letter (V, E, J, P, G or C) followed by nine digits, the last one the check digit. Dashes and spaces are a"
+    }
+   ]
+  },
+  {
+   "id": "mintrabajo-gt-minimum-wage",
+   "name": "Mintrabajo Minimum Wage",
+   "path": "/gt/mintrabajo-gt/minimum-wage/v1",
+   "country": "gt",
+   "source": "Mintrabajo",
+   "category": "stats",
+   "served_from": "dataset",
+   "description": "Guatemala's monthly minimum wage since 1995 for the agricultural, non-agricultural and export-and-maquila activities in each economic circumscription (CE1, the department of Guatemala; CE2, the rest of the country): the ",
+   "docs_url": "https://docs.usecroma.com/guides/guatemala/mintrabajo",
+   "text_param": null,
+   "params": [
+    {
+     "name": "measure",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "nominal",
+      "real"
+     ],
+     "default": "",
+     "description": "Optional: `nominal` (the monthly wage in force each year) or `real` (deflated by the consumer price index, by month)."
+    },
+    {
+     "name": "activity",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "agricultural",
+      "non_agricultural",
+      "export_and_maquila"
+     ],
+     "default": "",
+     "description": "Optional activity: `agricultural`, `non_agricultural` or `export_and_maquila`."
+    },
+    {
+     "name": "circumscription",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "CE1",
+      "CE2"
+     ],
+     "default": "",
+     "description": "Optional economic circumscription: `CE1` (the department of Guatemala) or `CE2` (the other 21 departments)."
+    },
+    {
+     "name": "year_from",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional first year (inclusive). 0 sets no lower bound."
+    },
+    {
+     "name": "year_to",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional last year (inclusive). 0 sets no upper bound."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 500,
+     "default": 100,
+     "description": "Results per page (1-500)."
+    }
+   ]
+  },
+  {
+   "id": "mintrabajo-gt-publications-search",
+   "name": "Mintrabajo Publications",
+   "path": "/gt/mintrabajo-gt/publications-search/v1",
+   "country": "gt",
+   "source": "Mintrabajo",
+   "category": "stats",
+   "served_from": "dataset",
+   "description": "Every report, bulletin, cartilla and data file the Ministry of Labour publishes on its labour market statistics page: the employer reports since 2021, studies on women, children, indigenous peoples and migration, trade u",
+   "docs_url": "https://docs.usecroma.com/guides/guatemala/mintrabajo",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Optional words to match, accents optional."
+    },
+    {
+     "name": "format",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "pdf",
+      "zip"
+     ],
+     "default": "",
+     "description": "Optional format: `pdf` (reports and bulletins) or `zip` (data files and scripts)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 500,
+     "default": 100,
+     "description": "Results per page (1-500)."
+    }
+   ]
+  },
+  {
+   "id": "mintrabajo-gt-labour-indicators",
+   "name": "Mintrabajo Labour Indicators",
+   "path": "/gt/mintrabajo-gt/labour-indicators/v1",
+   "country": "gt",
+   "source": "Mintrabajo",
+   "category": "stats",
+   "served_from": "dataset",
+   "description": "Guatemala's labour market indicators from the INE household surveys as the Ministry of Labour publishes them (ENEI 2012-2022, ENCOVI 2023, quarterly ENEIC since 2024): working-age population, labour force, employed, unem",
+   "docs_url": "https://docs.usecroma.com/guides/guatemala/mintrabajo",
+   "text_param": null,
+   "params": [
+    {
+     "name": "survey",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "ENEI",
+      "ENEIC",
+      "ENCOVI"
+     ],
+     "default": "",
+     "description": "Optional survey: `ENEI` (2012-2022), `ENEIC` (quarterly since 2024) or `ENCOVI` (2023)."
+    },
+    {
+     "name": "breakdown",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "total",
+      "sex",
+      "area",
+      "age_group",
+      "ethnicity",
+      "economic_activity",
+      "occupational_category"
+     ],
+     "default": "",
+     "description": "Optional breakdown: `total`, `sex`, `area`, `age_group`, `ethnicity`, `economic_activity` or `occupational_category`."
+    },
+    {
+     "name": "year_from",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional first year (inclusive). 0 sets no lower bound."
+    },
+    {
+     "name": "year_to",
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2100,
+     "default": 0,
+     "description": "Optional last year (inclusive). 0 sets no upper bound."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 500,
+     "default": 100,
+     "description": "Results per page (1-500)."
+    }
+   ]
+  },
+  {
+   "id": "web-search",
+   "name": "Web Search",
+   "path": "/global/web-search/v1",
+   "country": "global",
+   "source": "Croma",
+   "category": "web",
+   "served_from": "live",
+   "description": "AI-powered web search. Returns structured results with URLs, titles, authors, dates, highlights, and relevance scores.",
+   "docs_url": "https://docs.usecroma.com/guides/global/web-search",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": true,
+     "minLength": 3,
+     "maxLength": 300,
+     "description": "Natural-language search query."
+    },
+    {
+     "name": "limit",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 25,
+     "default": 10,
+     "description": "Number of results to return."
+    }
+   ]
+  },
+  {
+   "id": "research",
+   "name": "Research",
+   "path": "/global/research/v1",
+   "country": "global",
+   "source": "Croma",
+   "category": "web",
+   "served_from": "live",
+   "description": "Answer an open question from live sources. Returns a written report in Markdown with numbered citations plus the list of sources behind it. Typically takes a few seconds; it is a research pass, not a lookup, so verify an",
+   "docs_url": "https://docs.usecroma.com/guides/global/research",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": true,
+     "minLength": 10,
+     "maxLength": 2000,
+     "description": "The question to research, in plain language."
+    }
+   ]
+  },
+  {
+   "id": "extract-markdown",
+   "name": "Extract Markdown",
+   "path": "/global/extract/markdown/v1",
+   "country": "global",
+   "source": "Croma",
+   "category": "web",
+   "served_from": "live",
+   "description": "Turn any public web page into clean Markdown. `scope` keeps either the article body or the whole page, and `include_metadata` adds the page's title, author, published date and image. Handles pages that render themselves ",
+   "docs_url": "https://docs.usecroma.com/guides/global/extract",
+   "text_param": null,
+   "params": [
+    {
+     "name": "url",
+     "type": "string",
+     "required": true,
+     "maxLength": 2000,
+     "format": "uri",
+     "description": "Public http or https URL of the page to read. Loopback and private addresses are not accepted."
+    },
+    {
+     "name": "scope",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "main",
+      "full"
+     ],
+     "default": "main",
+     "description": "`main` keeps the article body and drops navigation and boilerplate; `full` keeps the whole page."
+    },
+    {
+     "name": "effort",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "min",
+      "standard",
+      "max"
+     ],
+     "default": "standard",
+     "description": "Effort to spend on the page: `min` is fastest and may serve a recent copy, `standard` is the balanced default, `max` alw"
+    },
+    {
+     "name": "include_metadata",
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "description": "Include the page's title, author, published date and image in the response."
+    }
+   ]
+  },
+  {
+   "id": "gleif-entities-search",
+   "name": "GLEIF Entities Search",
+   "path": "/global/gleif/entities-search/v1",
+   "country": "global",
+   "source": "GLEIF (LEI)",
+   "category": "companies",
+   "served_from": "dataset",
+   "description": "Search every Legal Entity Identifier record in the world, about 3.4 million, by name (legal, trading, previous and transliterated names). Filter by legal-address country, legal jurisdiction (e.g. `US-DE`), business regis",
+   "docs_url": "https://docs.usecroma.com/guides/global/gleif",
+   "text_param": "query",
+   "params": [
+    {
+     "name": "query",
+     "type": "string",
+     "required": false,
+     "maxLength": 200,
+     "default": "",
+     "description": "Palabras a buscar en los nombres (opcional)."
+    },
+    {
+     "name": "country",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z]{2})?$",
+     "default": "",
+     "description": "País de dos letras de la dirección legal, p. ej. `US`, `CO`, `KY` (opcional)."
+    },
+    {
+     "name": "jurisdiction",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:[A-Za-z]{2}(?:-[A-Za-z0-9]{1,3})?)?$",
+     "default": "",
+     "description": "Jurisdicción legal: un país (`GB`) o una subdivisión (`US-DE`) (opcional)."
+    },
+    {
+     "name": "registration_authority",
+     "type": "string",
+     "required": false,
+     "pattern": "^(?:RA\\d{6})?$",
+     "default": "",
+     "description": "Registro mercantil por su código GLEIF, p. ej. `RA000602` (Delaware) o `RA000603` (Florida) (opcional)."
+    },
+    {
+     "name": "registered_as",
+     "type": "string",
+     "required": false,
+     "maxLength": 100,
+     "default": "",
+     "description": "Número de la entidad en su registro: un file number de Delaware, un document number de Sunbiz, un NIT (opcional)."
+    },
+    {
+     "name": "category",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "GENERAL",
+      "FUND",
+      "BRANCH",
+      "SOLE_PROPRIETOR",
+      "RESIDENT_GOVERNMENT_ENTITY",
+      "INTERNATIONAL_ORGANIZATION"
+     ],
+     "default": "",
+     "description": "Categoría de la entidad (opcional)."
+    },
+    {
+     "name": "entity_status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "ACTIVE",
+      "INACTIVE"
+     ],
+     "default": "",
+     "description": "Estado de la entidad: `ACTIVE` o `INACTIVE` (opcional)."
+    },
+    {
+     "name": "registration_status",
+     "type": "string",
+     "required": false,
+     "enum": [
+      "",
+      "ISSUED",
+      "LAPSED",
+      "RETIRED",
+      "DUPLICATE",
+      "ANNULLED",
+      "MERGED",
+      "PENDING_TRANSFER",
+      "PENDING_ARCHIVAL"
+     ],
+     "default": "",
+     "description": "Estado del registro LEI, p. ej. `ISSUED` o `LAPSED` (opcional)."
+    },
+    {
+     "name": "page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 1000,
+     "default": 1,
+     "description": "1-based page number for paginated results."
+    },
+    {
+     "name": "per_page",
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 50,
+     "default": 20,
+     "description": "Resultados por página (1-50)."
+    }
+   ]
+  }
+ ]
+}

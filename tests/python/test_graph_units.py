@@ -180,3 +180,9 @@ def test_graph_claim_roundtrip_and_backward_compatible():
     c = _claims(True)
     assert verify_internal_token(issue_internal_token(c)).graph_enabled is True
     assert verify_internal_token(issue_internal_token(_claims(False))).graph_enabled is False
+
+
+def test_graph_heuristic_keeps_label_before_colon_in_description():
+    g = graph_heuristic("Responsable de la nueva demanda: Mariana Ortiz Lozano. Próxima revisión: 15 de octubre.")
+    by_name = {e["name"]: e for e in g["entities"]}
+    assert by_name["Mariana Ortiz Lozano"]["description"].startswith("Responsable de la nueva demanda:")

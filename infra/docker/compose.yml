@@ -20,6 +20,12 @@ x-app-env: &app-env
   AI_GENERATION_MODEL: ${AI_GENERATION_MODEL:-local-extractive@v1}
   AI_RERANK_MODEL: ${AI_RERANK_MODEL:-local-lexical-rerank@v1}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-8192}
+  # Meta Model API (Muse): AI_GENERATION_MODEL=meta-muse-spark-1.3@v1 y la clave en .env (nunca en Git).
+  META_MODEL_API_KEY: ${META_MODEL_API_KEY:-}
+  META_REASONING_EFFORT: ${META_REASONING_EFFORT:-low}
+  # Muse Contributor entrena con el contenido enviado: solo para pruebas con datos no sensibles.
+  AI_ALLOW_TRAINING_MODELS: ${AI_ALLOW_TRAINING_MODELS:-false}
   OCR_PROVIDER: ${OCR_PROVIDER:-none}
   # RAG-04: VLM para figuras (vacío = solo captions), parser (native | docling), VLM-enhanced en consulta.
   AI_VISION_MODEL: ${AI_VISION_MODEL:-}
@@ -38,6 +44,8 @@ x-app-env: &app-env
 services:
   postgres:
     image: pgvector/pgvector:pg17
+    # Without a restart policy, a Docker restart left the app services up (they have one) and Postgres down.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ragsis_owner
       POSTGRES_DB: ragsis
@@ -57,6 +65,7 @@ services:
   seaweedfs:
     # S3 compatible local (MinIO dejó de publicar imágenes comunitarias).
     image: chrislusf/seaweedfs:3.80
+    restart: unless-stopped
     command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
     volumes:
       - s3data:/data
@@ -71,6 +80,7 @@ services:
   elasticmq:
     # SQS compatible local con DLQ (maxReceiveCount = 4).
     image: softwaremill/elasticmq-native:1.6.11
+    restart: unless-stopped
     volumes:
       - ./elasticmq/elasticmq.conf:/opt/elasticmq.conf:ro
     ports: ["127.0.0.1:9324:9324"]
@@ -146,6 +156,9 @@ services:
       <<: *app-env
       DATABASE_URL: postgresql://ragsis_app:${RAGSIS_APP_DB_PASSWORD}@postgres:5432/ragsis
       OTEL_SERVICE_NAME: ragsis-rag-engine
+      # Public records in Ask (ADR-036). Only the rag-engine holds the Croma key. CROMA_DEMO=1: labelled sample data.
+      CROMA_API_KEY: ${CROMA_API_KEY:-}
+      CROMA_DEMO: ${CROMA_DEMO:-false}
     depends_on:
       migrate: { condition: service_completed_successfully }
 

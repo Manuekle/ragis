@@ -33,6 +33,9 @@ class InternalClaims:
     max_context_tokens: int
     rerank_enabled: bool
     graph_enabled: bool = False   # RAG-05: grafo habilitado (plan u organización), resuelto por la API
+    # ADR-036: registros públicos permitidos para ESTA pregunta (interruptor de la organización + cupo mensual),
+    # resuelto por la API: {"country": "co"|None, "web": bool, "max_calls": int, "override": str|None}.
+    public_sources: dict | None = None
 
     def security_context(self) -> SecurityContext:
         return SecurityContext(self.organization_id, self.user_id, self.principals)
@@ -67,9 +70,25 @@ def verify_internal_token(token: str) -> InternalClaims:
             max_context_tokens=int(payload.get("max_ctx", 6000)),
             rerank_enabled=bool(payload.get("rerank", False)),
             graph_enabled=payload.get("graph") is True,
+            public_sources=_public_claim(payload.get("pub")),
         )
     except (ValueError, KeyError, TypeError) as exc:
         raise InternalAuthError(f"claims inválidos: {exc}") from exc
+
+
+def _public_claim(raw) -> dict | None:
+    """`pub` del token: ausente o malformado = sin registros públicos (nunca se infiere del cuerpo de la petición)."""
+    if not isinstance(raw, dict):
+        return None
+
+    def code(v):
+        return v if isinstance(v, str) and 2 <= len(v) <= 8 and v.isalpha() else None
+
+    n = raw.get("n")
+    if not isinstance(n, int) or isinstance(n, bool) or n <= 0:
+        return None
+    return {"country": code(raw.get("c")), "web": raw.get("w") is True, "max_calls": min(n, 10),
+            "override": code(raw.get("o"))}
 
 
 def issue_internal_token(claims: InternalClaims, ttl: int = 60, secret: str | None = None) -> str:
@@ -94,6 +113,9 @@ def issue_internal_token(claims: InternalClaims, ttl: int = 60, secret: str | No
             "max_ctx": claims.max_context_tokens,
             "rerank": claims.rerank_enabled,
             "graph": claims.graph_enabled,
+            **({"pub": {"c": claims.public_sources.get("country"), "w": bool(claims.public_sources.get("web")),
+                        "n": int(claims.public_sources.get("max_calls", 0)),
+                        "o": claims.public_sources.get("override")}} if claims.public_sources else {}),
         },
         secret or s.internal_service_secret,
         algorithm="HS256",

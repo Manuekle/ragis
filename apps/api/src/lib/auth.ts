@@ -96,6 +96,8 @@ export async function issueInternalToken(
     maxContextTokens: number;
     rerank: boolean;
     graph: boolean;
+    /** ADR-036: public records allowed for this question (country, web, lookups left, country picked in Ask). */
+    pub?: { c: string | null; w: boolean; n: number; o: string | null };
   },
 ): Promise<string> {
   return new SignJWT({
@@ -108,6 +110,7 @@ export async function issueInternalToken(
     max_ctx: claims.maxContextTokens,
     rerank: claims.rerank,
     graph: claims.graph,
+    ...(claims.pub ? { pub: claims.pub } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.userId)

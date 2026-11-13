@@ -21,7 +21,7 @@ LOCAL_NETWORK = "local"
 class ModelSpec:
     model_id: str                     # id interno versionado (estable en BD/índices)
     kind: ModelKind
-    provider: str                     # local | bedrock | bedrock-anthropic | ollama
+    provider: str                     # local | bedrock | bedrock-anthropic | ollama | meta
     provider_model_id: str
     locality: str                     # cloud | local
     dimensions: int | None = None     # embeddings
@@ -31,6 +31,7 @@ class ModelSpec:
     price_out_per_mtok: float = 0.0
     abstain_similarity: float = 0.0   # umbral mínimo de similitud para evidencia (embeddings)
     vision: bool = False              # acepta imágenes de entrada (descripción de figuras / VLM-enhanced)
+    trains_on_data: bool = False      # el proveedor puede entrenar con el contenido enviado (p. ej. Muse Contributor)
     notes: str = ""
 
     @property
@@ -75,6 +76,20 @@ DEFAULT_MODELS: tuple[ModelSpec, ...] = (
               CLOUD, context_tokens=1000000, regions=_US, vision=True),
     ModelSpec("bedrock-claude-opus-5-5@v1", ModelKind.GENERATE, "bedrock-anthropic", "anthropic.claude-opus-5-5",
               CLOUD, context_tokens=1000000, regions=_US, vision=True),
+    # --- Meta Model API (externa a AWS; no la cubren los créditos de AWS) ---
+    ModelSpec("meta-muse-spark-1.3@v1", ModelKind.GENERATE, "meta", "muse-spark-1.3", CLOUD,
+              notes="Muse Spark por Chat Completions (https://api.meta.ai/v1). La evidencia sale a Meta."),
+    ModelSpec("meta-muse-spark-1.3-contributor@v1", ModelKind.GENERATE, "meta", "muse-spark-1.3-contributor", CLOUD,
+              trains_on_data=True,
+              notes="Modo Contributor: precio muy rebajado a cambio de que Meta entrene con el contenido enviado. "
+                    "Solo con AI_ALLOW_TRAINING_MODELS=true y nunca con datos confidential/restricted."),
+    # Visión de Muse solo para ingesta (describir fotos y figuras). Va aparte de los modelos de generación para que
+    # activarla no cambie las respuestas: el modo VLM-enhanced de la consulta mira `vision` del modelo de generación.
+    ModelSpec("meta-muse-spark-1.3-vision@v1", ModelKind.VISION, "meta", "muse-spark-1.3", CLOUD, vision=True,
+              notes="Muse Spark describe imágenes (image_url con data URL). Las imágenes salen a Meta."),
+    ModelSpec("meta-muse-spark-1.3-contributor-vision@v1", ModelKind.VISION, "meta", "muse-spark-1.3-contributor",
+              CLOUD, vision=True, trains_on_data=True,
+              notes="Visión en modo Contributor: Meta puede entrenar con las imágenes. Solo datos de prueba."),
     ModelSpec("aws-textract@v1", ModelKind.OCR, "textract", "detect-document-text", CLOUD, regions=_US,
               notes="OCR asíncrono sobre el objeto S3; datos salen a un servicio administrado de AWS."),
     ModelSpec("aws-transcribe@v1", ModelKind.TRANSCRIBE, "transcribe", "start-transcription-job", CLOUD, regions=_US,
@@ -90,6 +105,10 @@ DEFAULT_FALLBACKS: dict[str, tuple[str, ...]] = {
     "bedrock-nova-lite@v1": ("bedrock-nova-micro@v1",),
     "ollama-qwen3-14b@v1": ("ollama-qwen3-8b@v1", "local-extractive@v1"),
     "ollama-qwen3-8b@v1": ("local-extractive@v1",),
+    # Sin Ollama en la cadena: quien elige Muse no quiere cargar la GPU local.
+    "meta-muse-spark-1.3@v1": ("local-extractive@v1",),
+    # Sin pasar a Standard: cambiaría el coste sin aviso.
+    "meta-muse-spark-1.3-contributor@v1": ("local-extractive@v1",),
     "bedrock-cohere-rerank-3-5@v1": ("local-lexical-rerank@v1",),
     "ollama-qwen3-vl-8b@v1": ("ollama-qwen2.5vl-7b@v1",),
     # Embeddings NO tienen fallback: mezclar espacios vectoriales rompe el índice.

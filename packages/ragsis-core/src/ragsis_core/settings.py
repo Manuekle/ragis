@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     ai_generation_model: str = "local-extractive@v1"
     ai_rerank_model: str = "local-lexical-rerank@v1"
     ollama_base_url: str = "http://localhost:11434"
+    # Ventana de contexto que se pide a Ollama (num_ctx). Su valor por defecto (4096) recorta los prompts largos por el
+    # principio y se pierden las instrucciones y las primeras fuentes. Cada valor distinto recarga el modelo.
+    ollama_num_ctx: int = 8192
+    # Meta Model API (Muse). Clave en META_MODEL_API_KEY; nunca en el repositorio.
+    meta_model_api_key: str = ""
+    meta_model_api_base_url: str = "https://api.meta.ai/v1"
+    meta_reasoning_effort: str = "low"            # minimal | low | medium | high ("none" no existe en Muse)
+    meta_reasoning_budget_tokens: int = 2048      # margen para el razonamiento sobre max_output_tokens
+    # Modelos cuyo proveedor entrena con el contenido (Muse Contributor). Solo pruebas con datos no sensibles.
+    ai_allow_training_models: bool = False
 
     malware_scanner: str = "none"
     clamav_host: str = "clamav"
@@ -74,6 +84,18 @@ class Settings(BaseSettings):
     graph_max_chunks_per_doc: int = 200
     # Consulta: entidades y relaciones de la evidencia seleccionada que se añaden al prompt (tokens aprox.).
     rag_graph_context_tokens: int = 500
+    # Documentos generados desde el chat (ADR-034): tokens de salida para el Markdown y tamaño de página del PDF/Word.
+    rag_document_max_output_tokens: int = 3000
+    docs_page_size: str = "A4"            # A4 | LETTER
+
+    # Public records in Ask (ADR-036): official government data and the web through Croma (api.croma.run).
+    # Without a key the feature shows as "not set up"; CROMA_DEMO=1 answers with labelled sample data instead.
+    croma_api_key: str = ""
+    croma_base_url: str = "https://api.croma.run"
+    croma_demo: bool = False
+    croma_timeout_seconds: float = 25.0
+    croma_max_calls: int = 2              # lookups per question
+    croma_context_tokens: int = 3500      # prompt budget for public evidence
 
     pipeline_version: str = "ingest-2026.11.3"
     log_level: str = "INFO"

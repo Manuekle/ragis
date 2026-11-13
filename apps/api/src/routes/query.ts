@@ -6,6 +6,7 @@ import { ApiError, badRequest, notFound, quotaExceeded } from "../lib/errors.js"
 import { audit, requireWorkspaceRead, tx, type TenantContext } from "../lib/tenant.js";
 import { childSpan } from "../lib/telemetry.js";
 import { saveConversationTurn } from "./conversations.js";
+import { COUNTRY_CHOICES, MAX_LOOKUPS_PER_QUESTION, effectiveCountry, loadPublicSettings } from "../lib/public-sources.js";
 
 const QueryBody = z.object({
   question: z.string().trim().min(2).max(2000),
@@ -15,10 +16,26 @@ const QueryBody = z.object({
   mode: z.enum(["auto", "off", "local", "global", "hybrid"]).optional(),
   // Historial (ADR-028): uuid generado por el cliente; si viene, el turno se guarda en esa conversación.
   conversation_id: z.string().uuid().optional(),
+  // ADR-034: "answer" (por defecto, contrato anterior), "auto" (detecta si se pide un archivo) o un formato concreto.
+  output: z.enum(["answer", "auto", "pdf", "docx", "pptx", "xlsx", "csv", "md"]).optional(),
+  // ADR-036: también consultar registros públicos (Croma) para esta pregunta; `country` fija el país ("global" = mundo).
+  public_sources: z.boolean().optional(),
+  country: z.enum(COUNTRY_CHOICES).optional(),
 });
+
+export interface RenderedFile {
+  status: number;
+  data: Buffer;
+  contentType: string;
+  filename: string | null;
+}
 
 export interface RagClient {
   query(token: string, body: Record<string, unknown>, headers?: Record<string, string>): Promise<{ status: number; body: unknown }>;
+  /** Convierte un documento generado (Markdown verificado) en PDF, Word, PowerPoint, Excel, CSV o Markdown (ADR-034). */
+  render?(token: string, body: Record<string, unknown>): Promise<RenderedFile>;
+  /** ADR-036: whether public records are set up (Croma key or demo mode) in the rag-engine. */
+  publicSourcesStatus?(token: string): Promise<{ available: boolean; demo: boolean }>;
 }
 
 /** `timeoutMs`: un modelo local (Ollama) en una máquina cargada puede tardar más de un minuto en generar. */
@@ -41,6 +58,36 @@ export function httpRagClient(baseUrl: string, timeoutMs = 120_000): RagClient {
         throw err;
       }
     },
+    async publicSourcesStatus(token) {
+      const res = await fetch(`${baseUrl}/internal/public-sources/status`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!res.ok) throw new Error(`rag-engine status ${res.status}`);
+      const body = (await res.json()) as { available?: unknown; demo?: unknown };
+      return { available: body.available === true, demo: body.demo === true };
+    },
+    async render(token, body) {
+      try {
+        const res = await fetch(`${baseUrl}/internal/render`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(60_000),
+        });
+        return {
+          status: res.status,
+          data: Buffer.from(await res.arrayBuffer()),
+          contentType: res.headers.get("content-type") ?? "application/octet-stream",
+          filename: res.headers.get("x-filename"),
+        };
+      } catch (err) {
+        if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+          throw new ApiError(504, "render_timeout", "Preparing the file is taking too long. Try again in a moment.");
+        }
+        throw err;
+      }
+    },
   };
 }
 
@@ -53,13 +100,17 @@ export async function runRagQuery(
   deps: Deps,
   t: TenantContext,
   ws: string,
-  body: { question: string; as_of?: string; top_k?: number; mode?: string },
+  body: { question: string; as_of?: string; top_k?: number; mode?: string; output?: string; public_sources?: boolean; country?: string },
   req?: FastifyRequest,
 ): Promise<unknown> {
   const { pool, rag, limiter, cfg } = deps;
   if (!limiter.take(`${t.organizationId}:${t.userId}`, t.plan.queries_per_minute)) {
     throw new ApiError(429, "rate_limited", "demasiadas consultas por minuto");
   }
+  // ADR-036: registros públicos solo si la organización los tiene encendidos y le queda cupo este mes. Si no, la
+  // pregunta se responde igual con los documentos y el resultado dice por qué no se consultaron.
+  let pub: { c: string | null; w: boolean; n: number; o: string | null } | undefined;
+  let pubDenied: "off" | "limit" | "restricted" | undefined;
   await tx(pool, t, async (db) => {
     const r = await db.query(
       "SELECT coalesce(sum(quantity), 0)::int AS n FROM usage_events WHERE kind='query' AND created_at >= date_trunc('month', now())",
@@ -67,6 +118,15 @@ export async function runRagQuery(
     if (r.rows[0].n >= t.plan.max_queries_month) {
       await audit(db, t, "query.blocked", `workspace:${ws}`, "deny", { reason: "monthly_quota" });
       throw quotaExceeded("cuota mensual de consultas agotada");
+    }
+    if (body.public_sources) {
+      const s = await loadPublicSettings(db, t.organizationId);
+      const remaining = s.monthlyLimit - s.usedThisMonth;
+      // Datos `restricted` nunca salen a APIs externas (misma regla que los modelos en la nube).
+      if (t.dataClass === "restricted") pubDenied = "restricted";
+      else if (!s.enabled) pubDenied = "off";
+      else if (remaining <= 0) pubDenied = "limit";
+      else pub = { c: effectiveCountry(s), w: s.web, n: Math.min(MAX_LOOKUPS_PER_QUESTION, remaining), o: body.country ?? null };
     }
   });
 
@@ -82,9 +142,10 @@ export async function runRagQuery(
     maxContextTokens: t.plan.max_context_tokens,
     rerank: t.plan.rerank_enabled,
     graph: t.graphEnabled,
+    ...(pub ? { pub } : {}),
   });
   const send = (carrier?: Record<string, string>) =>
-    rag.query(token, { question: body.question, as_of: body.as_of, top_k: body.top_k, graph_mode: body.mode }, carrier);
+    rag.query(token, { question: body.question, as_of: body.as_of, top_k: body.top_k, graph_mode: body.mode, output: body.output }, carrier);
   const res = req ? await childSpan(req, "rag-engine.query", { "ragsis.workspace_id": ws }, send) : await send();
   if (res.status === 403) throw new ApiError(403, "model_policy_violation", "no model allowed by the tenant data policy");
   if (res.status === 429) throw new ApiError(429, "budget_exceeded", "presupuesto de tokens excedido");
@@ -92,7 +153,23 @@ export async function runRagQuery(
     req?.log.error({ status: res.status }, "rag-engine error");
     throw new ApiError(503, "rag_unavailable", "servicio de consulta no disponible");
   }
-  return res.body;
+  const result = res.body as Record<string, unknown>;
+  if (pubDenied) {
+    result.public_sources = { requested: true, lookups: 0, countries: [], sources: [], unavailable: pubDenied, demo: false };
+  }
+  const used = result.public_sources as { lookups?: number; sources?: string[]; countries?: string[] } | undefined;
+  if (used?.lookups) {
+    // Lo que sale de la organización queda en el registro de actividad: cuántas consultas y a qué registros (sin términos).
+    await tx(pool, t, (db) =>
+      audit(db, t, "query.public_sources", `workspace:${ws}`, "allow", {
+        trace_id: result.trace_id,
+        lookups: used.lookups,
+        sources: used.sources ?? [],
+        countries: used.countries ?? [],
+      }),
+    ).catch((err: unknown) => req?.log.error({ err }, "could not audit public lookup"));
+  }
+  return result;
 }
 
 export async function queryRoutes(app: FastifyInstance, deps: Deps) {

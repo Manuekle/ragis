@@ -131,12 +131,13 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
     const rows = await tx(pool, t, async (db) =>
       (
         await db.query(
-          `SELECT w.id, w.name, w.created_at, wm.role AS my_role,
+          `SELECT w.id, w.name, w.created_at, wm.role AS my_role, tm.id AS team_id, tm.color AS team_color,
                   CASE WHEN wm.role IS NOT NULL THEN EXISTS (
                     SELECT 1 FROM documents d
                      WHERE d.organization_id = w.organization_id AND d.workspace_id = w.id AND d.status = 'active'
                   ) END AS has_documents
              FROM workspaces w LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $1
+             LEFT JOIN teams tm ON tm.workspace_id = w.id
             ORDER BY w.created_at`,
           [t.userId],
         )

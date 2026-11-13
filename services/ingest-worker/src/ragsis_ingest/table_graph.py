@@ -52,6 +52,22 @@ def table_rows(text: str) -> tuple[list[str], list[list[str]]]:
     return _cells(block[0]), rows
 
 
+_NAME_CONNECTORS = frozenset({"de", "del", "la", "las", "los", "y", "e"})
+
+
+def looks_like_proper_name(label: str) -> bool:
+    """Etiqueta de fila que nombra a alguien o algo concreto ("Mariana Ortiz Lozano", "Banco de Bogotá").
+
+    Dos o más palabras con mayúscula inicial (conectores aparte) y sin cifras. "Total", "Región Caribe 2025" o
+    "Gastos de viaje" no lo son: esas filas siguen siendo locales a su tabla.
+    """
+    words = label.split()
+    if any(ch.isdigit() for ch in label):
+        return False
+    named = [w for w in words if w.lower() not in _NAME_CONNECTORS]
+    return len(named) >= 2 and all(w[:1].isupper() and w[:1].isalpha() for w in named)
+
+
 def table_graph(text: str, anchor: dict, caption: str = "", key_of=None) -> tuple[list[dict], list[dict]]:
     """Entidades y relaciones de la estructura de la tabla, ancladas a `anchor` (nodo de la tabla).
 
@@ -112,6 +128,14 @@ def table_graph(text: str, anchor: dict, caption: str = "", key_of=None) -> tupl
         if not key:
             continue
         edge(key, anchor["key"], "fila_de", f"{name} es una fila de {label}", ROW_WEIGHT)
+        if looks_like_proper_name(name):
+            # La fila también menciona a la entidad global del mismo nombre: así un salto del grafo llega desde
+            # "Mariana Ortiz Lozano" en un acta hasta su fila en una hoja de horas. La fila sigue anclada a su tabla.
+            global_key = key_of(name)[-MAX_NAME:]
+            if len(global_key) >= 2 and global_key != anchor["key"]:
+                entities.setdefault(global_key, {"key": global_key, "name": name, "type": "entidad",
+                                                 "description": normalize(f"{name} en {label}: {content}")[:MAX_DESCRIPTION]})
+                edge(key, global_key, "fila_sobre", f"La fila {name} de {label} se refiere a {name}", ROW_WEIGHT)
         for j, h, col_key, u in cols:
             value = r[j] if j < len(r) else ""
             if not value or cells >= MAX_CELLS:

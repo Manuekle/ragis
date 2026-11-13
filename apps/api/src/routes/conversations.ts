@@ -27,8 +27,15 @@ const RenameBody = z.object({ title: z.string().trim().min(1).max(120) });
 
 /** Solo los campos que la pantalla necesita; nada interno (tiempos, costes) pasa al historial. */
 function snapshot(result: Record<string, unknown>): Record<string, unknown> {
-  const keep = ["trace_id", "answer", "abstained", "abstain_reason", "citations", "retrieval_strategy", "question_class", "generation_model", "latency_ms"];
-  return Object.fromEntries(keep.filter((k) => k in result).map((k) => [k, result[k]]));
+  const keep = ["trace_id", "answer", "abstained", "abstain_reason", "citations", "retrieval_strategy", "question_class", "generation_model", "latency_ms", "public_sources"];
+  const out = Object.fromEntries(keep.filter((k) => k in result).map((k) => [k, result[k]]));
+  // Documento generado (ADR-034): solo la tarjeta; el Markdown vive en generated_documents y se pide al abrirlo.
+  const doc = result.document as Record<string, unknown> | null | undefined;
+  if (doc && typeof doc === "object") {
+    const { markdown: _markdown, ...card } = doc;
+    out.document = card;
+  }
+  return out;
 }
 
 export function conversationTitle(question: string): string {
@@ -69,7 +76,7 @@ interface StoredTurn {
   question: string;
   as_of: string | null;
   created_at: Date;
-  result: { citations?: { document_id?: string }[] } & Record<string, unknown>;
+  result: { citations?: { document_id?: string | null; external?: boolean }[] } & Record<string, unknown>;
   feedback: number | null;
 }
 
@@ -120,7 +127,8 @@ export async function conversationRoutes(app: FastifyInstance, deps: Deps) {
       return {
         ...c.rows[0],
         turns: rows.map(({ result, ...x }) => {
-          const hidden = (result.citations ?? []).some((ci) => !ci.document_id || !visible.has(ci.document_id));
+          // ADR-036: public records and web pages are not organization documents; they never hide an answer.
+          const hidden = (result.citations ?? []).some((ci) => !ci.external && (!ci.document_id || !visible.has(ci.document_id)));
           return { ...x, redacted: hidden, result: hidden ? null : result };
         }),
       };
