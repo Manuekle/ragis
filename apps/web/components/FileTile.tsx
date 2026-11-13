@@ -12,9 +12,10 @@ const TYPE: Record<string, string> = {
   csv: "csv",
   html: "html",
   htm: "html",
-  png: "png",
-  jpg: "jpg",
-  jpeg: "jpeg",
+  // Photos use the generic solid image icon, not a per-extension label.
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
   mp3: "mp3",
   wav: "wav",
   m4a: "audio",

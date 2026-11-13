@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type Workspace } from "@/lib/api";
 import { AppErrorState, requestErrorKind } from "@/components/AppState";
 import { IconActivity, IconAgent, IconSignature, IconAlert, IconInbox, IconWorkflow, IconArrowRight, IconChart, IconChat, IconCheck, IconRocket, IconChevronsUpDown, IconFiles, IconFolder, IconLogout, IconPlug, IconShield, IconSparkles, IconSwitch } from "@/components/icons";
@@ -12,12 +12,34 @@ import { ConfirmProvider, Avatar } from "@/components/ui";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import "./studio.css";
 import "./workflows.css";
+import "./teams.css";
 
 interface OrgInfo {
   id: string;
   name: string;
   role: string;
   plan: { id: string; rerank_enabled: boolean };
+}
+
+/** A company team as the directory returns it (GET /teams, visible to the whole organization, ADR-035). */
+export interface TeamDir {
+  id: string;
+  name: string;
+  color: string;
+  description: string;
+  workspace_id: string;
+  archived_at: string | null;
+  member_count: number;
+  people: { id: string; name: string; lead: boolean }[];
+  is_member: boolean;
+  is_lead: boolean;
+  open_requests: number | null;
+}
+export interface TeamSuggestion {
+  name: string;
+  description: string;
+  color: string;
+  existing_workspace: { id: string; members: number } | null;
 }
 
 interface Ctx {
@@ -27,9 +49,28 @@ interface Ctx {
   workspaceId: string;
   setWorkspaceId: (id: string) => void;
   setWorkspaceHasDocuments: (id: string, hasDocuments: boolean) => void;
+  /** null while loading. Screens that change teams fire `ragsis:teams` and everything re-reads it. */
+  teams: TeamDir[] | null;
+  /** Suggested departments (admins only). */
+  teamSuggestions: TeamSuggestion[];
+  /** Team labels next to people only make sense once the company has two or more teams. */
+  showTeamTags: boolean;
+  /** The active teams a person belongs to (empty when tags are hidden). */
+  teamsOf: (userId: string | null | undefined) => (TeamDir & { lead: boolean })[];
 }
 
-const OrgContext = createContext<Ctx>({ org: null, loading: true, workspaces: [], workspaceId: "", setWorkspaceId: () => undefined, setWorkspaceHasDocuments: () => undefined });
+const OrgContext = createContext<Ctx>({
+  org: null,
+  loading: true,
+  workspaces: [],
+  workspaceId: "",
+  setWorkspaceId: () => undefined,
+  setWorkspaceHasDocuments: () => undefined,
+  teams: null,
+  teamSuggestions: [],
+  showTeamTags: false,
+  teamsOf: () => [],
+});
 export const useOrg = () => useContext(OrgContext);
 
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
@@ -44,6 +85,8 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const loading = !org && !error;
   const [setup, setSetup] = useState<{ status: string; completed_steps: number[]; can_edit: boolean } | null>(null);
   const [inboxCount, setInboxCount] = useState(0);
+  const [teams, setTeams] = useState<TeamDir[] | null>(null);
+  const [teamSuggestions, setTeamSuggestions] = useState<TeamSuggestion[]>([]);
   const wsMenu = useDropdown();
   const orgMenu = useDropdown();
 
@@ -65,11 +108,44 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     return () => { active = false; };
   }, [orgId, revision]);
 
+  // Team directory: labels next to people, the Inbox and Governance read it from here.
+  useEffect(() => {
+    let active = true;
+    const load = () =>
+      api<{ teams: TeamDir[]; suggestions: TeamSuggestion[] }>(`organizations/${orgId}/teams`)
+        .then((r) => {
+          if (!active) return;
+          setTeams(r.teams);
+          setTeamSuggestions(r.suggestions ?? []);
+        })
+        .catch(() => { if (active) setTeams((cur) => cur ?? []); });
+    load();
+    const onChange = () => {
+      load();
+      // A new team brings a new space; the switcher has to show it.
+      api<{ workspaces: Workspace[] }>(`organizations/${orgId}/workspaces`).then((w) => { if (active) setWorkspaces(w.workspaces); }).catch(() => undefined);
+    };
+    window.addEventListener("ragsis:teams", onChange);
+    return () => {
+      active = false;
+      window.removeEventListener("ragsis:teams", onChange);
+    };
+  }, [orgId]);
+  const activeTeams = useMemo(() => (teams ?? []).filter((t) => !t.archived_at), [teams]);
+  const showTeamTags = activeTeams.length >= 2;
+  const teamsByPerson = useMemo(() => {
+    const map = new Map<string, (TeamDir & { lead: boolean })[]>();
+    for (const t of activeTeams) for (const p of t.people) map.set(p.id, [...(map.get(p.id) ?? []), { ...t, lead: p.lead }]);
+    return map;
+  }, [activeTeams]);
+  const teamsOf = useCallback((userId: string | null | undefined) => (showTeamTags && userId ? (teamsByPerson.get(userId) ?? []) : []), [showTeamTags, teamsByPerson]);
+  const myTeams = activeTeams.filter((t) => t.is_member);
+
   // Contador de Inbox: se refresca al navegar y cuando una pantalla decide una aprobación.
   useEffect(() => {
     const refresh = () =>
-      api<{ counts: { actionable: number } }>(`organizations/${orgId}/inbox`)
-        .then((r) => setInboxCount(r.counts.actionable))
+      api<{ counts: { actionable: number; total?: number } }>(`organizations/${orgId}/inbox`)
+        .then((r) => setInboxCount(r.counts.total ?? r.counts.actionable))
         .catch(() => setInboxCount(0));
     window.addEventListener("ragsis:inbox", refresh);
     return () => window.removeEventListener("ragsis:inbox", refresh);
@@ -80,8 +156,8 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     api<{ status: string; completed_steps: number[]; can_edit: boolean }>(`organizations/${orgId}/onboarding`)
       .then(setSetup)
       .catch(() => setSetup(null));
-    api<{ counts: { actionable: number } }>(`organizations/${orgId}/inbox`)
-      .then((r) => setInboxCount(r.counts.actionable))
+    api<{ counts: { actionable: number; total?: number } }>(`organizations/${orgId}/inbox`)
+      .then((r) => setInboxCount(r.counts.total ?? r.counts.actionable))
       .catch(() => setInboxCount(0));
   }, [orgId, path]);
 
@@ -155,7 +231,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   }, [path, isAdmin]);
 
   return (
-    <OrgContext.Provider value={{ org, loading, workspaces, workspaceId, setWorkspaceId, setWorkspaceHasDocuments }}>
+    <OrgContext.Provider value={{ org, loading, workspaces, workspaceId, setWorkspaceId, setWorkspaceHasDocuments, teams, teamSuggestions, showTeamTags, teamsOf }}>
       <ConfirmProvider>
       <div className="shell">
         <aside className="side">
@@ -171,7 +247,11 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
             ) : (
               <span className="side-org-meta">
                 <strong>{org?.name ?? "Organization"}</strong>
-                {org && <small>{org.role} · {org.plan?.id ?? "—"} plan</small>}
+                {org && (
+                  <small>
+                    {org.role} · {showTeamTags && myTeams.length ? myTeams.map((t) => t.name).join(", ") : `${org.plan?.id ?? "—"} plan`}
+                  </small>
+                )}
               </span>
             )}
             <div className="side-org-menu" ref={orgMenu.ref}>
@@ -235,6 +315,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
                     wsMenu.close();
                   }}
                 >
+                  {showTeamTags && w.team_color && <span className="team-dot" data-team-color={w.team_color} aria-hidden="true" />}
                   {w.name}
                   {w.id === workspaceId && <IconCheck className="check" size={15} />}
                 </button>

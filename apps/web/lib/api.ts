@@ -37,7 +37,22 @@ export interface Citation {
   effective_from: string | null;
   snippet: string;
   chunk_id: string;
-  kind?: "text" | "table" | "figure" | "equation" | "audio";
+  kind?: "text" | "table" | "figure" | "equation" | "audio" | "public_record" | "web";
+  /**
+   * ADR-036: a public record or web page looked up for this question, outside the organization's documents.
+   * Document fields (document_id, version_id, chunk_id, filename…) are null on these.
+   */
+  external?: boolean;
+  url?: string | null;
+  source?: string;
+  country?: string;
+  country_name?: string;
+  /** Date of the source's data (datasets), when Croma reports it. */
+  as_of?: string | null;
+  retrieved_at?: string;
+  /** The search ran and found nothing in that register. */
+  no_match?: boolean;
+  demo?: boolean;
   /** Recordings: seconds from the start of the cited passage. */
   t_start?: number | null;
   t_end?: number | null;
@@ -59,7 +74,69 @@ export interface QueryResult {
   latency_ms: number;
   /** Presente solo si el turno quedó guardado en el historial (ADR-028). */
   conversation_id?: string;
+  /** The question asked for a file (ADR-034): `answer` is a short note and this is the card. */
+  document?: GeneratedDocument | null;
+  /** Present when the question asked for public records (ADR-036). */
+  public_sources?: PublicSourcesSummary | null;
 }
+
+export interface PublicSourcesSummary {
+  requested: boolean;
+  lookups: number;
+  countries: string[];
+  sources: string[];
+  /** Why nothing was looked up: off | limit | restricted | not_configured | credits_exhausted | rate_limited | source_unavailable | timeout | unavailable. */
+  unavailable: string | null;
+  demo: boolean;
+}
+
+/** Organization settings for public records (GET/PUT organizations/:org/public-sources). */
+export interface PublicSourcesSettings {
+  /** The platform has Croma set up (API key or demo mode). */
+  available: boolean;
+  demo: boolean;
+  /** The organization's data is classified `restricted`: nothing may go to external services. */
+  restricted?: boolean;
+  enabled: boolean;
+  /** Effective default country (explicit setting, else the organization profile). */
+  country: string | null;
+  country_setting: string | null;
+  country_from_profile: string | null;
+  web: boolean;
+  monthly_limit: number;
+  used_this_month: number;
+  remaining: number;
+  can_manage: boolean;
+  countries: { code: string; name: string }[];
+}
+
+export type DocFormat = "pdf" | "docx" | "pptx" | "xlsx" | "csv" | "md";
+
+/** A file written from the person's documents (ADR-034). Markdown underneath; each format is made on download. */
+export interface GeneratedDocument {
+  id: string;
+  title: string;
+  format: DocFormat;
+  kind: "report" | "presentation" | "table";
+  filename: string;
+  /** Only in the live answer; history keeps the card and loads the Markdown on demand. */
+  markdown?: string;
+  outline: string[];
+  sections: number;
+  words: number;
+  sources: number;
+  /** Distinct documents behind the citations (`sources` counts cited passages). */
+  documents?: number;
+  /** PowerPoint: slides in the deck (cover and sources included). */
+  slides?: number;
+  /** Rows across the document's tables. */
+  rows?: number;
+  formats: DocFormat[];
+}
+
+/** Same-origin URL of a generated file (through the BFF, which adds the session). */
+export const generatedFileUrl = (org: string, id: string, format: DocFormat, inline = false) =>
+  `/api/proxy/organizations/${org}/generated-documents/${id}/file?format=${format}${inline ? "&disposition=inline" : ""}`;
 
 export interface ConversationSummary {
   id: string;
@@ -94,6 +171,9 @@ export interface Workspace {
   name: string;
   my_role: string | null;
   has_documents?: boolean | null;
+  /** Set when the workspace is a team's private space (ADR-035). */
+  team_id?: string | null;
+  team_color?: string | null;
 }
 
 export const formatBytes = (raw: number | string | null | undefined) => {

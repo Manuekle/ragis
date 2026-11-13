@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { IconAlert, IconBuilding } from "@/components/icons";
 import { StateIllustration } from "@/components/AppState";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
-import { SkeletonRunRows, SkeletonStatus } from "@/components/skeletons";
+import { SkeletonActivityRows, SkeletonStatus } from "@/components/skeletons";
 import { useOrg } from "../layout";
 import { ERROR_COPY, StateBadge, ago } from "../workflows/shared";
 import { Seg } from "@/components/motion";
@@ -38,19 +38,23 @@ export default function ActivityPage() {
   const { org: orgInfo } = useOrg();
   const [state, setState] = useState("");
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    // Keep the rows already on screen while the next filter loads: the list stays put instead of blinking
+    // through a skeleton and snapping back to a different height.
+    setPending(true);
     api<{ runs: RunSummary[] }>(`organizations/${org}/runs${state ? `?state=${state}` : ""}`)
-      .then((r) => { if (active) setRuns(r.runs); })
-      .catch((e) => { if (active) setError(e.message); });
+      .then((r) => { if (active) { setRuns(r.runs); setError(null); } })
+      .catch((e) => { if (active) { setRuns(null); setError(e.message); } })
+      .finally(() => { if (active) setPending(false); });
     return () => { active = false; };
   }, [org, state]);
 
   function filterByState(next: string) {
     if (next === state) return;
-    setRuns(null);
     setError(null);
     setState(next);
   }
@@ -83,37 +87,51 @@ export default function ActivityPage() {
           </div>
         )}
 
-        {(!error || runs !== null) && <section className="card" style={{ padding: 0, overflow: "hidden" }}>
-          {runs === null ? (
+        {(!error || runs !== null) && (
+          runs === null ? (
             <SkeletonStatus label="Loading activity…">
-              <SkeletonRunRows />
+              <SkeletonActivityRows />
             </SkeletonStatus>
           ) : runs.length === 0 ? (
-            <div className="empty">
+            <div className="card empty">
               <StateIllustration kind="activity" />
               <strong>Nothing here yet</strong>
-              <span>Run a published workflow and it will show up here.</span>
+              <span>{state ? "No run is in this state right now." : "Run a published workflow and it will show up here."}</span>
             </div>
           ) : (
-            runs.map((r) => (
-              <Link key={r.id} href={`/app/${org}/activity/${r.id}`} className="run-row">
-                <span className="meta">
-                  <strong>
-                    {r.workflow_name} <span className="faint">v{r.workflow_version}</span>
-                  </strong>
-                  <small>
-                    {r.initiated_by_email ?? "—"} · {ago(r.created_at)} · {r.usage.agent_calls} agent {r.usage.agent_calls === 1 ? "step" : "steps"}
-                    {r.error_code ? ` · ${ERROR_COPY[r.error_code] ?? r.error_code}` : ""}
-                  </small>
-                </span>
-                <span className="side">
-                  {r.pending_approvals > 0 && <span className="badge warn">{r.pending_approvals === 1 ? "1 approval waiting" : `${r.pending_approvals} approvals waiting`}</span>}
-                  <StateBadge state={r.state} />
-                </span>
-              </Link>
-            ))
-          )}
-        </section>}
+            <section className="card act-list" aria-busy={pending || undefined} data-loading={pending ? "" : undefined}>
+              {runs.map((r) => (
+                <Link key={r.id} href={`/app/${org}/activity/${r.id}`} className="act-row">
+                  <span className="meta">
+                    <span className="title">
+                      <strong>{r.workflow_name}</strong>
+                      <span className="act-ver">v{r.workflow_version}</span>
+                    </span>
+                    <span className="sub">
+                      {r.initiated_by_email ?? "—"}
+                      <span className="sep"> · </span>
+                      {ago(r.created_at)}
+                      <span className="sep"> · </span>
+                      {r.usage.agent_calls} agent {r.usage.agent_calls === 1 ? "step" : "steps"}
+                      {r.error_code && (
+                        <>
+                          <span className="sep"> · </span>
+                          <span className="err">{ERROR_COPY[r.error_code] ?? r.error_code}</span>
+                        </>
+                      )}
+                    </span>
+                  </span>
+                  <span className="cell wait-cell">
+                    {r.pending_approvals > 0 && <span className="badge warn">{r.pending_approvals === 1 ? "1 approval waiting" : `${r.pending_approvals} approvals waiting`}</span>}
+                  </span>
+                  <span className="cell state-cell">
+                    <StateBadge state={r.state} />
+                  </span>
+                </Link>
+              ))}
+            </section>
+          )
+        )}
       </div>
     </div>
   );

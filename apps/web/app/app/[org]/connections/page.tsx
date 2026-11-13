@@ -10,6 +10,7 @@ import { IconAlert, IconBuilding, IconLock, IconPause, IconPlay, IconPlug, IconP
 import { Checkbox, Seg, Toast } from "@/components/motion";
 import { Disclosure, Select, useConfirm } from "@/components/ui";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
+import { PublicRecordsSection } from "./PublicRecordsCard";
 import "./connections.css";
 
 type ProviderId = "gmail" | "slack" | "clickup";
@@ -734,6 +735,7 @@ function ConnectionsView() {
                 </header>
                 <div className="conn-list">{company.map(card)}</div>
               </section>
+              <PublicRecordsSection org={org} notify={setToast} />
 
               {data.can_manage_company && (
                 <Disclosure title="Apps people can connect" hint="Turning an app off pauses its updates. Nothing is removed.">

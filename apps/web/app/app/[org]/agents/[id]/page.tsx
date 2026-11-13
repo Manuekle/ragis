@@ -7,6 +7,7 @@ import { confetti } from "@/lib/confetti";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 import { SkeletonEditor } from "@/components/skeletons";
 import { useOrg } from "../../layout";
+import { StateIllustration } from "@/components/AppState";
 import { IconAgent, IconAlert, IconArchive, IconChat, IconCheck, IconChevronDown, IconFolder, IconLayers, IconLock, IconPause, IconPlay, IconPlus, IconRocket, IconRollback, IconShield, IconSpinner, IconTask, IconTool, IconTrash, IconX, type IconProps } from "@/components/icons";
 import { Checkbox, Seg, SoftText, Toast } from "@/components/motion";
 import { Disclosure, grainVars, Select, TextField, useConfirm } from "@/components/ui";
@@ -1088,6 +1089,7 @@ export default function AgentEditor() {
           <section className="card tab-panel" style={{ marginTop: 20 }}>
             {detail.versions.length === 0 ? (
               <div className="empty">
+                <StateIllustration kind="agents" />
                 <strong>Not published yet</strong>
                 <span>Run a successful test in Setup, then publish the first version.</span>
               </div>

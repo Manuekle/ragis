@@ -35,8 +35,18 @@ async function forward(req: Request, ctx: { params: Promise<{ path: string[] }> 
     cache: "no-store",
   };
   const res = await fetch(target, init);
-  const text = await res.text();
   const cacheControl = res.headers.get("cache-control");
+  const type = res.headers.get("content-type") ?? "application/json";
+  // Archivos (documentos generados, ADR-034): se reenvían como bytes, con su nombre y sin que el navegador adivine el tipo.
+  if (res.ok && !/^application\/(problem\+)?json/.test(type)) {
+    const passthrough = new Headers({ "content-type": type, "x-content-type-options": "nosniff" });
+    for (const h of ["content-disposition", "cache-control", "content-security-policy"]) {
+      const v = res.headers.get(h);
+      if (v) passthrough.set(h, v);
+    }
+    return new NextResponse(await res.arrayBuffer(), { status: res.status, headers: passthrough });
+  }
+  const text = await res.text();
   return new NextResponse(text || null, {
     status: res.status,
     headers: { "content-type": res.headers.get("content-type") ?? "application/json", ...(cacheControl ? { "cache-control": cacheControl } : {}) },

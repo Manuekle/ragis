@@ -4,9 +4,10 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, formatBytes } from "@/lib/api";
 import { useOrg } from "../layout";
-import { AppErrorState, requestErrorKind, StateIllustration } from "@/components/AppState";
+import { AppErrorState, StateIllustration, requestErrorKind } from "@/components/AppState";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
-import { IconAlert, IconChevronRight, IconEdit, IconEye, IconFolder, IconPlus, IconSearch, IconSparkles, IconSpinner, IconTrash, IconUpload, IconX } from "@/components/icons";
+import { IconAlert, IconChevronRight, IconEdit, IconEye, IconFolder, IconPlus, IconSearch, IconSparkles, IconTrash, IconUpload, IconX } from "@/components/icons";
+import { FolderDrop, stageOf, UploadTracker, type UploadItem } from "@/components/UploadDrop";
 import { Skel, SkeletonStatus, SkeletonTable } from "@/components/skeletons";
 import { Select, TextField, useConfirm } from "@/components/ui";
 import { clock } from "@/components/AudioView";
@@ -130,6 +131,26 @@ function ago(iso: string) {
   return rtf.format(Math.round(s / 31557600), "year");
 }
 
+const READ_ERRORS = new Set(["no_extractable_text", "ocr_required", "transcription_required", "no_speech_detected", "audio_too_long"]);
+
+/** Move uploads that are indexing to "Indexed" (or "failed") once the listing reports it. */
+function trackIndexing(list: UploadItem[], docs: Doc[]): UploadItem[] {
+  if (!list.some((u) => u.phase === "indexing")) return list;
+  const byId = new Map(docs.map((d) => [d.id, d]));
+  return list.map((u) => {
+    const d = u.phase === "indexing" && u.docId ? byId.get(u.docId) : undefined;
+    if (!d) return u;
+    if (d.latest_status === "indexed") return { ...u, phase: "ready", stage: 3 };
+    if (d.latest_status === "rejected" || d.latest_status === "failed") {
+      // Rejected files stop at the safety check; text that can't be pulled out stops at the reading step.
+      const stage = d.latest_status === "rejected" ? 1 : READ_ERRORS.has(d.error_code ?? "") ? 2 : Math.max(u.stage, 2);
+      return { ...u, phase: "failed", stage, error: docError(d.error_code ?? "", d.filename) };
+    }
+    const stage = Math.max(u.stage, stageOf(d.latest_status));
+    return stage === u.stage ? u : { ...u, stage };
+  });
+}
+
 type View = "all" | "indexed" | "pending" | "failed";
 type Listing = { orgId: string; workspaceId: string; filter: string; folder: FolderView; docs: Doc[] | null; error?: Error };
 
@@ -143,7 +164,7 @@ function folderPath(folders: Folder[], id: string | null): Folder[] {
 const pathLabel = (folders: Folder[], id: string | null) => folderPath(folders, id).map((f) => f.name).join(" / ");
 
 /** Small form dialog (same surface as the confirm dialog). Esc or a click outside cancels. */
-function FormDialog({ title, submitLabel, busy, onSubmit, onClose, children }: { title: string; submitLabel: string; busy: boolean; onSubmit: () => void; onClose: () => void; children: React.ReactNode }) {
+function FormDialog({ title, description, submitLabel, busy, onSubmit, onClose, children }: { title: string; description?: string; submitLabel: string; busy: boolean; onSubmit: () => void; onClose: () => void; children: React.ReactNode }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setShown(true));
@@ -167,10 +188,14 @@ function FormDialog({ title, submitLabel, busy, onSubmit, onClose, children }: {
           onSubmit();
         }}
       >
+        <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
+          <IconX size={16} />
+        </button>
         <span className="dialog-icon">
           <IconFolder size={20} variant="duotone" />
         </span>
         <h2>{title}</h2>
+        {description && <p className="dialog-desc">{description}</p>}
         {children}
         <div className="dialog-actions">
           <button type="button" className="ghost" onClick={onClose}>
@@ -244,7 +269,7 @@ export default function LibraryPage() {
   const [listing, setListing] = useState<Listing>();
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState<string[]>([]);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [over, setOver] = useState(false);
   const [filters, setFilters] = useState({ orgId, workspaceId, title: "", view: "all" as View, folder: "all" as FolderView });
   if (filters.orgId !== orgId || filters.workspaceId !== workspaceId) {
@@ -279,6 +304,7 @@ export default function LibraryPage() {
         );
         if (!active) return;
         setListing({ orgId, workspaceId, filter, folder: folderView, docs: r.documents });
+        setUploads((list) => trackIndexing(list, r.documents));
         if (folderView === "all" && (!filter || r.documents.length > 0)) {
           setWorkspaceHasDocuments(workspaceId, r.documents.length > 0);
         }
@@ -318,32 +344,102 @@ export default function LibraryPage() {
     };
   }, [orgId, workspaceId, revision, listing?.docs]);
 
-  async function uploadOne(file: File) {
+  const patchUpload = (key: string, patch: Partial<UploadItem>) => setUploads((list) => list.map((u) => (u.key === key ? { ...u, ...patch } : u)));
+
+  async function uploadOne(file: File, key: string) {
     const contentType = TYPES[ext(file.name)];
-    if (!contentType) throw new Error(`${file.name}: this file type isn't supported`);
+    if (!contentType) throw new Error("This file type isn't supported");
     const start = await api<{ document_id: string; version_id: string; upload: { url: string; headers: Record<string, string> } }>(
       `organizations/${orgId}/documents/uploads`,
       { method: "POST", body: { workspace_id: workspaceId, filename: file.name, content_type: contentType, size_bytes: file.size, title: file.name.replace(/\.[^.]+$/, ""), ...(currentFolder ? { folder_id: currentFolder.id } : {}) } },
     );
     // Direct browser → S3 upload via presigned URL; the file never passes through the API.
-    const put = await fetch(start.upload.url, { method: "PUT", headers: start.upload.headers, body: file });
-    if (!put.ok) throw new Error(`${file.name}: upload failed — check your connection and try again`);
+    // XHR rather than fetch: it is the only browser API that reports upload progress.
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", start.upload.url);
+      for (const [k, v] of Object.entries(start.upload.headers)) xhr.setRequestHeader(k, v);
+      xhr.upload.onprogress = (e) => e.lengthComputable && patchUpload(key, { progress: e.loaded / e.total });
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed — check your connection and try again")));
+      xhr.onerror = () => reject(new Error("Upload failed — check your connection and try again"));
+      xhr.send(file);
+    });
     await api(`organizations/${orgId}/documents/${start.document_id}/versions/${start.version_id}/complete`, { method: "POST" });
+    return start.document_id;
   }
 
   async function handleFiles(files: FileList | File[]) {
     setError(null);
-    for (const f of Array.from(files)) {
-      setUploading((u) => [...u, f.name]);
+    const batch = Array.from(files).map((f) => ({ file: f, key: `${f.name}-${f.size}-${crypto.randomUUID()}` }));
+    setUploads((list) => [
+      ...list.filter((u) => !u.leaving),
+      ...batch.map(({ file, key }) => ({
+        key,
+        name: file.name,
+        size: file.size,
+        ext: ext(file.name),
+        phase: "uploading" as const,
+        stage: 0,
+        progress: 0,
+        preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+      })),
+    ]);
+    for (const { file, key } of batch) {
       try {
-        await uploadOne(f);
+        const docId = await uploadOne(file, key);
+        patchUpload(key, { phase: "indexing", stage: 1, progress: 1, docId });
+        // Refresh now so the list shows the file and starts polling its status.
+        setRevision((value) => value + 1);
       } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setUploading((u) => u.filter((n) => n !== f.name));
+        patchUpload(key, { phase: "failed", error: (e as Error).message });
       }
     }
-    setRevision((value) => value + 1);
+  }
+
+  const dismissUploads = useCallback((keys: string[]) => {
+    const gone = new Set(keys);
+    setUploads((list) => list.map((u) => (gone.has(u.key) ? { ...u, leaving: true } : u)));
+    setTimeout(
+      () =>
+        setUploads((list) =>
+          list.filter((u) => {
+            if (!gone.has(u.key)) return true;
+            if (u.preview) URL.revokeObjectURL(u.preview);
+            return false;
+          }),
+        ),
+      360,
+    );
+  }, []);
+  const dismissUpload = useCallback((key: string) => dismissUploads([key]), [dismissUploads]);
+
+  // Rows stay together until the whole batch settles, so the counts never jump; then the indexed
+  // ones fold away. Files that couldn't be added stay until they are dismissed.
+  const settledKey = uploads.some((u) => u.phase === "uploading" || u.phase === "indexing")
+    ? ""
+    : uploads.filter((u) => u.phase === "ready" && !u.leaving).map((u) => u.key).join(",");
+  useEffect(() => {
+    if (!settledKey) return;
+    const t = setTimeout(() => dismissUploads(settledKey.split(",")), 3200);
+    return () => clearTimeout(t);
+  }, [settledKey, dismissUploads]);
+
+  async function removeUpload(it: UploadItem) {
+    if (!it.docId) return dismissUpload(it.key);
+    const ok = await confirm({
+      title: `Delete "${it.name}"?`,
+      body: "It couldn't be added, so it isn't used in answers. This removes it from the library.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api(`organizations/${orgId}/documents/${it.docId}`, { method: "DELETE" });
+      dismissUpload(it.key);
+      setRevision((value) => value + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   const openDoc = (d: Doc) => setViewing({ documentId: d.id, versionId: d.latest_version_id, title: d.title, filename: d.filename });
@@ -520,7 +616,8 @@ export default function LibraryPage() {
           {loadingLayout && <LibrarySkeleton hasDocuments={loadingHasDocuments} />}
           {blank ? (
             <div className={`drop hero${over ? " over" : ""}`}>
-              <StateIllustration kind="empty" />
+              <span className="drop-glow" aria-hidden="true" />
+              <FolderDrop size={96} open={over} />
               <span className="lead">{over ? "Drop to upload" : `Upload your first document${wsName ? ` to ${wsName}` : ""}`}</span>
               <span>Drag files anywhere on this page or choose them from your computer.</span>
               <button type="button" className="ghost" onClick={browse} disabled={!workspaceId}>
@@ -541,39 +638,26 @@ export default function LibraryPage() {
             </div>
           ) : hasListing && (
             <div className={`drop compact${over ? " over" : ""}`}>
-              <span className="up">
-                <IconUpload size={17} variant={over ? "duotone" : "stroke"} />
-              </span>
+              <span className="drop-glow" aria-hidden="true" />
+              <FolderDrop size={44} open={over} />
               <span className="drop-text">
                 <span className="lead">
                   {over ? (
                     "Drop to upload"
                   ) : (
-                    <>
-                      Drop files {currentFolder ? `into ${currentFolder.name}` : "here"} or{" "}
-                      <button type="button" className="link" onClick={browse}>
-                        browse
-                      </button>
-                    </>
+                    <>Drop files {currentFolder ? `into ${currentFolder.name}` : "here"}</>
                   )}
                 </span>
                 <span>PDF, DOCX, PPTX, XLSX, PNG/JPEG, Markdown, TXT, CSV, HTML or audio recordings</span>
               </span>
+              <button type="button" className="ghost small drop-cta" onClick={browse}>
+                <IconUpload size={15} />
+                Choose files
+              </button>
             </div>
           )}
 
-          {uploading.length > 0 && (
-            <div className="uploads">
-              {uploading.map((n) => (
-                <div key={n} className="upload-row">
-                  <IconSpinner size={15} />
-                  <span className="t-shimmer" data-text={`Uploading ${n}`}>
-                    Uploading {n}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <UploadTracker items={uploads} onDismiss={dismissUpload} onRemove={removeUpload} />
 
           {alert && (
             <div className="alert" role="alert">
@@ -682,9 +766,7 @@ export default function LibraryPage() {
               {docs != null && <div className="table-card">
                 {shown.length === 0 ? (
                   <div className="empty">
-                    <span className="bubble">
-                      <IconSearch size={20} />
-                    </span>
+                    <StateIllustration kind="empty" />
                     <strong>{filter ? "No titles match" : all.length === 0 && folderView !== "all" ? "No documents here yet" : "Nothing in this status"}</strong>
                     <span>
                       {filter
@@ -746,7 +828,7 @@ export default function LibraryPage() {
                                   )}
                                   {d.error_code && (
                                     <span className="badge err doc-error">
-                                      {docError(d.error_code)}
+                                      {docError(d.error_code, d.filename)}
                                     </span>
                                   )}
                                 </div>
@@ -783,7 +865,7 @@ export default function LibraryPage() {
       </div>
       <DocViewer doc={viewing} orgId={orgId} onClose={closeDoc} />
       {naming && (
-        <FormDialog title={naming.mode === "create" ? (currentFolder ? `New folder in ${currentFolder.name}` : "New folder") : "Rename folder"} submitLabel={naming.mode === "create" ? "Create folder" : "Save"} busy={busy} onSubmit={saveFolderName} onClose={() => setNaming(null)}>
+        <FormDialog title={naming.mode === "create" ? (currentFolder ? `New folder in ${currentFolder.name}` : "New folder") : "Rename folder"} description={naming.mode === "create" ? "Group related documents so they're easier to find." : "Give this folder a name people will recognize."} submitLabel={naming.mode === "create" ? "Create folder" : "Save"} busy={busy} onSubmit={saveFolderName} onClose={() => setNaming(null)}>
           <TextField label="Name" value={naming.value} maxLength={120} autoFocus error={naming.error} onChange={(e) => setNaming({ mode: naming.mode, value: e.target.value })} />
         </FormDialog>
       )}

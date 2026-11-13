@@ -72,9 +72,11 @@ export interface ViewerDoc {
   filename: string;
   /** Recordings: second to open at (the moment a source cites). */
   startAt?: number;
+  /** A file that isn't in the library (a generated document, ADR-034): same-origin inline URL and its own download. */
+  source?: { inlineUrl: string; download: () => Promise<void> };
 }
 
-type Kind = "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "md" | "image" | "text" | "audio" | "none";
+type Kind = "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "md" | "image" | "text" | "html" | "audio" | "none";
 
 const ext = (f: string) => f.split(".").pop()?.toLowerCase() ?? "";
 function kindOf(filename: string): Kind {
@@ -82,10 +84,24 @@ function kindOf(filename: string): Kind {
   if (e === "pdf" || e === "docx" || e === "xlsx" || e === "pptx" || e === "csv") return e;
   if (["png", "jpg", "jpeg"].includes(e)) return "image";
   if (e === "md" || e === "markdown") return "md";
-  if (["txt", "html", "htm"].includes(e)) return "text";
+  if (e === "html" || e === "htm") return "html";
+  if (e === "txt") return "text";
   if (["mp3", "wav", "m4a", "ogg", "flac"].includes(e)) return "audio";
   return "none";
 }
+/** Kinds whose bytes are fetched and rendered by us (not handed to a viewer as a URL). */
+const isBodyKind = (k: Kind) => k === "csv" || k === "text" || k === "md" || k === "html";
+
+/**
+ * An uploaded HTML file is untrusted. It renders in an iframe with an empty sandbox (no scripts, forms, popups,
+ * navigation or same-origin access) and a CSP that blocks every network load (remote images, fonts, CSS), so
+ * opening a document can never run code or call home. Inline styles and data: images still render.
+ */
+const HTML_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:";
+const htmlDoc = (source: string) =>
+  `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HTML_CSP}"><base target="_blank">` +
+  // Readable defaults for unstyled files; the document's own CSS comes later and wins.
+  `<style>body{margin:24px clamp(16px,6vw,96px);font:15px/1.6 system-ui,sans-serif;color:#1a1a1a}table{border-collapse:collapse}th,td{padding:4px 10px;border-bottom:1px solid #ddd;text-align:left}</style>${source}`;
 
 const CLOSE_MS = 180;
 
@@ -127,12 +143,14 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
   useEffect(() => {
     if (!doc || kindOf(doc.filename) === "none") return;
     let live = true;
-    api<{ url: string }>(`organizations/${orgId}/documents/${doc.documentId}/versions/${doc.versionId}/download?disposition=inline`)
+    const located = doc.source
+      ? Promise.resolve({ url: doc.source.inlineUrl })
+      : api<{ url: string }>(`organizations/${orgId}/documents/${doc.documentId}/versions/${doc.versionId}/download?disposition=inline`);
+    located
       .then(async (r) => {
-        const k = kindOf(doc.filename);
-        if (k === "csv" || k === "text" || k === "md") {
+        if (isBodyKind(kindOf(doc.filename))) {
           const res = await fetch(r.url);
-          if (!res.ok) throw new Error(`Couldn't read the file (${res.status})`);
+          if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message ?? `Couldn't read the file (${res.status})`);
           const text = await res.text();
           if (live) setBody(text);
         }
@@ -170,6 +188,10 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
     if (!current) return;
     setDownloading(true);
     try {
+      if (current.source) {
+        await current.source.download();
+        return;
+      }
       const r = await api<{ url: string }>(`organizations/${orgId}/documents/${current.documentId}/versions/${current.versionId}/download`);
       window.location.assign(r.url); // attachment disposition: saves the file, page stays put
     } catch (e) {
@@ -220,7 +242,7 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
               <strong>No preview for this file type</strong>
               <span>Download it to open it in its app.</span>
             </Stage>
-          ) : !url || ((kind === "csv" || kind === "text" || kind === "md") && body === null) ? (
+          ) : !url || (isBodyKind(kind) && body === null) ? (
             <Stage>
               <IconSpinner size={20} />
             </Stage>
@@ -236,6 +258,10 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
           ) : kind === "md" ? (
             <Stage note={false}>
               <MarkdownView source={body ?? ""} isDark={appDark} />
+            </Stage>
+          ) : kind === "html" ? (
+            <Stage note={false}>
+              <iframe className="viewer-html" sandbox="" referrerPolicy="no-referrer" title={current.title} srcDoc={htmlDoc(body ?? "")} />
             </Stage>
           ) : kind === "text" ? (
             <Stage note={false}>

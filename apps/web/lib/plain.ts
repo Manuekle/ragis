@@ -42,4 +42,11 @@ const DOC_ERRORS: Record<string, string> = {
   audio_too_long: "The recording is too long — split it into shorter parts",
   dead_letter: "Processing failed several times — try uploading again",
 };
-export const docError = (code: string) => DOC_ERRORS[code] ?? "Couldn't process this file — try uploading again";
+const IMAGE = /\.(png|jpe?g)$/i;
+// The same code reads differently per format: an image with no text is a photo, not a broken file.
+const IMAGE_ERRORS: Record<string, string> = {
+  no_extractable_text: "No text found in this image — photos without text need image descriptions switched on",
+  ocr_required: "Reading text in images isn't switched on for this workspace yet",
+};
+export const docError = (code: string, filename?: string) =>
+  (filename && IMAGE.test(filename) ? IMAGE_ERRORS[code] : undefined) ?? DOC_ERRORS[code] ?? "Couldn't process this file — try uploading again";

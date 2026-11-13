@@ -4,12 +4,14 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useOrg } from "../layout";
-import { AppErrorState, requestErrorKind } from "@/components/AppState";
+import { AppErrorState, StateIllustration, requestErrorKind } from "@/components/AppState";
 import { IconAlert, IconCopy, IconCopyCheck, IconFolder, IconMail, IconX } from "@/components/icons";
 import { Checkbox, Seg, SoftText, Swap, Toast } from "@/components/motion";
 import { Skel, SkeletonStatus, SkeletonTable } from "@/components/skeletons";
 import { Select, TextField, useConfirm, useFormErrors, Avatar } from "@/components/ui";
 import { cap, humanize } from "@/lib/plain";
+import { PersonTeams } from "../team-tags";
+import { TeamsPanel } from "./TeamsPanel";
 
 const ROLES = [
   { value: "member", label: "Member", hint: "Asks questions and uploads documents" },
@@ -53,9 +55,10 @@ const date = (s: string) => new Date(s).toLocaleString("en-US", { dateStyle: "me
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-type Tab = "members" | "roles" | "sharing" | "groups" | "keys" | "audit";
+type Tab = "members" | "teams" | "roles" | "sharing" | "groups" | "keys" | "audit";
 const TABS: { id: Tab; label: string }[] = [
   { id: "members", label: "Members" },
+  { id: "teams", label: "Teams" },
   { id: "roles", label: "Roles" },
   { id: "sharing", label: "Sharing" },
   { id: "groups", label: "Groups" },
@@ -102,7 +105,7 @@ function Resource({ value }: { value: string }) {
 
 export default function AdminPage() {
   const { org } = useParams<{ org: string }>();
-  const { workspaceId, workspaces } = useOrg();
+  const { workspaceId, workspaces, teams } = useOrg();
   const [members, setMembers] = useState<Member[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -194,7 +197,7 @@ export default function AdminPage() {
   };
 
   const wsName = workspaces.find((w) => w.id === workspaceId)?.name ?? "workspace";
-  const counts: Record<Tab, number> = { sharing: ext?.allowed_domains.length ?? 0, roles: roleMembers.filter((m) => m.roles.length).length, members: members.length, groups: groups.length, keys: keys.filter((k) => !k.revoked_at).length, audit: events.length };
+  const counts: Record<Tab, number> = { teams: (teams ?? []).filter((t) => !t.archived_at).length, sharing: ext?.allowed_domains.length ?? 0, roles: roleMembers.filter((m) => m.roles.length).length, members: members.length, groups: groups.length, keys: keys.filter((k) => !k.revoked_at).length, audit: events.length };
   const denied = events.filter((e) => e.decision !== "allow").length;
   const shownEvents = events.filter((e) => (decision === "all" ? true : decision === "allow" ? e.decision === "allow" : e.decision !== "allow"));
   const errorKind = dataStatus === "failed" ? requestErrorKind(error) : null;
@@ -241,7 +244,7 @@ export default function AdminPage() {
         <header className="page-head" style={{ marginBottom: 20 }}>
           <div>
             <h1>Governance</h1>
-            <p className="sub">People, roles, groups, sharing rules, integrations and the activity log.</p>
+            <p className="sub">People, teams, roles, groups, sharing rules, integrations and the activity log.</p>
           </div>
         </header>
 
@@ -313,7 +316,10 @@ export default function AdminPage() {
                           <div className="cell-title">
                             <Avatar name={m.email} size="sm" />
                             <div style={{ minWidth: 0 }}>
-                              <strong>{m.display_name ?? m.email.split("@")[0]}</strong>
+                              <strong className="name-with-teams">
+                                {m.display_name ?? m.email.split("@")[0]}
+                                <PersonTeams userId={m.id} />
+                              </strong>
                               <div className="muted ellipsis" style={{ fontSize: 13 }}>
                                 {m.email}
                               </div>
@@ -352,6 +358,12 @@ export default function AdminPage() {
           </section>
         )}
 
+        {tab === "teams" && (
+          <section className="tab-panel" id="panel-teams" role="tabpanel" aria-labelledby="tab-teams" key="teams">
+            <TeamsPanel org={org} members={members} loading={dataStatus === "loading"} onNotice={setNotice} onError={setError} />
+          </section>
+        )}
+
         {tab === "groups" && (
           <section className="tab-panel" id="panel-groups" role="tabpanel" aria-labelledby="tab-groups" key="groups">
             <div className="section-head">
@@ -375,6 +387,7 @@ export default function AdminPage() {
             <GovernanceTable status={dataStatus} label="Loading groups…" columns={["", "num", "hide-sm"]}>
               {groups.length === 0 ? (
                 <div className="empty">
+                  <StateIllustration kind="groups" />
                   <strong>No groups yet</strong>
                   <span>Create one to share documents with several people at once.</span>
                 </div>
@@ -469,6 +482,7 @@ export default function AdminPage() {
             <GovernanceTable status={dataStatus} label="Loading API keys…" columns={["", "hide-sm", "hide-sm", "hide-md", "", ""]}>
               {keys.length === 0 ? (
                 <div className="empty">
+                  <StateIllustration kind="keys" />
                   <strong>No keys yet</strong>
                   <span>Create one when you connect an integration.</span>
                 </div>
@@ -629,7 +643,10 @@ export default function AdminPage() {
                           <div className="cell-title">
                             <Avatar name={m.email} size="sm" />
                             <div style={{ minWidth: 0 }}>
-                              <strong>{m.display_name ?? m.email.split("@")[0]}</strong>
+                              <strong className="name-with-teams">
+                                {m.display_name ?? m.email.split("@")[0]}
+                                <PersonTeams userId={m.id} />
+                              </strong>
                               <div className="muted ellipsis" style={{ fontSize: 13 }}>
                                 {m.email} · {cap(m.org_role)}
                               </div>
@@ -694,6 +711,7 @@ export default function AdminPage() {
             <GovernanceTable status={dataStatus} label="Loading audit log…" columns={["", "", "hide-sm", "", "hide-md"]}>
               {shownEvents.length === 0 ? (
                 <div className="empty">
+                  <StateIllustration kind="activity" />
                   <strong>No events</strong>
                   <span>{decision === "deny" ? "Nothing has been blocked." : "No activity recorded yet."}</span>
                 </div>

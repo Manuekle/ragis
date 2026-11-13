@@ -1,0 +1,329 @@
+/* ───────────── Teams and requests between teams (ADR-035) ───────────── */
+
+/* One hue per team, set with data-team-color on any element; children read var(--team). */
+[data-team-color] { --team: #3b82f6; }
+[data-team-color="green"] { --team: #22a35a; }
+[data-team-color="amber"] { --team: #e8930c; }
+[data-team-color="red"] { --team: #e5484d; }
+[data-team-color="violet"] { --team: #8b5cf6; }
+[data-team-color="teal"] { --team: #12a594; }
+[data-team-color="pink"] { --team: #e54694; }
+[data-team-color="slate"] { --team: #64748b; }
+
+.team-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--team); flex: none; }
+.team-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  height: 22px; padding: 0 9px; border-radius: var(--r-pill);
+  font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  background: color-mix(in srgb, var(--team) 13%, transparent);
+  color: color-mix(in oklab, var(--team), var(--text) 38%);
+}
+.team-chip > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.team-route { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.team-route .svg-icon { color: var(--faint); flex: none; }
+
+/* Select menus opened from inside a dialog must sit above the dialog's scrim. */
+body:has(> .dialog-layer.is-open) > .menu.floating { z-index: 90; }
+/* Same for menus and date pickers opened from the request panel (Sheet marks itself open with data-open). */
+body:has(> .sheet-layer[data-open="true"]) > .menu.floating { z-index: 75; }
+.dialog.wide { width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+.dialog .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dialog .field-row > .field { margin-top: 0; }
+.dialog textarea { min-height: 96px; }
+.color-picks { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-picks button {
+  width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  background: var(--team); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform var(--duration-quick) ease, box-shadow var(--duration-quick) ease;
+}
+.color-picks button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--team); }
+@media (prefers-reduced-motion: no-preference) { .color-picks button:not(:disabled):active { transform: scale(0.96); } }
+
+/* ───────────── inbox: people / agents ───────────── */
+.inbox-tabs { margin-bottom: 4px; }
+.req-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.req-toolbar .row { gap: 8px; }
+.seg.icon-seg button { padding: 0 10px; }
+
+/* request status + priority */
+.req-status { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: var(--r-pill); font-size: 12.5px; font-weight: 500; white-space: nowrap; background: var(--surface-2); color: var(--text-2); }
+.req-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.req-status[data-s="open"] { background: var(--accent-soft); color: var(--accent-text); }
+.req-status[data-s="in_progress"] { background: color-mix(in srgb, #8b5cf6 13%, transparent); color: color-mix(in oklab, #8b5cf6, var(--text) 35%); }
+.req-status[data-s="waiting"] { background: var(--warn-soft); color: var(--warn); }
+.req-status[data-s="done"] { background: var(--ok-soft); color: var(--ok); }
+.req-status[data-s="declined"] { background: var(--err-soft); color: var(--err); }
+.req-status[data-s="cancelled"] { background: var(--surface-3); color: var(--muted); }
+.prio { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--muted); }
+.prio[data-p="urgent"] { color: var(--err); }
+.prio[data-p="high"] { color: var(--warn); }
+.prio .bars { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 10px; }
+.prio .bars i { width: 2.5px; border-radius: 1px; background: currentColor; opacity: 0.25; }
+.prio .bars i:nth-child(1) { height: 4px; }
+.prio .bars i:nth-child(2) { height: 7px; }
+.prio .bars i:nth-child(3) { height: 10px; }
+.prio .bars i.on { opacity: 1; }
+.due { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.due.late { color: var(--err); font-weight: 500; }
+/* "Needs you": a small accent dot before the number (static cue, no motion). */
+.attn-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.req-num { font-family: var(--mono); letter-spacing: var(--tracking-mono); font-size: 12px; color: var(--faint); }
+
+/* list: one grid, every row a subgrid of it, so the columns line up across rows.
+   Columns: title + route | priority | due date | person | status. Empty cells keep their column. */
+.req-list {
+  --req-pad-x: 20px;
+  display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, auto); column-gap: 20px;
+  padding: 0;
+}
+.req-row, .req-group-label { grid-column: 1 / -1; }
+.req-list > :first-child { border-top: 0; border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.req-list > :last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+.req-row {
+  display: grid; grid-template-columns: subgrid; align-items: center; position: relative;
+  min-height: 60px; padding: 10px var(--req-pad-x) 10px calc(var(--req-pad-x) + 8px);
+  border-top: 1px solid var(--border); color: inherit; text-decoration: none;
+  transition: background-color var(--duration-quick, 150ms) ease;
+}
+@media (hover: hover) { .req-row:hover { background: var(--surface-2); text-decoration: none; } }
+.req-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.req-row .req-main { grid-column: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.req-row .title { display: flex; align-items: baseline; gap: 8px; min-width: 0; line-height: 20px; }
+.req-row .title strong { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.req-row .sub { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; color: var(--muted); font-size: 12.5px; }
+.req-row .sub .team-route { flex-wrap: nowrap; }
+.req-row .comments { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--faint); }
+.req-row .cell { display: flex; align-items: center; min-width: 0; }
+.req-row .prio-cell { grid-column: 2; }
+.req-row .due-cell { grid-column: 3; }
+.req-row .who-cell { grid-column: 4; justify-content: center; }
+.req-row .status-cell { grid-column: 5; }
+.req-row .avatar.sm { width: 24px; height: 24px; }
+.req-row .nobody { width: 24px; height: 24px; border-radius: 50%; border: 1.5px dashed var(--faint); opacity: 0.6; }
+/* "Needs you" dot in the left gutter, vertically centred, so numbers and titles never shift. */
+.req-row .attn-dot { position: absolute; left: 11px; top: 50%; margin-top: -4px; }
+.req-group-label {
+  padding: 14px var(--req-pad-x) 6px calc(var(--req-pad-x) + 8px);
+  font-size: 12px; font-weight: 500; color: var(--faint);
+  border-top: 1px solid var(--border);
+}
+
+/* board */
+.board { display: grid; grid-template-columns: repeat(4, minmax(224px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+.board-col {
+  display: flex; flex-direction: column; gap: 8px; min-height: 280px; padding: 8px; scroll-snap-align: start;
+  border-radius: var(--r-lg); background: color-mix(in oklab, var(--surface-2) 80%, transparent);
+  outline: 2px dashed transparent; outline-offset: -2px;
+  transition: outline-color var(--duration-quick) ease, background-color var(--duration-quick) ease;
+}
+.board-col[data-drop="ok"] { outline-color: color-mix(in oklab, var(--accent), transparent 40%); }
+.board-col[data-drop="over"] { outline-color: var(--accent); background: color-mix(in oklab, var(--accent-soft) 70%, var(--surface-2)); }
+.board-col[data-drop="no"] { opacity: 0.55; }
+.board-col > header { display: flex; align-items: center; gap: 8px; padding: 6px 6px 2px; font-size: 13px; font-weight: 500; }
+.board-col > header .count { margin-left: auto; }
+.board-col > header small { display: block; color: var(--faint); font-weight: 400; font-size: 11.5px; }
+.board-col .col-empty { margin: auto 0; padding: 16px 8px; text-align: center; font-size: 12.5px; color: var(--faint); }
+.req-card {
+  display: flex; flex-direction: column; gap: 9px; padding: 12px 12px 11px;
+  border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-sm);
+  color: inherit; text-decoration: none; position: relative;
+  transition: box-shadow var(--duration-quick) ease, opacity var(--duration-quick) ease, transform var(--duration-quick) ease-out;
+}
+.req-card[draggable="true"] { cursor: grab; }
+.req-card.dragging { opacity: 0.45; transform: rotate(-1deg); }
+@media (hover: hover) { .req-card:hover { box-shadow: var(--shadow-md); text-decoration: none; } }
+.req-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.req-card .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.req-card strong { font-weight: 500; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.req-card .excerpt { margin: -3px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.req-card .foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.req-card .foot .who { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.req-card .foot .unassigned { color: var(--faint); font-style: italic; }
+.req-card .comments { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ───────────── request panel (opens over the Inbox) ─────────────
+   A floating panel that sits exactly on the app surface behind it: same 8px inset as `.panel`'s margin and the
+   same 20px corner, so its rounded corner lands on the shell's corner instead of cutting across it.
+   Inside, the chain is concentric and counts the 1px (transparent) borders: composer 21 = button 12 + 8 padding
+   + 1 border; close button 7 = panel 20 − 1 border − 12 inset.
+   Motion is transitions.dev "panel reveal" on the X axis: short travel + cross-blur, slower in than out. */
+:root {
+  --panel-open-dur: var(--duration-slow, 400ms);
+  --panel-close-dur: var(--duration-medium, 350ms);
+  --panel-translate-x: 56px;
+  --panel-blur: 2px;
+  --panel-ease: var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1));
+  --sheet-inset: 8px;
+  --sheet-radius: 20px;
+}
+.sheet-layer {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; justify-content: flex-end; padding: var(--sheet-inset);
+  background: color-mix(in oklab, var(--scrim), transparent 30%);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--panel-close-dur) var(--panel-ease);
+}
+.sheet-layer[data-open="true"] {
+  opacity: 1; pointer-events: auto;
+  transition: opacity var(--panel-open-dur) var(--panel-ease);
+}
+.sheet {
+  position: relative;
+  width: min(620px, 100%); height: 100%;
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid transparent; /* forced-colors keeps an edge when box-shadow is dropped */
+  border-radius: var(--sheet-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  outline: none;
+  transform: translateX(var(--panel-translate-x));
+  opacity: 0;
+  filter: blur(var(--panel-blur));
+  transition:
+    transform var(--panel-close-dur) var(--panel-ease),
+    opacity   var(--panel-close-dur) var(--panel-ease),
+    filter    var(--panel-close-dur) var(--panel-ease);
+  will-change: transform, opacity, filter;
+}
+.sheet-layer[data-open="true"] .sheet {
+  transform: translateX(0);
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    transform var(--panel-open-dur) var(--panel-ease),
+    opacity   var(--panel-open-dur) var(--panel-ease),
+    filter    var(--panel-open-dur) var(--panel-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No travel or blur: a plain cross-fade. */
+  .sheet, .sheet-layer[data-open="true"] .sheet { transform: none; filter: none; transition: opacity var(--duration-quick, 150ms) ease-out; }
+  .sheet-layer, .sheet-layer[data-open="true"] { transition: opacity var(--duration-quick, 150ms) ease-out; }
+}
+
+.sheet-close {
+  position: absolute; top: 12px; right: 12px; z-index: 1;
+  width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
+  /* Concentric with the panel corner: 20 − 1 border − 12 inset = 7. */
+  border-radius: calc(var(--sheet-radius) - 13px); color: var(--muted);
+}
+/* Top padding centres the 22px status row on the close button (12 + 36/2 = 19 + 22/2). */
+.sheet-head { display: flex; flex-direction: column; gap: 10px; padding: 19px 64px 18px 24px; }
+.sheet-head > .row { gap: 8px; flex-wrap: wrap; min-height: 22px; }
+.sheet-head h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.22; letter-spacing: var(--tracking-tight); text-wrap: balance; }
+.sheet-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.sheet-body {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px 24px 24px; display: flex; flex-direction: column; gap: 20px;
+}
+.sheet-section { margin: 0 0 12px; font-family: var(--font); font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.sheet-privacy { font-size: 12.5px; margin: 0; }
+
+.move-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The quiet "Decline" has no fill, so its label (not its box) lines up with the facts card's right edge:
+   16px padding + the 1px transparent border. */
+.move-actions .end { margin-left: auto; margin-right: -17px; }
+/* Optical: labelled buttons with a leading icon get 2px less padding on the icon side. */
+.move-actions button:has(> .svg-icon:first-child), .req-composer button.primary { padding-left: 14px; }
+.req-facts button.small:has(> .svg-icon:first-child) { padding-left: 10px; }
+/* Every row is one 32px control line (avatar, selects, "Take it", date), so labels and controls share a rhythm
+   and the even 16px padding reads the same on all four sides. */
+.req-facts {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); grid-auto-rows: minmax(32px, auto); gap: 10px 18px; align-items: center;
+  margin: 0; padding: 16px; border-radius: var(--r-lg); background: var(--surface-2); font-size: 13px;
+}
+.req-facts dt { color: var(--muted); }
+.req-facts dd { margin: 0; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.req-facts .select-trigger, .req-facts button.small { height: 32px; }
+.req-facts .select-trigger { min-width: 172px; max-width: 100%; background: var(--surface); }
+.req-facts .date-chip { background: var(--surface); }
+.req-facts .date-chip:not(.is-set) .date-value { color: var(--muted); font-weight: 400; }
+.req-body { margin: 0; white-space: pre-wrap; font-size: 14.5px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
+.req-body.empty-body { color: var(--faint); font-style: italic; }
+.req-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.req-tl li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
+.req-tl li.system { align-items: center; }
+.req-tl li.system .text { font-size: 13px; color: var(--muted); }
+.req-tl li.system .text strong { color: var(--text-2); font-weight: 500; }
+.req-tl .sys-dot { width: 28px; height: 28px; display: grid; place-items: center; color: var(--faint); }
+.req-tl .bubble { padding: 10px 14px; border-radius: 4px var(--r-md) var(--r-md) var(--r-md); background: var(--surface-2); }
+.req-tl .bubble header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; flex-wrap: wrap; }
+.req-tl .bubble header strong { font-weight: 500; }
+.req-tl .bubble header time { margin-left: auto; }
+.req-tl .bubble p { margin: 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.req-tl .bubble.note { background: var(--warn-soft); }
+.req-tl time { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.waiting-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r-lg); background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
+.waiting-note p { margin: 0; color: var(--text-2); }
+
+/* Reply box: its own surface floating 8px above the panel's bottom edge. */
+.sheet-foot { padding: 0 8px 8px; }
+.req-composer {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px; border: 1px solid transparent; border-radius: 21px;
+  background: var(--surface-2);
+  transition: box-shadow var(--duration-quick, 150ms) ease-out;
+}
+.req-composer:focus-within { box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent), 0 0 0 4px var(--accent-soft); outline: 2px solid transparent; outline-offset: 2px; }
+.req-composer textarea {
+  border: 0; box-shadow: none; background: transparent; border-radius: var(--r-md);
+  padding: 8px 10px 4px; min-height: 44px; max-height: 180px; resize: none;
+  font-size: 14.5px; line-height: 1.5; field-sizing: content;
+}
+.req-composer textarea:focus, .req-composer textarea:focus-visible { box-shadow: none; outline: none; }
+.req-composer .row { justify-content: space-between; gap: 10px; padding-left: 10px; }
+.req-composer .hint { font-size: 12.5px; color: var(--muted); }
+
+/* ───────────── team labels next to people (only with two or more teams) ───────────── */
+.team-chip.sm { height: 19px; padding: 0 7px; gap: 5px; font-size: 11.5px; }
+.team-chip.sm .team-dot { width: 6px; height: 6px; }
+.person-teams { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.person-teams .more { font-size: 11.5px; color: var(--muted); }
+.name-with-teams { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ───────────── Governance → Teams ───────────── */
+.team-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.team-pill {
+  height: 34px; padding: 0 12px; gap: 8px; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--team) 11%, var(--surface)); color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--team) 22%, transparent); font-weight: 500; font-size: 13.5px;
+}
+.team-pill .count { min-width: 20px; height: 18px; background: color-mix(in srgb, var(--team) 16%, transparent); color: inherit; }
+.team-pill .edit { color: var(--faint); }
+@media (hover: hover) { .team-pill:not(:disabled):hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--team) 45%, transparent); } }
+.team-pill.suggest { background: transparent; color: var(--muted); font-weight: 400; box-shadow: inset 0 0 0 1px var(--border); border-style: dashed; }
+.team-pill.suggest .svg-icon { color: var(--team); }
+@media (hover: hover) { .team-pill.suggest:not(:disabled):hover { color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--team) 45%, transparent); } }
+.team-pill.archived { opacity: 0.6; font-weight: 400; }
+.chip.team-toggle { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; font-size: 13px; }
+.chip.team-toggle .team-dot { opacity: 0.45; }
+.chip.team-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--team) 14%, transparent); color: color-mix(in oklab, var(--team), var(--text) 38%); }
+.chip.team-toggle[aria-pressed="true"] .team-dot { opacity: 1; }
+
+@media (max-width: 640px) {
+  /* Phone: title on top, then status · priority · date on one line, the person at its end. */
+  .req-list { --req-pad-x: 16px; display: flex; flex-direction: column; }
+  .req-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-height: 0; padding-block: 12px; }
+  .req-row .req-main { flex: 1 0 100%; order: 0; }
+  .req-row .status-cell { order: 1; }
+  .req-row .prio-cell, .req-row .due-cell { order: 2; }
+  .req-row .who-cell { order: 3; margin-left: auto; }
+  .req-row .cell:empty, .req-row .who-cell:has(.nobody) { display: none; }
+  .req-row .attn-dot { top: 18px; margin-top: 0; }
+  .board { grid-template-columns: repeat(4, minmax(78vw, 1fr)); }
+  /* Phone keeps the desktop inset and panel radius so the sheet still lands on the `.panel` corner
+     (mobile shell: `.panel { margin: 0 8px 8px }`); only the composer tightens: 12 + 6 + 1 = 19. */
+  .sheet-head { padding: 15px 56px 14px 18px; }
+  .sheet-body { padding: 4px 18px 18px; }
+  .sheet-foot { padding: 0 6px 6px; }
+  .req-composer { border-radius: 19px; padding: 6px; }
+  /* 20 − 1 border − 8 inset = 11. */
+  .sheet-close { top: 8px; right: 8px; border-radius: calc(var(--sheet-radius) - 9px); }
+  .move-actions .end { margin-right: 0; }
+  .req-facts { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; gap: 4px; }
+  .req-facts dd { margin-bottom: 8px; }
+  .dialog .field-row { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .req-card, .board-col { transition: none; }
+  .req-card.dragging { transform: none; }
+}

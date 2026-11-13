@@ -3,6 +3,8 @@
 //   stroke  – the icon as drawn by Hugeicons
 //   duotone – stroke on top of a 22% tint of the same shapes (the Hugeicons duotone look)
 //   solid   – shapes filled with currentColor; use it on glyphs without inner detail (thumbs, bubbles, shields)
+// Media controls (play, pause, stop) default to solid: as outlines a stop square reads as a checkbox
+// and a pause as two empty boxes, so they are only recognisable filled. A caller can still pass `variant`.
 import { createElement, type SVGProps } from "react";
 import {
   Edit02Icon,
@@ -36,6 +38,7 @@ import {
   Pdf01Icon,
   SendIcon,
   SparklesIcon,
+  CandyCaneIcon,
   Loading03Icon,
   Logout03Icon,
   Mail01Icon,
@@ -75,6 +78,13 @@ import {
   Download04Icon,
   Link01Icon,
   NewTwitterIcon,
+  UserGroupIcon,
+  KanbanIcon,
+  LeftToRightListBulletIcon,
+  Message01Icon,
+  GlobalSearchIcon,
+  GlobeIcon,
+  BankIcon,
 } from "@hugeicons/core-free-icons";
 
 type IconData = readonly (readonly [string, { readonly [key: string]: string | number }])[];
@@ -127,8 +137,8 @@ export const IconPlug = make(Plug01Icon);
 export const IconRefresh = make(RefreshIcon);
 
 // Agent Studio
-export const IconPlay = make(PlayIcon);
-export const IconPause = make(PauseIcon);
+export const IconPlay = make(PlayIcon, { variant: "solid" });
+export const IconPause = make(PauseIcon, { variant: "solid" });
 export const IconCompare = make(GitCompareIcon);
 export const IconTool = make(WrenchIcon);
 export const IconPlus = make(PlusSignIcon, { strokeWidth: 1.8 });
@@ -148,8 +158,12 @@ export const IconActivity = make(Activity01Icon);
 export const IconUserCheck = make(UserCheck01Icon);
 export const IconBranch = make(GitBranchIcon);
 export const IconHourglass = make(HourglassIcon);
-export const IconStop = make(StopIcon);
+export const IconStop = make(StopIcon, { variant: "solid" });
 export const IconFlag = make(Flag02Icon);
+/** Public records in Ask (ADR-036): the switch, web results and official government records. */
+export const IconGlobalSearch = make(GlobalSearchIcon);
+export const IconGlobe = make(GlobeIcon);
+export const IconLandmark = make(BankIcon);
 
 // Chevrons and arrows
 export const IconChevronDown = make(ArrowDown01Icon, { strokeWidth: 1.8 });
@@ -160,6 +174,7 @@ export const IconArrowUp = make(ArrowUp02Icon, { strokeWidth: 2 });
 export const IconArrowRight = make(ArrowRight02Icon, { strokeWidth: 1.8 });
 export const IconSend = make(SendIcon, { strokeWidth: 1.8 });
 export const IconSparkles = make(SparklesIcon, { strokeWidth: 1.8 });
+export const IconCandyCane = make(CandyCaneIcon, { strokeWidth: 1.8 });
 export const IconExternal = make(LinkSquare02Icon);
 export const IconArrowUpRight = make(ArrowUpRight01Icon, { strokeWidth: 1.8 });
 
@@ -203,6 +218,10 @@ export const IconEye = make(EyeIcon);
 export const IconAlert = make(Alert02Icon);
 export const IconMail = make(Mail01Icon);
 export const IconUser = make(UserIcon);
+export const IconTeam = make(UserGroupIcon);
+export const IconBoard = make(KanbanIcon);
+export const IconList = make(LeftToRightListBulletIcon);
+export const IconComment = make(Message01Icon);
 
 // Appearance
 export const IconSun = make(Sun03Icon);

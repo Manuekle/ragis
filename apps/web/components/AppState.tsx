@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ApiError } from "@/lib/api";
 
 // Each drawing ships a second file with light ink (`<file>-dark.svg`); CSS shows the one that matches the theme.
+// Empty and error states carry a drawing, never an icon tile.
 const errorFrame = { width: 224, height: 174 };
 const workspaceFrame = { width: 264, height: 160 };
 
@@ -18,6 +19,9 @@ const illustrations = {
   inbox: { file: "inbox-empty", ...workspaceFrame },
   workflows: { file: "workflows-empty", ...workspaceFrame },
   agents: { file: "agents-empty", ...workspaceFrame },
+  teams: { file: "teams-empty", ...workspaceFrame },
+  groups: { file: "groups-empty", ...workspaceFrame },
+  keys: { file: "keys-empty", ...workspaceFrame },
 };
 
 type ErrorKind = "forbidden" | "server" | "offline" | "notFound";

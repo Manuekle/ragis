@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Citation, type ConversationDetail, type QueryResult } from "@/lib/api";
+import { api, generatedFileUrl, type Citation, type ConversationDetail, type DocFormat, type GeneratedDocument, type PublicSourcesSettings, type QueryResult } from "@/lib/api";
 import { useOrg } from "../layout";
 import {
   IconAlert,
+  IconGlobalSearch,
   IconSend,
   IconArrowUpRight,
   IconCalendar,
@@ -29,6 +30,8 @@ import { DocViewer, type ViewerDoc } from "@/components/DocViewer";
 import { clock } from "@/components/AudioView";
 import { duration } from "@/lib/plain";
 import { HistoryMenu } from "./HistoryMenu";
+import { DocumentCard, FORMAT, FormatPicker, downloadGenerated } from "./DocumentCard";
+import { ExternalBody, ExternalIcon, externalMeta, loadChoice, publicNotice, PublicRecordsPicker, requestFields, saveChoice, usable, type PublicChoice } from "./PublicRecords";
 
 interface Turn {
   id: number;
@@ -38,6 +41,10 @@ interface Turn {
   feedback?: 1 | -1;
   /** Restored from history, but a cited document is no longer visible to this person: the answer stays hidden. */
   redacted?: boolean;
+  /** The turn is expected to produce a file (picked in "Answer as", or the question asks for one). */
+  making?: DocFormat | "file";
+  /** Public records were asked for (ADR-036): only changes the loading messages. */
+  publicOn?: boolean;
 }
 
 /** UUID v4 for a new conversation; `randomUUID` only exists in secure contexts (https / localhost). */
@@ -55,15 +62,21 @@ function syncUrl(id: string | null) {
 }
 
 const STATES = ["Searching the documents", "Finding the best passages", "Checking the sources", "Writing the answer"];
+const DOC_STATES = ["Searching the documents", "Gathering the evidence", "Drafting the document", "Checking every source", "Formatting the file"];
+const PUBLIC_STATES = ["Searching the documents", "Checking public records", "Checking the sources", "Writing the answer"];
+
+// Same idea as the server's detection (ADR-034), only to pick the loading messages: a creation verb plus a file word.
+const ASKS_FOR_FILE =
+  /\b(hazme|haz|crea|cr[eé]ame|genera|gen[eé]rame|elabora|redacta|prepara|arma|exporta|convierte|pasa|make|create|generate|draft|write|prepare|export|build|turn)\b[\s\S]*\b(pdf|word|docx|power ?point|pptx?|presentaci[oó]n|diapositivas|slides|deck|csv|excel|xlsx|hoja de c[aá]lculo|spreadsheet|tabla|table|informe|reporte|report|memo)\b/i;
 
 const SUGGESTIONS = [
   "What is the deadline to request travel expense reimbursements?",
-  "Summarize the current remote work policy",
+  "Make a PowerPoint summary of the remote work policy",
   "What changed in the latest version of the internal regulations?",
   "Who approves purchases above the limit?",
 ];
 
-const KIND_LABEL: Record<string, string> = { table: "Table", figure: "Figure", equation: "Equation", audio: "Recording" };
+const KIND_LABEL: Record<string, string> = { table: "Table", figure: "Figure", equation: "Equation", audio: "Recording", public_record: "Public record", web: "Web" };
 
 /** Imagen de una figura citada: la URL firmada se pide solo al abrir la fuente y no se guarda. */
 function FigurePreview({ chunkId, alt }: { chunkId: string; alt: string }) {
@@ -106,13 +119,17 @@ function Sources({ citations, openN, setOpenN, flashN, onOpen }: { citations: Ci
             <button type="button" className="source-head" aria-expanded={open} onClick={() => setOpenN(open ? null : c.n)}>
               <span className="n">{c.n}</span>
               <span className="title">{c.title}</span>
-              {c.kind && KIND_LABEL[c.kind] && <span className="badge accent">{KIND_LABEL[c.kind]}</span>}
-              <span className="meta">{citationMeta(c)}</span>
+              {c.kind && KIND_LABEL[c.kind] && <span className={`badge ${c.external ? "pub-badge" : "accent"}`}>{c.external && <ExternalIcon c={c} size={12} />}{KIND_LABEL[c.kind]}</span>}
+              <span className="meta">{c.external ? externalMeta(c) : citationMeta(c)}</span>
               <IconChevronDown className="chev" size={16} />
             </button>
             <div className="acc-panel">
               <div className="acc-inner">
                 <div className="acc-body">
+                  {c.external ? (
+                    <ExternalBody c={c} />
+                  ) : (
+                  <>
                   {open && c.has_asset && <FigurePreview chunkId={c.chunk_id} alt={c.caption || `Figure from ${c.title}`} />}
                   <blockquote>{c.snippet}</blockquote>
                   {c.ai_generated && (
@@ -126,6 +143,8 @@ function Sources({ citations, openN, setOpenN, flashN, onOpen }: { citations: Ci
                       {c.t_start != null ? `Listen from ${clock(c.t_start)}` : "Open document"}
                     </button>
                   </div>
+                  </>
+                  )}
                 </div>
               </div>
             </div>
@@ -136,11 +155,14 @@ function Sources({ citations, openN, setOpenN, flashN, onOpen }: { citations: Ci
   );
 }
 
-function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; onFeedback: (v: 1 | -1) => void; onOpen: (c: Citation) => void }) {
+function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview }: { t: Turn; fresh: boolean; orgId: string; onFeedback: (v: 1 | -1) => void; onOpen: (c: Citation) => void; onPreview: (d: GeneratedDocument) => void }) {
   const [openN, setOpenN] = useState<number | null>(null);
   const [flashN, setFlashN] = useState<number | null>(null);
   const r = t.result;
-  const docs = r ? Array.from(new Map(r.citations.map((c) => [c.document_id, c.title])).values()) : [];
+  const docs = r ? Array.from(new Map(r.citations.filter((c) => !c.external).map((c) => [c.document_id, c.title])).values()) : [];
+  // ADR-036: public registers and web sites cited, one chip each.
+  const outside = r ? Array.from(new Map(r.citations.filter((c) => c.external && !c.no_match).map((c) => [c.source ?? c.title, c])).values()) : [];
+  const notice = r ? publicNotice(r.public_sources, r.citations.filter((c) => c.external).length) : null;
 
   function cite(n: number) {
     setOpenN(n);
@@ -156,7 +178,7 @@ function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; o
       <div className="steps">
         {!r && !t.error && !t.redacted && (
           <div className="step">
-            <ThinkingStates states={STATES} />
+            <ThinkingStates states={t.making ? DOC_STATES : t.publicOn ? PUBLIC_STATES : STATES} />
           </div>
         )}
         {r && docs.length > 0 && (
@@ -172,6 +194,27 @@ function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; o
               ))}
               {docs.length > 3 && <span className="doc-chip">+{docs.length - 3}</span>}
             </span>
+          </div>
+        )}
+        {r && outside.length > 0 && (
+          <div className="step">
+            <IconGlobalSearch size={17} />
+            <span>Looked up</span>
+            <span className="chips">
+              {outside.slice(0, 3).map((c) => (
+                <span key={c.source ?? c.title} className="doc-chip pub-chip" data-tip={c.kind === "web" ? "Public web page" : `Official public record${c.country_name && c.country !== "global" ? ` · ${c.country_name}` : ""}`}>
+                  <ExternalIcon c={c} flag />
+                  <span>{c.source ?? c.title}</span>
+                </span>
+              ))}
+              {outside.length > 3 && <span className="doc-chip">+{outside.length - 3}</span>}
+            </span>
+          </div>
+        )}
+        {notice && (
+          <div className="step pub-notice">
+            <IconGlobalSearch size={17} />
+            <span>{notice}</span>
           </div>
         )}
       </div>
@@ -219,6 +262,8 @@ function TurnView({ t, fresh, onFeedback, onOpen }: { t: Turn; fresh: boolean; o
           <StreamText text={r.answer} animate={fresh} onCite={cite} />
         ))}
 
+      {r && !r.abstained && r.document && <DocumentCard doc={r.document} orgId={orgId} onPreview={onPreview} />}
+
       {r && r.citations.length > 0 && <Sources citations={r.citations} openN={openN} setOpenN={setOpenN} flashN={flashN} onOpen={onOpen} />}
 
       {r && (
@@ -246,6 +291,15 @@ export default function AskPage() {
   const wsMenu = useDropdown();
   const [question, setQuestion] = useState("");
   const [asOf, setAsOf] = useState("");
+  // "Answer as" (ADR-034): null = chat answer, and the server still detects a file request in the question.
+  const [format, setFormat] = useState<DocFormat | null>(null);
+  // Public records (ADR-036): shown only when the organization has them on and the server has Croma set up.
+  const [pubSettings, setPubSettings] = useState<PublicSourcesSettings | null>(null);
+  const [pubChoice, setPubChoiceState] = useState<PublicChoice>(null);
+  const setPubChoice = (v: PublicChoice) => {
+    setPubChoiceState(v);
+    saveChoice(orgId, v);
+  };
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [freshId, setFreshId] = useState<number | null>(null);
@@ -279,6 +333,17 @@ export default function AskPage() {
   }, [workspaces]);
 
   useEffect(() => {
+    let alive = true;
+    setPubChoiceState(loadChoice(orgId));
+    api<PublicSourcesSettings>(`organizations/${orgId}/public-sources`)
+      .then((s) => alive && setPubSettings(s))
+      .catch(() => alive && setPubSettings(null));
+    return () => {
+      alive = false;
+    };
+  }, [orgId]);
+
+  useEffect(() => {
     if (!turns.length) return;
     endRef.current?.scrollIntoView({ block: "end", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, [turns]);
@@ -290,11 +355,13 @@ export default function AskPage() {
     const id = nextId.current++;
     setBusy(true);
     setQuestion("");
-    setTurns((t) => [...t, { id, question: q }]);
+    const making = format ?? (ASKS_FOR_FILE.test(q) ? "file" : undefined);
+    const pub = requestFields(pubSettings, pubChoice);
+    setTurns((t) => [...t, { id, question: q, ...(making ? { making } : {}), ...(pub.public_sources ? { publicOn: true } : {}) }]);
     try {
       const result = await api<QueryResult>(`organizations/${orgId}/workspaces/${workspaceId}/query`, {
         method: "POST",
-        body: { question: q, conversation_id: (conversationId.current ??= newConversationId()), ...(asOf ? { as_of: asOf } : {}) },
+        body: { question: q, output: format ?? "auto", conversation_id: (conversationId.current ??= newConversationId()), ...(asOf ? { as_of: asOf } : {}), ...pub },
       });
       if (result.conversation_id && result.conversation_id === conversationId.current) {
         setActiveId(result.conversation_id);
@@ -313,6 +380,14 @@ export default function AskPage() {
   const openDoc = (c: Citation) =>
     setViewing({ documentId: c.document_id, versionId: c.version_id, title: c.title, filename: c.filename, startAt: c.t_start ?? undefined });
   const closeDoc = useCallback(() => setViewing(null), []);
+  const previewGenerated = (d: GeneratedDocument) =>
+    setViewing({
+      documentId: d.id,
+      versionId: "",
+      title: d.title,
+      filename: d.filename || `document.${d.format}`,
+      source: { inlineUrl: generatedFileUrl(orgId, d.id, d.format, true), download: () => downloadGenerated(orgId, d.id, d.format) },
+    });
 
   async function feedback(id: number, value: 1 | -1) {
     const t = turns.find((x) => x.id === id);
@@ -450,11 +525,12 @@ export default function AskPage() {
           <div className="chat-intro">
             <h1>What do you need to know?</h1>
             <p>
-              I answer with citations from the documents you can see{wsName ? ` in ${wsName}` : ""}. If I can't find support, I'll say so instead of guessing.
+              I answer with citations from the documents you can see{wsName ? ` in ${wsName}` : ""}, and I can turn the answer into a PDF report, Word document, PowerPoint or Excel workbook. If I can't find support, I'll say so instead of guessing.
             </p>
+            {usable(pubSettings) && <p className="faint">Need outside facts? Turn on Public records to also check official government data and the web.</p>}
           </div>
         ) : (
-          turns.map((t) => <TurnView key={t.id} t={t} fresh={t.id === freshId} onFeedback={(v) => feedback(t.id, v)} onOpen={openDoc} />)
+          turns.map((t) => <TurnView key={t.id} t={t} fresh={t.id === freshId} orgId={orgId} onFeedback={(v) => feedback(t.id, v)} onOpen={openDoc} onPreview={previewGenerated} />)
         )}
         <div ref={endRef} />
       </div>
@@ -466,7 +542,7 @@ export default function AskPage() {
             ref={inputRef}
             rows={2}
             aria-label="Question"
-            placeholder={empty ? "Ask about your documents…" : "Ask a follow-up…"}
+            placeholder={format ? `Describe the ${FORMAT[format].name.toLowerCase()} you need…` : empty ? "Ask about your documents, or ask for a report or slides…" : "Ask a follow-up…"}
             value={question}
             maxLength={2000}
             autoFocus
@@ -479,6 +555,8 @@ export default function AskPage() {
             }}
           />
           <div className="composer-bar">
+            <FormatPicker value={format} onChange={setFormat} disabled={busy} />
+            {usable(pubSettings) && <PublicRecordsPicker settings={pubSettings} value={pubChoice} onChange={setPubChoice} disabled={busy} />}
             <DatePicker value={asOf} onChange={setAsOf} label="As of a date" ariaLabel="Answer as of a date" Icon={IconCalendar} tip="Answer using the documents that were valid on this date" />
             <button type="submit" className="send" disabled={!canSend} aria-label={busy ? "Searching for evidence" : "Ask"}>
               <Swap on={busy} a={<IconSend size={18} variant="duotone" />} b={<IconSpinner size={17} />} />

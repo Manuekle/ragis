@@ -194,6 +194,22 @@ function usePopover({ align = "start", gap = 6 }: { align?: "start" | "end"; gap
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  // Escape belongs to the popover that has the focus. Capture phase, so the Sheet or dialog behind it never sees
+  // the event: they close on Escape too, and a bubble-phase listener would close the whole layer along with the menu.
+  useEffect(() => {
+    if (state !== "open") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const active = document.activeElement;
+      if (!anchorRef.current?.contains(active) && !floatRef.current?.contains(active)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      close(true);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [state, close]);
+
   const cls = `t-dropdown${state === "open" ? " is-open" : state === "closing" ? " is-closing" : ""}`;
   const origin = `${pos?.placement === "top" ? "bottom" : "top"}-${align === "end" ? "right" : "left"}`;
   const style = pos ? { top: pos.top, left: pos.left, minWidth: pos.minWidth } : { top: -9999, left: -9999 };
@@ -217,6 +233,7 @@ export function Select({
   ariaLabel,
   size = "md",
   className,
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -225,9 +242,12 @@ export function Select({
   ariaLabel: string;
   size?: "md" | "sm";
   className?: string;
+  /** Lets a visible <label htmlFor> name the trigger as well. */
+  id?: string;
 }) {
   const pop = usePopover();
-  const id = useId();
+  const autoId = useId();
+  const listId = `${autoId}-list`;
   const [active, setActive] = useState(-1);
   const typed = useRef({ text: "", at: 0 });
   const listRef = useRef<HTMLDivElement>(null);
@@ -263,7 +283,6 @@ export function Select({
     else if (e.key === "Home") setActive(0);
     else if (e.key === "End") setActive(last);
     else if (e.key === "Enter" || e.key === " ") pick(active);
-    else if (e.key === "Escape") pop.close(true);
     else if (e.key === "Tab") return pop.close();
     else if (e.key.length === 1) {
       const now = Date.now();
@@ -279,13 +298,16 @@ export function Select({
     <>
       <button
         ref={pop.anchorRef}
+        id={id}
         type="button"
         role="combobox"
-        aria-label={ariaLabel}
+        // Include the current value in the name: aria-label replaces the button's text content for AT, so without
+        // this the control announced only its label and never what is selected.
+        aria-label={`${ariaLabel}: ${selected?.label ?? placeholder}`}
         aria-haspopup="listbox"
         aria-expanded={pop.isOpen}
-        aria-controls={`${id}-list`}
-        aria-activedescendant={pop.isOpen && active >= 0 ? `${id}-${active}` : undefined}
+        aria-controls={listId}
+        aria-activedescendant={pop.isOpen && active >= 0 ? `${autoId}-${active}` : undefined}
         className={`select-trigger ${size}${selected ? "" : " is-placeholder"}${className ? ` ${className}` : ""}`}
         onClick={() => (pop.isOpen ? pop.close() : openAt(Math.max(0, options.findIndex((o) => o.value === value))))}
         onKeyDown={onKeyDown}
@@ -299,18 +321,19 @@ export function Select({
             pop.floatRef.current = el;
             listRef.current = el;
           }}
-          id={`${id}-list`}
+          id={listId}
           role="listbox"
           aria-label={ariaLabel}
           className={`menu floating ${pop.cls}`}
           data-origin={pop.origin}
           style={pop.style}
+          inert={!pop.isOpen}
         >
-          {options.length === 0 && <div className="menu-empty">Sin opciones</div>}
+          {options.length === 0 && <div className="menu-empty" role="presentation">No options</div>}
           {options.map((o, i) => (
             <div
               key={o.value}
-              id={`${id}-${i}`}
+              id={`${autoId}-${i}`}
               data-i={i}
               role="option"
               aria-selected={o.value === value}
@@ -320,7 +343,7 @@ export function Select({
               onClick={() => pick(i)}
             >
               <span className="menu-text">
-                {o.label}
+                <span className="menu-opt">{o.label}</span>
                 {o.hint && <small>{o.hint}</small>}
               </span>
               {o.value === value && <IconCheck className="check" size={15} />}
@@ -359,6 +382,7 @@ export function DatePicker({
   ariaLabel,
   Icon = IconCalendar,
   tip,
+  emptyText = "today",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -366,6 +390,8 @@ export function DatePicker({
   ariaLabel: string;
   Icon?: (p: IconProps) => ReactNode;
   tip?: string;
+  /** Shown when no date is picked ("today" for an as-of date, "none" for an optional due date). */
+  emptyText?: string;
 }) {
   const pop = usePopover();
   const id = useId();
@@ -436,7 +462,7 @@ export function DatePicker({
       >
         <Icon size={15} variant={value ? "duotone" : "stroke"} />
         {label}
-        <span className="date-value">{value ? formatDate(value) : "today"}</span>
+        <span className="date-value">{value ? formatDate(value) : emptyText}</span>
       </button>
       {value && (
         <button type="button" className="date-clear" aria-label="Clear date" onClick={() => onChange("")}>
@@ -452,7 +478,9 @@ export function DatePicker({
           className={`menu floating calendar ${pop.cls}`}
           data-origin={pop.origin}
           style={pop.style}
-          onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), pop.close(true))}
+          inert={!pop.isOpen}
+          // Closing returns focus to the trigger, so Tab then continues from there into the form.
+          onKeyDown={(e) => e.key === "Tab" && pop.close(true)}
         >
           <div className="cal-head">
             <button type="button" className="quiet icon small" aria-label="Previous month" onClick={() => setFocus(addMonths(focus, -1))}>
@@ -510,7 +538,7 @@ export function DatePicker({
                   pop.close(true);
                 }}
               >
-                Quitar fecha
+                Clear date
               </button>
             )}
           </div>
@@ -591,6 +619,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         createPortal(
           <div className={`dialog-layer${shown ? " is-open" : ""}`} onPointerDown={(e) => e.target === e.currentTarget && settle(false)}>
             <div ref={boxRef} className="dialog" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={req.body ? `${id}-b` : undefined}>
+              <button type="button" className="dialog-close" aria-label="Close" onClick={() => settle(false)}>
+                <IconX size={16} />
+              </button>
               <span className={`dialog-icon${req.tone === "danger" ? " danger" : ""}`}>
                 <IconAlert size={20} variant="duotone" />
               </span>
