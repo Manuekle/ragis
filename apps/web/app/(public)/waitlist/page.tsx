@@ -20,11 +20,11 @@ export const metadata = pageMetadata({ title: "Join the waitlist for early acces
 // drawing of the matching app screen (public/illustrations/<art>.svg and <art>-dark.svg).
 const INCLUDED = [
   { art: "access-denied", title: "Access control", text: "People only get answers from files they can open." },
-  { art: "documents-empty", title: "Tables and scans", text: "Read and cited like any other text." },
+  { art: "documents-empty", title: "Tables and scans", text: "Read and cited like any other document." },
   { art: "agents-empty", title: "Agents", text: "Assistants for a team or a task." },
-  { art: "workflows-empty", title: "Workflows", text: "Recurring steps, with a person approving." },
+  { art: "workflows-empty", title: "Workflows", text: "Recurring steps, approved by a person." },
   { art: "signatures-empty", title: "Signatures", text: "Send, sign and verify documents." },
-  { art: "activity-empty", title: "Audit trail", text: "Who asked what, with which sources." },
+  { art: "activity-empty", title: "Audit trail", text: "Who asked what, and from which sources." },
 ];
 
 // `text` is the plain answer, also published as FAQPage structured data; `a` overrides how it shows on the page.

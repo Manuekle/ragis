@@ -10,7 +10,7 @@ export default function Image() {
     eyebrow: "Waitlist",
     title: [["Early access to answers"], ["your company can ", { em: "cite" }, "."]],
     titleSize: 70,
-    lead: "Join the waitlist. Sponsors get in first, then everyone in the order they joined.",
+    lead: "Join the waitlist. Sponsors get in first, then everyone else in the order they joined.",
     checks: ["Free to join", "One email", "Leave any time"],
     art: "waitlist",
   });

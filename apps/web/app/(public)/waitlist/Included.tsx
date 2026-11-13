@@ -21,7 +21,7 @@ const springFromResponse = (response: number, dampingRatio: number) => ({
 
 // The number grows out of the folded slice with a small pop when its card opens and settles back
 // when it folds. A spring keeps it interruptible: when the slider moves on mid-pop it turns from
-// wherever it is, with the speed it had. Reduced motion keeps the change without the overshoot.
+// wherever it is, with the speed it had. Reduced motion jumps straight to the new size.
 const POP = springFromResponse(0.5, 0.7);
 const SETTLE = springFromResponse(0.4, 1);
 const FOLDED = 0.5; // the folded number's size against the open one
@@ -141,13 +141,10 @@ export function Included({ items }: { items: IncludedItem[] }) {
                   className="inc-n-num"
                   initial={false}
                   animate={{ scale: open ? 1 : FOLDED }}
-                  transition={open && !reduceMotion ? POP : SETTLE}
+                  transition={reduceMotion ? { duration: 0 } : open ? POP : SETTLE}
                 >
                   {pad(k + 1)}
                 </motion.span>
-              </span>
-              <span className="inc-label" aria-hidden="true">
-                {title}
               </span>
               <span className="inc-body" aria-hidden="true">
                 <strong>{title}</strong>

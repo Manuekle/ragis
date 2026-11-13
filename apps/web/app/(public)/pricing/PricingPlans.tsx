@@ -14,7 +14,8 @@ const usd = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
 });
 
-export function PricingPlans({ salesHref, startHref }: { salesHref: string; startHref: string }) {
+/** `discount` is a holiday percent off (lib/season.ts), applied to the self-serve plans; 0 shows list prices. */
+export function PricingPlans({ salesHref, startHref, discount = 0 }: { salesHref: string; startHref: string; discount?: number }) {
   const [billingPeriod, setBillingPeriod] = useState<(typeof BILLING_PERIODS)[number]>("Monthly");
   const annual = billingPeriod === "Annual";
 
@@ -40,6 +41,8 @@ export function PricingPlans({ salesHref, startHref }: { salesHref: string; star
           const featured = "featured" in plan;
           const contactSales = "contactSales" in plan;
           const price = annual ? plan.monthlyPrice * 12 : plan.monthlyPrice;
+          const off = discount > 0 && !contactSales ? discount : 0;
+          const finalPrice = off ? Math.round(price * (1 - off / 100)) : price;
 
           return (
             <article key={plan.id} className={`plan${featured ? " is-featured" : ""}`}>
@@ -54,9 +57,17 @@ export function PricingPlans({ salesHref, startHref }: { salesHref: string; star
               </header>
               <p className="plan-blurb">{plan.blurb}</p>
               <p className="plan-price">
-                <span className="plan-from">From</span>
+                <span className="plan-from">
+                  From
+                  {off > 0 && <span className="plan-off">-{off}%</span>}
+                </span>
+                {off > 0 && (
+                  <s className="plan-was" aria-label={`was ${usd.format(price)}`}>
+                    <SoftText text={usd.format(price)} />
+                  </s>
+                )}
                 <strong>
-                  <SoftText text={usd.format(price)} />
+                  <SoftText text={usd.format(finalPrice)} />
                 </strong>
                 <span className="plan-unit">
                   <SoftText text={`/ ${annual ? "year" : "month"} + ${plan.additionalCost}`} />

@@ -92,9 +92,6 @@
 .inc-n-num { display: block; transform-origin: 50% 50%; }
 .inc-card[aria-current] .inc-n { color: var(--accent-text); }
 
-/* the name only shows on phones, where folded features are rows (see below) */
-.inc-label { display: none; }
-
 /* open: name and line beside the number, set at the open width so the text never reflows while the card grows */
 .inc-body {
   position: absolute; left: calc(var(--slice) - 4px); top: calc(var(--art-h) + 8px); bottom: 0; width: calc(var(--open) - var(--slice) - 4px);
@@ -112,7 +109,7 @@
   .inc-n { --n-size: 40px; }
 }
 
-/* phones: the slider stands up; folded features become rows with their name across */
+/* phones: the slider stands up; folded features become rows with their number across */
 @media (max-width: 640px) {
   .wl-sec.inc-sec { grid-template-columns: minmax(0, 1fr); }
   .inc-nav { display: none; }
@@ -123,22 +120,16 @@
   .inc-art { opacity: 0; transition: opacity 300ms ease; }
   .inc-card[aria-current] .inc-art { opacity: 1; transition-delay: 150ms; }
   .inc-art.ill img, .inc-card[aria-current] .inc-art.ill img { left: 0; width: 100%; transform: none; }
-  /* folded rows: the number in a square at the start of the row, the name beside it; opening
-     carries the number down under the drawing, in step with the row growing */
-  .inc-n { --n-size: 36px; width: 56px; top: 0; bottom: auto; height: 54px; transition: top 600ms var(--ease-smooth-out), height 600ms var(--ease-smooth-out), color 300ms ease; }
-  .inc-card[aria-current] .inc-n { top: calc(var(--art-h) + 8px); height: calc(342px - var(--art-h) - 8px); }
-  .inc-label {
-    display: block; position: absolute; left: 56px; top: 17px;
-    font-size: 14.5px; letter-spacing: -0.01em; white-space: nowrap;
-    transition: opacity 250ms ease 250ms;
-  }
-  .inc-card[aria-current] .inc-label { opacity: 0; transition-delay: 0ms; }
+  /* folded rows: only the number, centred across the row; opening carries it down under the
+     drawing, in step with the row growing, and the name and line appear beside it */
+  .inc-n { --n-size: 36px; left: 50%; width: auto; top: 0; bottom: auto; height: 54px; transform: translateX(-50%); transition: top 600ms var(--ease-smooth-out), height 600ms var(--ease-smooth-out), color 300ms ease, left 600ms var(--ease-smooth-out), transform 600ms var(--ease-smooth-out); }
+  .inc-card[aria-current] .inc-n { left: 0; transform: none; width: 56px; top: calc(var(--art-h) + 8px); height: calc(342px - var(--art-h) - 8px); }
   .inc-body { left: 60px; width: calc(100% - 76px); }
   .inc-body strong { font-size: 18px; }
   .inc-body span { font-size: 14.5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .inc-card, .inc-art, .inc-art::after, .inc-art.ill img, .inc-label, .inc-body, .inc-n { transition-duration: 1ms !important; transition-delay: 0ms !important; }
+  .inc-card, .inc-art, .inc-art::after, .inc-art.ill img, .inc-body, .inc-n { transition-duration: 1ms !important; transition-delay: 0ms !important; }
   .inc-count b { animation: none; }
 }
