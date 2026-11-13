@@ -91,14 +91,23 @@ Each field is an uppercase variable (`ai_embedding_model` → `AI_EMBEDDING_MODE
 | `AI_EMBEDDING_MODEL` | `local-hash-1024@v1` | Embedding model. Changing it requires a reindex. |
 | `AI_GENERATION_MODEL` | `local-extractive@v1` | Answer generation model. |
 | `AI_RERANK_MODEL` | `local-lexical-rerank@v1` | Rerank. |
-| `AI_VISION_MODEL` | empty | VLM that describes figures during ingestion. Empty: captions only. |
+| `AI_VISION_MODEL` | empty | VLM that describes figures and uploaded photos during ingestion. Empty: captions only, and photos with no text fail with `no_extractable_text`. Muse options: `meta-muse-spark-1.3-vision@v1`, `meta-muse-spark-1.3-contributor-vision@v1` (Meta may train on the images; test data only). These are separate from the generation models, so turning vision on does not change how answers are built. |
 | `AI_GRAPH_MODEL` | empty (`local-graph-heuristic@v1` in local Compose) | Entity and relation extraction. Empty: no graph even if the tenant has it enabled. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. |
+| `OLLAMA_NUM_CTX` | `8192` | Context window requested from Ollama. Its own default (4096) silently drops the start of long RAG prompts: the rules and the first sources. Each new value reloads the model. |
+| `META_MODEL_API_KEY` | empty | Key for the Meta Model API (Muse). Only in `.env`, never in Git. |
+| `META_REASONING_EFFORT` | `low` | Muse reasoning effort (`minimal`, `low`, `medium`, `high`). RAG extracts and cites; more effort adds latency and cost. |
+| `AI_ALLOW_TRAINING_MODELS` | `false` | Allows models whose provider may train on what is sent (`meta-muse-spark-1.3-contributor@v1`). Never for `confidential` or `restricted` organizations. |
 
 For Bedrock: `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
 `bedrock-claude-sonnet-5-5@v1`) and AWS credentials in the containers' environment. On the pilot EC2 they come from the
 `ragsis-pilot-ec2` role, which today does not include Bedrock permissions (they must be added and the models enabled in
 the account).
+
+For Meta Muse (cloud, outside AWS; AWS credits do not cover it): `AI_GENERATION_MODEL=meta-muse-spark-1.3@v1` and
+`META_MODEL_API_KEY`. Retrieved evidence is sent to Meta. The `-contributor` variant costs about 12 times less per input
+token because Meta may train on the content, so it also needs `AI_ALLOW_TRAINING_MODELS=true` and is only for
+non-sensitive test data (ADR-033). If Muse fails, the answer falls back to `local-extractive@v1`, never to Ollama.
 
 ### Ingestion and multimodal
 
@@ -135,7 +144,22 @@ the account).
 | `RAG_VLM_ENHANCED` | `auto` | Attaches images of cited figures if the generator has vision (`auto`, `on`, `off`). |
 | `RAG_VLM_MAX_IMAGES` | `3` | Maximum images per query. |
 | `RAG_GRAPH_CONTEXT_TOKENS` | `500` | Budget for graph facts of the selected evidence added to the prompt; `0` turns it off. |
+| `RAG_DOCUMENT_MAX_OUTPUT_TOKENS` | `3000` | Output tokens for a document written from the chat (ADR-034); answers keep their own limit. |
+| `DOCS_PAGE_SIZE` | `A4` | Page size of generated PDF and Word files (`A4` or `LETTER`). |
 | `INTERNAL_TOKEN_AUDIENCE`, `INTERNAL_TOKEN_ISSUER` | `ragsis-rag`, `ragsis-api` | Claims of the internal token. |
+
+### Public records (ADR-036)
+
+Only the rag-engine reads these. Organizations turn the feature on in Connected apps; they never see the key.
+
+| Variable | Default | Description |
+|---|---|---|
+| `CROMA_API_KEY` | empty | Croma organization key (`croma_live_…`, from platform.usecroma.com). A secret: Secrets Manager in AWS, never in Git. Empty = "Not set up". |
+| `CROMA_DEMO` | `false` | `1` = labelled sample records instead of live lookups (development only). |
+| `CROMA_BASE_URL` | `https://api.croma.run` | Croma host (HTTPS only). |
+| `CROMA_TIMEOUT_SECONDS` | `25` | Per-lookup timeout; slower async lookups are reported as still processing. |
+| `CROMA_MAX_CALLS` | `2` | Lookups per question (the API also caps it at 2 and at the organization's remaining monthly limit). |
+| `CROMA_CONTEXT_TOKENS` | `3500` | Prompt budget for public evidence. |
 
 ### Operations
 
@@ -174,4 +198,4 @@ verified SES identity in the API's Region with production access). With a direct
 
 ## Rehearsal script variables
 
-`REHEARSAL_ENV`, `FLOCI_ENDPOINT`, `REHEARSAL_HOSTNAME` and `REHEARSAL_TARGETS`: see [guides/floci.md](guides/floci.md).
+`REHEARSAL_ENV`, `REHEARSAL_HOSTNAME`, `REHEARSAL_INSTANCE_TYPE`, `REHEARSAL_TARGETS` and the `EMULATOR_*` variables: see [guides/aws-emulator.md](guides/aws-emulator.md).

@@ -484,7 +484,7 @@ keep the redirect from ADR-015. The Cognito client now allows `ALLOW_USER_PASSWO
 **Revisit when** MFA, social sign-in or federation is needed: at that point it is worth going back to the redirect flow or
 adopting Cognito managed login, which requires the Essentials plan.
 
-## ADR-027 · Infrastructure rehearsal in Floci before AWS
+## ADR-027 · Infrastructure rehearsal in Floci before AWS (superseded by ADR-032)
 
 **Context.** The pilot runs on AWS FREE plan credits (USD 100, six months). A misconfigured or forgotten resource spends
 credits and each attempt on real AWS takes longer than locally.
@@ -498,13 +498,15 @@ application keeps using SeaweedFS and ElasticMQ (ADR-012), not Floci.
 **Consequences.**
 - Floci validates the shape of the calls and the dependencies, not real AWS behavior: it does not check prices, quotas,
   instance type availability or `user_data`. The pilot rehearsal with Floci 2.4.0 creates all 28 resources and a second
-  `plan` has no changes; see [guides/floci.md](../guides/floci.md#known-limits).
+  `plan` has no changes; the Floci guide was replaced by [guides/aws-emulator.md](../guides/aws-emulator.md).
 - Its catalog does not include `m7i-flex.large`, so the rehearsal uses `m5.large` (same shape: 2 vCPU and 8 GiB) and
   real AWS uses the type in `main.tf`.
 - With `AWS_ENDPOINT_URL` pointing to Floci, the AWS CLI does not reach real AWS; the variable must be removed to operate
   there.
 
 **Revisit when** the emulator adds the pilot's instance types, or when the pilot becomes production.
+
+> **Superseded by ADR-032** (2026-11-11): the rehearsal rule stays, the emulator is now AWS Emulator.
 
 ## ADR-028 · Ask conversation history
 
@@ -708,3 +710,230 @@ flat list makes uploads hard to find. Folders must not become a second permissio
 
 **Revisit when** workspaces regularly hold thousands of documents (bulk move, multi-select), or people ask for folder-level
 sharing.
+
+## ADR-032 · AWS Emulator replaces Floci for the infrastructure rehearsal
+
+**Context.** ADR-027 made every Terraform change go through a local emulator first. Floci did the job, but it is a
+third-party project that ran here as a hand-built Java process with its own failure modes (the JVM wedged when its jar
+was rebuilt, an incomplete instance type catalog). AWS now publishes [AWS Emulator](https://github.com/aws/aws-emulator)
+(CC0-1.0), an official emulator driven by the AWS API models, with published fidelity scores per release.
+
+**Decision.** The rehearsal runs against AWS Emulator in Docker (`infra/docker/aws-emulator/Dockerfile`,
+`scripts/aws-emulator.sh`, `make emulator-up`) on `https://127.0.0.1:9297`, published on loopback only and with
+telemetry off by default. `scripts/aws-rehearsal.sh` keeps its interface (`make rehearse*`), works in
+`infra/terraform/.emulator/` and takes endpoint, per-run SigV4 keys and CA certificate from `scripts/aws-emulator.sh env`.
+The local application keeps using SeaweedFS and ElasticMQ (ADR-012).
+
+**Consequences.**
+- With AWS Emulator 1.0.322 the pilot rehearsal creates 26 resources, a second `plan` has no changes and `destroy`
+  empties it. EC2 `DescribeTags` is not implemented, so `aws_instance.pilot` and `aws_eip.pilot` are left out by
+  default (`REHEARSAL_EXCLUDE`); the instance is validated only by the real `terraform plan` and first boot. Floci did
+  cover it.
+- Five emulator gaps are worked around in the rehearsal only (S3 Control host, egress revoke with `-1`, network
+  interfaces and empty AZ in `RunInstances`, Canonical SSM parameters); see
+  [guides/aws-emulator.md](../guides/aws-emulator.md#known-limits). The S3 Control workaround sets `insecure = true` on
+  the rehearsal provider, acceptable only because it targets the loopback emulator with throwaway keys.
+- Static `test` credentials no longer work: shells and tools must use the variables from `scripts/aws-emulator.sh env`.
+- The emulator updates often; the Dockerfile follows the LTS channel and can be pinned with `EMULATOR_CHANNEL`.
+
+**Revisit when** a release implements EC2 `DescribeTags` (drop the default exclusion) or fixes the gaps above (drop the
+matching workaround).
+
+## ADR-033 · Meta Muse as a cloud generation model, with a guard for training modes
+
+**Context.** Local generation with Ollama loads the developer's GPU and, on a 16 GB machine, competes with the stack for
+memory. The Meta Model API serves Muse Spark through an OpenAI-compatible Chat Completions endpoint. Its Contributor
+mode (`muse-spark-1.3-contributor`) costs USD 0.10 per million input tokens instead of 1.25, in exchange for Meta
+being allowed to train future models on the content sent. In a RAG system that content is customer document text.
+
+**Decision.** The AI gateway gets a `meta` provider (`https://api.meta.ai/v1/chat/completions`, `developer` role for the
+rules, `reasoning_effort=low`, margin on `max_completion_tokens` for reasoning) and two models:
+`meta-muse-spark-1.3@v1` and `meta-muse-spark-1.3-contributor@v1`. Both are `cloud` for the data policy (blocked for
+`restricted`, allowlist for `confidential`) and fall back only to `local-extractive@v1`, never to Ollama. Models flagged
+`trains_on_data` also need `AI_ALLOW_TRAINING_MODELS=true` in the deployment and are never allowed for `confidential`
+data, even when allowlisted. The flag defaults to `false`, so the pilot cannot use Contributor mode by accident.
+
+**Consequences.**
+- On the judicial suite (`eval/golden/judicial.yaml`) Muse Spark 1.3 Contributor answers all 24 questions correctly with
+  a median latency of about 3 s, against 16 of 24 with `qwen3:8b` before the fixes listed below.
+- Working on that suite also fixed three platform issues that affected every model: Ollama prompts truncated at 4096
+  tokens (`OLLAMA_NUM_CTX`), strong-evidence filter dropping the first lexical or graph result by hundredths
+  (top-3 now needs coverage 0.30 instead of 0.40), and graph links lost between a person in prose and the same person
+  in a table row (label-before-colon descriptions, proper-name rows also mention the global entity).
+- Evidence leaves AWS. Meta usage is billed by Meta and is not covered by AWS credits.
+
+**Revisit when** a tenant needs Muse with `confidential` data (Standard mode and an allowlist entry, never Contributor),
+or Meta changes the Contributor terms.
+
+
+## ADR-034 · Documents from the chat: verified Markdown first, files rendered on download
+
+**Context.** People ask Ask for deliverables, not only answers: "make a PowerPoint about the remote work policy", "a
+PDF report on the reimbursement deadlines", "export the rates table to Excel". The file must carry the same guarantees
+as an answer (only authorized evidence, a citation on every fact, the verifier), look professional in each format, and
+stay correct when access to a source is removed later. RAG-Anything's `enhanced_markdown.py` converts Markdown to PDF
+with WeasyPrint or Pandoc; both need system libraries or binaries, and WeasyPrint needed a restricted URL fetcher so a
+document could not embed local files. ADR-004/018 still apply: the library is not a dependency.
+
+**Decision.**
+- **One source: Markdown.** A file request is answered by a document writer prompt over the same evidence as an answer
+  (RLS + ACL, graph facts of the selected evidence). The model returns Markdown with `[n]` on every fact; a structure
+  is suggested per kind (report, presentation, table). With the local provider the document is built from literal
+  evidence sentences instead.
+- **Block-aware verification** (`documents/compose.py`). Headings are kept; paragraphs and bullets are verified sentence
+  by sentence like an answer (valid citation, lexical support, literal figures); each table row needs a valid citation
+  and its figures in the cited source, checked together with the header. Empty sections are removed, a "Sources"
+  section written by the model is dropped (the real one is generated), and no verified citation means no document.
+- **Intent detection** (`documents/intent.py`), deliberately conservative: a creation verb plus a format or document
+  word with an indefinite article or a target ("en PDF", "as slides"). A sentence starting with an interrogative is
+  never a file request, and "dame el PDF del contrato" (definite article) asks for an existing file. Retrieval uses the
+  topic with the instruction words removed. `output` on `POST …/query`: `answer` (default, previous contract), `auto`
+  (detect) or a format (`pdf`, `docx`, `pptx`, `xlsx`, `csv`, `md`) chosen with **Answer as** in the composer.
+  "Excel", "spreadsheet" and "a table" map to `xlsx`; only "CSV" maps to `csv`.
+- **Storage** (migrations `0018_generated_documents.sql` and `0020_generated_documents_xlsx.sql`). Only the verified Markdown and its citations are stored, in
+  the same transaction as the query trace. Private to its author (RLS: organization **and** user; admins do not see
+  it), no `UPDATE` grant: verified content is not edited afterwards. History keeps only the card (title, outline,
+  counts), never the Markdown.
+- **Rendering on download** (`documents/render/`, `POST /internal/render`). `GET …/generated-documents/:id/file?format=`
+  re-checks under RLS that every cited document is still active and visible; if not, `410 source_unavailable` and a
+  `deny` audit event. Otherwise it audits the download and asks the rag-engine to convert. Any stored document can be
+  taken in any format. Responses are `private, no-store`, `nosniff` and `CSP: sandbox`; the filename comes from a
+  strict pattern, never verbatim from the engine.
+- **Pure-Python renderers, no fetching.** Markdown is parsed with `markdown-it-py` (no HTML) into an intermediate model
+  shared by every format: ReportLab for PDF (embedded Noto Sans, SIL OFL), `python-docx` with real Word styles,
+  `python-pptx` on the blank layout (looks the same in PowerPoint, Keynote and Google Slides), `openpyxl` for
+  Excel (one sheet per table as a native Excel table with filters, frozen header and brand zebra; unambiguous
+  numbers stored as numbers, read in the document's language; every text cell typed as a string so nothing becomes
+  a formula; content and sources sheets), `csv` with BOM and formula-injection guard. Links stay as text with their URL and images become their alt text, so no renderer
+  downloads anything or touches the disk.
+
+**Consequences.**
+- One generation per file; extra formats cost only the conversion (no model call). Documents use
+  `RAG_DOCUMENT_MAX_OUTPUT_TOKENS` (3000) instead of the answer limit.
+- The rag-engine image gains `python-docx`, `python-pptx`, `openpyxl`, `reportlab` and `markdown-it-py` plus
+  about 3 MB of fonts.
+- Excel files carry values, not formulas: totals or pivots are left to the person, so nothing in the workbook is
+  a figure the evidence does not contain.
+- Follow-up turns are still stateless (ADR-028), so "now make it shorter" writes a new document from the evidence.
+
+**Not adopted.**
+- *HTML → PDF (WeasyPrint, headless Chrome) or Pandoc.* System dependencies in the image and a fetcher to lock down;
+  the shared intermediate model also keeps every format consistent.
+- *Storing the rendered files.* They would outlive a permission change and duplicate content in S3; rendering on
+  download takes 10–150 ms per file in local
+  tests.
+- *Asking the model for JSON slides or tables.* Markdown is what models write most reliably, what the verifier already
+  understands and what the person can export as is.
+
+**Revisit when** people need computed columns or totals in the workbook, charts drawn from table data, or
+follow-up edits of a generated document.
+
+## ADR-035 · Company teams, requests between teams and a two-part Inbox
+
+**Context.** A company works in departments (Legal, Finance & Treasury, People…). Their documents should not mix:
+Legal does not need Treasury's bank statements in its answers. But departments depend on each other: Legal asks
+Treasury for a wire transfer or a bank certificate, and today that happens in email and chat, outside the platform.
+The Inbox (ADR-022) only held what workflows and agents need from a person.
+
+**Decision.**
+- A **team** is a department that owns exactly one workspace (migration `0019_teams_requests`). The data boundary is
+  the ACL that already exists (`workspace:<id>` principal, ADR-008), so nothing new is needed for "Legal does not see
+  Treasury's files". Team membership **is** the workspace membership, with a `team_lead` flag on it: one source of
+  truth, nothing to keep in sync. Creating a team whose name matches an existing space adopts that space and its people.
+- Teams are managed in **Governance → Teams**, by admins only (the company's managers): they create, rename and archive
+  teams, put each person in their team (a person can be in more than one) and choose leads. There is no separate
+  teams section in the app. The team directory (names, members, leads) is visible to the whole organization, because
+  people need it to know whom to ask and to show team labels. What a team works on is not.
+- Once the company has **two or more** active teams, people carry a team label next to their name (Governance tables,
+  requests, the sidebar, the workspace switcher). With one team or none the label would say the same thing for
+  everybody, so it is hidden, and request cards show who asked instead of "team → team".
+- A **request** goes from a person (on behalf of one of their teams, or none) to another team. It has a per-organization
+  number (`#12`, from a counter row, since RLS hides most rows from any single user), priority, optional due date,
+  status (`open → in_progress → waiting → done`, plus `declined` and `cancelled`) and an append-only timeline of
+  comments and changes. The receiving team works it and assigns it to one of its members; the requester can cancel or
+  reopen it. Asking the requester for information (`waiting`) and declining need a note; the requester's reply puts the
+  request back in the team's hands.
+- **Visibility** is enforced by RLS: a request and its timeline are visible to the requester, the assignee and the
+  members of the sending and receiving teams. Org admins do **not** see other teams' requests (same rule as documents
+  and conversations): they manage teams, not their work. Someone who leaves a team loses access, and their open
+  assignments go back to the team's queue (`app.release_team_assignments`, `SECURITY DEFINER`, returns only a count).
+- The **Inbox** has two parts: *From people* (requests, as a list or a board with drag and drop, with the views *For me*,
+  *My teams* and *Sent by me*) and *From agents* (reviews and approvals from ADR-022). The sidebar counter adds both.
+  A request opens as a side panel over the Inbox (`?r=<id>`, so it can be linked), not as a page of its own.
+  A request needs a person's attention when it waits on them as requester, is open and assigned to them, or is open and
+  unassigned in a team they triage (they lead it, or the team has no lead).
+- Every change is audited (`team.*`, `team_request.*`) and emits an outbox event (`team_request.created`, `.updated`,
+  `.commented`) for future notifications. No route declares scopes, so service API keys cannot reach teams or requests.
+
+**Consequences.**
+- Separating departments is free for existing customers: their spaces become teams with one click, with the people
+  already in them.
+- An admin who is not in a team sees its name in the workspace switcher but not its documents, Ask answers or requests.
+- Requests carry no documents yet: a person writes where the file is ("attached in Legal's space").
+- There are no email or chat notifications yet; the Inbox counter is the only signal.
+
+**Revisit when** requests need attachments shared across the team boundary (it needs an explicit, audited share of
+one document, not a wider ACL), agents should file or answer requests on a team's behalf, or customers ask for
+notifications, SLAs or request templates per team.
+
+## ADR-036 · Public records in Ask: official government data and the web through Croma, on request
+
+**Context.** Ask answers only from the organization's documents. People also need outside facts while they work:
+whether a counterparty has court cases or sanctions, what a law or a regulator says, a company's registry data, or
+international news, depending on the country. [Croma](https://docs.usecroma.com) (`api.croma.run`) exposes official
+public records from 11 countries (Colombia, Mexico, Peru, Chile, United States, Brazil, El Salvador, Guatemala,
+Bolivia, Venezuela, Japan) plus web search, page extraction and research, as typed JSON behind one organization API key.
+Its catalog also includes lookups of a private person's data by ID number (criminal records, health and social security
+affiliations, bank accounts, personal tax invoices, vehicles by owner).
+
+**Decision.**
+- **On request, never automatic.** A *Public records* chip under the question box, off by default; the person picks
+  the organization's country, another country or *Worldwide*. Only organizations whose admin turned it on in
+  **Connected apps → Outside your documents** see it (migration `0021_public_sources`: switch, default country
+  — falls back to the onboarding profile —, web allowed, monthly lookup limit, default 300).
+- **The API decides, the rag-engine executes.** `POST …/query` takes `public_sources: true` and an optional `country`.
+  The API checks the switch and the month's remaining lookups and signs them into the internal token (`pub` claim:
+  country, web, lookups left, country picked). Without that claim the rag-engine never calls Croma; the request body
+  alone cannot turn it on. When the switch is off or the limit is reached the question is still answered from the
+  documents, and the result says why (`public_sources.unavailable`). Agents (sandbox and workflows) never send it.
+- **A curated allowlist.** `scripts/croma-catalog.py` builds `public_sources/croma_catalog.json` from Croma's public
+  catalog with ~70 search endpoints (companies, court cases, laws and gazettes, regulation and tax doctrine,
+  sanctions, public procurement, statistics, trademarks, the web). Personal-data lookups by ID number are left out, so
+  neither the model nor the user can reach them.
+- **Planning sees only the question.** The generation model gets the question and a shortlist (the countries in scope
+  plus worldwide tools) and returns JSON; ids outside the shortlist and unknown parameters are dropped, types, lengths,
+  enums and patterns are enforced, paging is capped at 5 records. It never sees the organization's documents, so what
+  goes to Croma can only come from what the person typed. Without a generative model (local extractive provider) a
+  keyword router picks the endpoint, and questions about the organization itself ("our policy…") never fall back to the
+  web. At most `CROMA_MAX_CALLS` (2) lookups per question, run in parallel with internal retrieval.
+- **Public results are evidence like any other.** Each record (up to 4 per lookup) or web page becomes a source
+  numbered after the internal ones, rendered as `<fuente origen="registro_publico|web">` with the retrieval date and the
+  data's `as_of`, escaped and declared untrusted in the system prompt; the same citation verifier applies. An empty
+  search is evidence too ("no matching records for …", scoped to that register). With public evidence and no internal
+  evidence the answer no longer abstains; when records match but do not quote the exact passage (a full-text hit inside
+  a ruling), the answer describes the matching records and points to them instead of abstaining. Citations carry `external: true`, source, country, URL and dates, and open the
+  official page instead of the document viewer.
+- **Privacy and audit.** Organizations whose data is classified `restricted` cannot turn it on (same rule as cloud
+  models: restricted data never goes to external APIs). The Croma key is a platform secret held only by the rag-engine
+  (`CROMA_API_KEY`); organizations never handle it. `query_runs.retrieved_refs` records each lookup's endpoint, outcome, credits and Croma request id,
+  never the search terms (the question itself is stored only as a hash). Each answer that used public records adds a
+  `query.public_sources` audit event (sources, countries, count); settings changes add
+  `organization.public_sources_updated`. Usage is counted in `usage_events` (`public_lookups`). History and generated
+  documents skip external citations when re-checking access, so a public record never hides an answer.
+- **Failures never cost the answer.** Missing key, exhausted credits (402), rate limits (429), a source that is down
+  (5xx), a timeout or an async job that did not finish (202) all degrade to a documents-only answer with a plain
+  reason. `CROMA_DEMO=1` answers with labelled sample records for development.
+
+**Consequences.**
+- Questions with outside facts get cited answers in one place; the person sees which register each fact came from.
+- Names, ID numbers and keywords from a question leave the organization (to Croma, and from there to the government
+  source). That is why it is off by default, explained in the chip and in Connected apps, and audited.
+- Croma bills per call (10 credits a live lookup, 1 a dataset answer, cache hits free); the monthly limit per
+  organization keeps one tenant from spending the platform's plan.
+- Lookups by personal ID, multi-step lookups (search, then fetch the full record), async jobs that need polling and
+  Croma monitors are not used.
+
+**Revisit when** a customer needs per-person background checks (needs a legal basis, consent and a separate
+permission, not this switch), organizations want their own Croma key, Croma adds countries or endpoints worth
+allowlisting (`scripts/croma-catalog.py --check` flags removed ones), or public lookups should be offered to agents
+as a tool under the policy engine.

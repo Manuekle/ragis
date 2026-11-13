@@ -29,6 +29,7 @@ eval/reports/
 /Especificacion_Claude_Onboarding_Agentes_RAG.md
 /Plan_Maestro_Plataforma_RAG_Empresarial_AWS.docx
 
-# Ensayo local de Terraform contra Floci
+# Ensayo local de Terraform contra AWS Emulator (y restos del antiguo ensayo en Floci)
+infra/terraform/.emulator/
 infra/terraform/.floci/
 .vercel

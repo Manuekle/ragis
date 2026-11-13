@@ -1,25 +1,26 @@
 # Environments
 
-Ragis runs in three places. The rule that ties them together: **all AWS infrastructure is created first in Floci and
-only then in real AWS.**
+Ragis runs in three places. The rule that ties them together: **all AWS infrastructure is created first in AWS Emulator
+and only then in real AWS.**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/environments-dark.svg">
-  <img alt="Local with Docker Compose, rehearsal in Floci and real AWS" src="diagrams/environments.svg">
+  <img alt="Local with Docker Compose, rehearsal in AWS Emulator and real AWS" src="diagrams/environments.svg">
 </picture>
 
-| | Local | Rehearsal in Floci | Real AWS (pilot) |
+| | Local | Rehearsal in AWS Emulator | Real AWS (pilot) |
 |---|---|---|---|
 | Purpose | Develop and test the application | Test Terraform and AWS resources with no account or cost | Show the product to a small group |
-| How it comes up | `make up` | `make rehearse` | `terraform apply` with the `ragsis-pilot` profile |
+| How it comes up | `make up` | `make emulator-up` + `make rehearse` | `terraform apply` with the `ragsis-pilot` profile |
 | Storage | SeaweedFS (S3 API) | Emulated S3 | S3 |
 | Queue | ElasticMQ (SQS API) | Emulated SQS | SQS + DLQ |
 | Identity | Development login or simulated IdP | Emulated Cognito | Cognito |
 | Models | Local, deterministic | n/a | Local (Bedrock optional) |
 | Cost | 0 | 0 | FREE plan credits |
 
-The local application stack does **not** use Floci: it uses SeaweedFS and ElasticMQ because they start in seconds and
-depend on nothing external. Floci is used to rehearse the infrastructure (Terraform), not to run the application.
+The local application stack does **not** use the emulator: it uses SeaweedFS and ElasticMQ because they start in seconds
+and depend on nothing external. AWS Emulator is used to rehearse the infrastructure (Terraform), not to run the
+application.
 
 ## 1. Local
 
@@ -47,14 +48,17 @@ Services in `infra/docker/compose.yml`:
 By default it needs no network or credentials: it uses the local model provider. The web starts with `AUTH_MODE=dev`
 (any email signs in). To test SSO without a real IdP, `make mock-oidc` brings one up at <http://localhost:9000>.
 
-## 2. Rehearsal in Floci
+## 2. Rehearsal in AWS Emulator
 
-[Floci](https://github.com/floci-io/floci) is a local AWS emulator (port 4566). With it the same pilot Terraform can be
-applied with no AWS account and no cost. The full guide, with known limits, is in [guides/floci.md](guides/floci.md).
+[AWS Emulator](https://github.com/aws/aws-emulator) is the official local emulator of the AWS APIs, run in Docker on
+`https://127.0.0.1:9297`. With it the same pilot Terraform can be applied with no AWS account and no cost. The full
+guide, with known limits (the EC2 instance and its Elastic IP are left out today), is in
+[guides/aws-emulator.md](guides/aws-emulator.md).
 
 ```bash
+make emulator-up        # starts the emulator (Docker)
 make rehearse-plan      # what would be created
-make rehearse           # creates the resources in Floci
+make rehearse           # creates the resources in the emulator
 make rehearse-destroy   # deletes them
 ```
 
@@ -111,21 +115,22 @@ What to do:
 
 ### About `AWS_ENDPOINT_URL`
 
-If your shell exports `AWS_ENDPOINT_URL=http://localhost:4566` (usual when working with Floci), **any `aws` command goes
-to the emulator, not to real AWS**. For real AWS use `env -u AWS_ENDPOINT_URL aws …` or a clean terminal. Terraform also
+If your shell points at the emulator (`eval "$(scripts/aws-emulator.sh env)"` exports `AWS_ENDPOINT_URL`,
+`AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE`), **any `aws` command goes to the emulator, not to real AWS**. For
+real AWS use a clean terminal or `env -u AWS_ENDPOINT_URL -u AWS_CONFIG_FILE -u AWS_SHARED_CREDENTIALS_FILE aws …`. Terraform also
 needs credentials exported from the `aws login` session:
 
 ```bash
-unset AWS_ENDPOINT_URL AWS_PROFILE
+unset AWS_ENDPOINT_URL AWS_CONFIG_FILE AWS_SHARED_CREDENTIALS_FILE AWS_CA_BUNDLE AWS_PROFILE
 eval "$(aws configure export-credentials --profile ragsis-pilot --format env)"
 terraform -chdir=infra/terraform/envs/pilot plan -var aws_account_id=<account-id> -var pilot_hostname=<dns>
 ```
 
-## Promotion: from Floci to AWS
+## Promotion: from the emulator to AWS
 
 1. Change the Terraform or the compose file.
-2. `make rehearse-plan` and `make rehearse` in Floci. Fix until they apply without errors.
+2. `make rehearse-plan` and `make rehearse` in AWS Emulator. Fix until they apply without errors.
 3. `terraform plan` against real AWS. Check that it is a minimal change with no unexpected destructions.
 4. `terraform apply` in real AWS.
-5. If something fails in Floci because of an emulator limitation (not the code), note it in
-   [guides/floci.md](guides/floci.md#known-limits) and validate that part directly in AWS with a bounded change.
+5. If something fails in the emulator because of an emulator limitation (not the code), note it in
+   [guides/aws-emulator.md](guides/aws-emulator.md#known-limits) and validate that part directly in AWS with a bounded change.

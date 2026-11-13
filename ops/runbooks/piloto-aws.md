@@ -11,17 +11,18 @@ This environment uses one `m7i-flex.large` EC2 instance with 2 vCPU and 8 GiB, U
 
 The public repository has the [GitHub pilot environment](https://github.com/Manuekle/ragis/settings/environments/26787121908/edit). It stores `AWS_REGION=us-east-2`, `DEPLOY_STAGE=pilot`, `RAGSIS_ENV=production` and `AUTH_MODE=oidc`, and allows the `codex/piloto-aws` branch. The start-up described here uses images from private ECR, pushed from your machine. To automate it later, a workflow and a deployment role limited to that environment are needed. CloudShell returned `AccessDenied` when listing IAM OIDC providers. That GitHub authorization is independent of the user login in Cognito.
 
-## Before touching AWS: rehearse in Floci
+## Before touching AWS: rehearse in AWS Emulator
 
-Every infrastructure change is tested first in the local emulator (Floci, `localhost:4566`). Only with a clean rehearsal do you continue with real AWS. Guide and known limits: [docs/guides/floci.md](../../docs/guides/floci.md).
+Every infrastructure change is tested first in the local emulator (AWS Emulator in Docker, `https://127.0.0.1:9297`). Only with a clean rehearsal do you continue with real AWS. Guide and known limits: [docs/guides/aws-emulator.md](../../docs/guides/aws-emulator.md).
 
 ```bash
-make rehearse-plan      # what Terraform would create in Floci
-make rehearse           # creates it in Floci
+make emulator-up        # starts the emulator
+make rehearse-plan      # what Terraform would create in the emulator
+make rehearse           # creates it in the emulator
 make rehearse-destroy   # deletes it
 ```
 
-The rehearsal uses its own state in `infra/terraform/.floci/` and never reads or modifies the real AWS state.
+The rehearsal uses its own state in `infra/terraform/.emulator/` and never reads or modifies the real AWS state.
 
 ## Prepare the AWS plan
 
@@ -95,7 +96,7 @@ A stopped instance does not charge for compute, but the EBS disk and the Elastic
 
 ## Update images
 
-1. Rehearse the change locally (`make up`) and, if it touches Terraform, in Floci (`make rehearse`).
+1. Rehearse the change locally (`make up`) and, if it touches Terraform, in AWS Emulator (`make rehearse`).
 2. Build and publish the new images with a new tag (ECR tags are immutable) and note the digests.
 3. Update the `repo@sha256:...` references in `/opt/ragsis/.env.pilot`, keeping the passwords and the internal secret.
 4. Run `docker compose ... pull` and `up -d --wait` as in the initial start-up.

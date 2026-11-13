@@ -88,23 +88,25 @@ make up-obs    # same, with Jaeger and OpenTelemetry traces (http://localhost:16
 - Web: <http://localhost:3000> (development login: sign in with any email)
 - `make seed`: creates the "ACME Demo (local)" organization with `prueba@ragsis.test` and nine documents to try Ask
   ([details and sample questions](docs/development.md#test-user-and-data))
+- `make seed-judicial` then `make seed-judicial-week`: a law firm that looks like it has used Ragis for over a week,
+  for demos and recordings ([people and what each one shows](docs/development.md#judicial-demo-for-recordings-and-sales-demos))
 - API: <http://localhost:4000>, with the contract in [`packages/contracts/openapi.yaml`](packages/contracts/openapi.yaml)
 
 More commands, tests and conventions: [docs/development.md](docs/development.md).
 
 ## Environments
 
-The rule: **all AWS infrastructure is rehearsed first in Floci (local emulator) and only then created in real AWS.**
+The rule: **all AWS infrastructure is rehearsed first in AWS Emulator (the official local emulator) and only then created in real AWS.**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/environments-dark.svg">
-  <img alt="Local with Docker Compose, rehearsal in Floci and real AWS" src="docs/diagrams/environments.svg">
+  <img alt="Local with Docker Compose, rehearsal in AWS Emulator and real AWS" src="docs/diagrams/environments.svg">
 </picture>
 
 | Environment | Command | Details |
 |---|---|---|
 | Local | `make up` | Docker Compose with SeaweedFS (S3) and ElasticMQ (SQS) |
-| Rehearsal | `make rehearse` | Pilot Terraform against Floci ([guide](docs/guides/floci.md)) |
+| Rehearsal | `make emulator-up` + `make rehearse` | Pilot Terraform against AWS Emulator ([guide](docs/guides/aws-emulator.md)) |
 | Real AWS | `terraform apply` | Pilot in `us-east-2`: one EC2, S3, SQS, KMS, ECR and Cognito ([runbook](ops/runbooks/piloto-aws.md)) |
 
 Where each piece runs and what the pilot costs on the FREE plan: [docs/environments.md](docs/environments.md).
@@ -142,7 +144,7 @@ How a document and a question flow through the system, with step-by-step diagram
 | Architecture, RAG pipeline, data model, ingestion and query | [docs/architecture.md](docs/architecture.md) |
 | Public API v1 (OpenAPI) | [packages/contracts/openapi.yaml](packages/contracts/openapi.yaml) |
 | Environments, AWS pilot and costs | [docs/environments.md](docs/environments.md) |
-| Rehearsing infrastructure in Floci | [docs/guides/floci.md](docs/guides/floci.md) |
+| Rehearsing infrastructure in AWS Emulator | [docs/guides/aws-emulator.md](docs/guides/aws-emulator.md) |
 | Environment variables and secrets | [docs/configuration.md](docs/configuration.md) |
 | Sign-in (inside the app, with Cognito) | [docs/authentication.md](docs/authentication.md) |
 | Security | [docs/security.md](docs/security.md) |
@@ -211,8 +213,11 @@ Details and infrastructure controls: [docs/security.md](docs/security.md).
 | — | Cross-modal graph (RAG-Anything ideas) | ✅ Anchor nodes for figures, tables and equations, intra-table graph, dense graph seeds, modality-aware fusion, graph facts in the prompt (ADR-029) |
 | — | Audio recordings | ✅ MP3/WAV/M4A/OGG/FLAC, Amazon Transcribe provider, chunks with time ranges and speakers, player with transcript (ADR-030). Open: Transcribe IAM in Terraform and a local transcriber for restricted tenants |
 | — | Library folders | ✅ Nested folders, move, upload into a folder, suggestions by content or name under RLS (ADR-031) |
-| INFRA-PILOT | Low-cost pilot on AWS | ✅ Terraform and Compose on one EC2 (us-east-2); prior rehearsal in Floci (ADR-027). Open: redeploy with the new login |
-| ENT-01/02, AGT-01 | Dedicated, offline, agentic | ⏳ P2/P3 |
+| — | Teams and requests between teams | ✅ Departments with their own private space (Legal, Treasury…), requests between teams with a board, timeline and assignment, visible only to the people involved (RLS); two-part Inbox: from people and from agents (ADR-035). Open: notifications and attachments on requests |
+| INFRA-PILOT | Low-cost pilot on AWS | ✅ Terraform and Compose on one EC2 (us-east-2); prior rehearsal in AWS Emulator (ADR-027, ADR-032). Open: redeploy with the new login |
+| ENT-01 | Dedicated tenant IaC | ⏳ P2 · Goal: provision in an isolated account/VPC, with a restore test. Today: Terraform modules (`dev`, `pilot` envs), per-customer CMK planned for the `dedicated_tenant` template, dedicated as a premium option (ADR-006). Open: the dedicated environment itself and the restore test |
+| ENT-02 | Offline on-prem install | ⏳ P2 · Goal: runs disconnected, documented and tested. Today: deterministic local provider (ADR-010), Ollama models and Docling local OCR. Open: an offline install guide and an end-to-end test with no network |
+| AGT-01 | Supervised agentic RAG | ⏳ P3 · Goal: read-only, step cap, verification and budget. Today: the agent runtime (P1-01…04) already enforces `max_steps`, `usd_per_run`, a sandbox with simulated writes and verification checks. Open: a read-only multi-step retrieval mode in Ask |
 
 Known open items before production: validate Textract, Transcribe and Bedrock (including Nova and Claude vision) in the real account
 and Region (here they were tested with test doubles), validate Docling and its local OCR in the worker image, measure the
@@ -222,4 +227,4 @@ permissions pentest, and the legal and privacy gates of the checklist (section 2
 ---
 
 *AWS icons belong to Amazon Web Services and technology logos to their owners; see
-[docs/assets/icons/README.md](docs/assets/icons/README.md). Local emulator: [Floci](https://github.com/floci-io/floci) (MIT).*
+[docs/assets/icons/README.md](docs/assets/icons/README.md). Local emulator: [AWS Emulator](https://github.com/aws/aws-emulator) (CC0-1.0).*

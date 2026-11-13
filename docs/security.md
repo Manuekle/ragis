@@ -47,6 +47,10 @@ What to do when a leak is suspected: [incident-cross-tenant.md](../ops/runbooks/
   receive the files.
 - **Connectors:** OAuth tokens encrypted with AES-GCM (AAD), PKCE and single-use `state`; Gmail visible only to its
   owner; on disconnect, access is revoked and indexed content is removed (ADR-025).
+- **Public records (ADR-036):** off by default and per question. Only names and keywords taken from the question reach
+  Croma (the planner never sees documents); endpoints come from a curated allowlist without personal-ID lookups; the
+  key stays in the rag-engine; lookups are audited without their terms. Organizations with `restricted` data cannot
+  turn it on.
 
 ## Infrastructure
 

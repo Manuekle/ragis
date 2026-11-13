@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 524" width="1260" height="524" font-family="ui-sans-serif, system-ui, -apple-system, &#x27;Segoe UI&#x27;, Roboto, &#x27;Helvetica Neue&#x27;, Arial, sans-serif" role="img" aria-labelledby="t d">
-<title id="t">Environments</title><desc id="d">Local with Docker Compose, rehearsal in Floci and real AWS, with the rule of rehearsing in Floci first.</desc>
+<title id="t">Environments</title><desc id="d">Local with Docker Compose, rehearsal in AWS Emulator and real AWS, with the rule of rehearsing in the emulator first.</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#71717a"/></marker><marker id="arrow-s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#71717a"/></marker></defs>
 <rect width="1260" height="524" rx="12" fill="#ffffff"/>
-<text x="24.0" y="36.0" font-size="17" font-weight="700" fill="#18181b" text-anchor="start">Three environments, one rule: Floci first, then AWS</text>
+<text x="24.0" y="36.0" font-size="17" font-weight="700" fill="#18181b" text-anchor="start">Three environments, one rule: emulator first, then AWS</text>
 <rect x="24" y="70" width="330" height="330" rx="8" fill="#fbfbfc" stroke="#a1a1aa" stroke-width="1.4"/>
 <text x="36.0" y="89.0" font-size="12.5" font-weight="600" fill="#52525b" text-anchor="start"></text>
 <svg x="38.0" y="82.0" width="40.0" height="40.0" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet"><g fill="#008fe2">
@@ -46,8 +46,8 @@
         <path d="M15.437,21.52 L32.064,21.52 L32.064,19.52 L15.437,19.52 L15.437,21.52 Z M15.437,17.196 L32.064,17.196 L32.064,15.196 L15.437,15.196 L15.437,17.196 Z M15.437,12.762 L32.064,12.762 L32.064,10.762 L15.437,10.762 L15.437,12.762 Z M15.437,8.494 L32.064,8.494 L32.064,6.494 L15.437,6.494 L15.437,8.494 Z M13,44.013 L34.499,44.013 L34.499,4 L13,4 L13,44.013 Z M35.032,2 L12.468,2 C11.659,2 11,2.659 11,3.469 L11,44.545 C11,45.355 11.659,46.013 12.468,46.013 L35.032,46.013 C35.841,46.013 36.499,45.355 36.499,44.545 L36.499,3.469 C36.499,2.659 35.841,2 35.032,2 L35.032,2 Z" fill="#232F3D"></path>
     </g>
 </svg>
-<text x="528.0" y="104.0" font-size="14" font-weight="700" fill="#18181b" text-anchor="start">2 · Rehearsal in Floci</text>
-<text x="478.0" y="148.0" font-size="11.5" font-weight="500" fill="#52525b" text-anchor="start">make rehearse · Terraform → localhost:4566</text>
+<text x="528.0" y="104.0" font-size="14" font-weight="700" fill="#18181b" text-anchor="start">2 · Rehearsal in AWS Emulator</text>
+<text x="478.0" y="148.0" font-size="11.5" font-weight="500" fill="#52525b" text-anchor="start">make rehearse · Terraform → 127.0.0.1:9297</text>
 <svg x="482.0" y="176.0" width="28.0" height="28.0" viewBox="0 0 80 80" preserveAspectRatio="xMidYMid meet">
     
     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
@@ -57,7 +57,7 @@
         <path d="M27,53 L52,53 L52,28 L27,28 L27,53 Z M54,28 L58,28 L58,30 L54,30 L54,34 L58,34 L58,36 L54,36 L54,39 L58,39 L58,41 L54,41 L54,45 L58,45 L58,47 L54,47 L54,51 L58,51 L58,53 L54,53 L54,53.136 C54,54.164 53.164,55 52.136,55 L52,55 L52,59 L50,59 L50,55 L46,55 L46,59 L44,59 L44,55 L41,55 L41,59 L39,59 L39,55 L35,55 L35,59 L33,59 L33,55 L29,55 L29,59 L27,59 L27,55 L26.864,55 C25.836,55 25,54.164 25,53.136 L25,53 L22,53 L22,51 L25,51 L25,47 L22,47 L22,45 L25,45 L25,41 L22,41 L22,39 L25,39 L25,36 L22,36 L22,34 L25,34 L25,30 L22,30 L22,28 L25,28 L25,27.864 C25,26.836 25.836,26 26.864,26 L27,26 L27,22 L29,22 L29,26 L33,26 L33,22 L35,22 L35,26 L39,26 L39,22 L41,22 L41,26 L44,26 L44,22 L46,22 L46,26 L50,26 L50,22 L52,22 L52,26 L52.136,26 C53.164,26 54,26.836 54,27.864 L54,28 Z M41,65.876 C41,65.944 40.944,66 40.876,66 L14.124,66 C14.056,66 14,65.944 14,65.876 L14,39.124 C14,39.056 14.056,39 14.124,39 L20,39 L20,37 L14.124,37 C12.953,37 12,37.953 12,39.124 L12,65.876 C12,67.047 12.953,68 14.124,68 L40.876,68 C42.047,68 43,67.047 43,65.876 L43,61 L41,61 L41,65.876 Z M68,14.124 L68,40.876 C68,42.047 67.047,43 65.876,43 L60,43 L60,41 L65.876,41 C65.944,41 66,40.944 66,40.876 L66,14.124 C66,14.056 65.944,14 65.876,14 L39.124,14 C39.056,14 39,14.056 39,14.124 L39,20 L37,20 L37,14.124 C37,12.953 37.953,12 39.124,12 L65.876,12 C67.047,12 68,12.953 68,14.124 L68,14.124 Z" fill="#FFFFFF"></path>
     </g>
 </svg>
-<text x="522.0" y="195.0" font-size="12.5" font-weight="400" fill="#18181b" text-anchor="start">EC2 as a Docker container</text>
+<text x="522.0" y="195.0" font-size="12.5" font-weight="400" fill="#18181b" text-anchor="start">EC2 left out for now (API gap)</text>
 <svg x="482.0" y="220.0" width="28.0" height="28.0" viewBox="0 0 80 80" preserveAspectRatio="xMidYMid meet">
     
     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
@@ -157,5 +157,5 @@
 <text x="849.0" y="245.7" font-size="10.5" font-weight="500" fill="#52525b" text-anchor="middle">rehearsal passes</text>
 <rect x="24" y="430" width="1210" height="70" rx="10" fill="#e6f2ff" stroke="#0a84ff" stroke-width="1.3"/>
 <text x="44.0" y="458.0" font-size="13" font-weight="700" fill="#0a84ff" text-anchor="start">Working rule</text>
-<text x="44.0" y="480.0" font-size="12.5" font-weight="400" fill="#18181b" text-anchor="start">All AWS infrastructure and changes are created first in Floci with scripts/aws-rehearsal.sh. Only after a clean rehearsal are they applied to real AWS.</text>
+<text x="44.0" y="480.0" font-size="12.5" font-weight="400" fill="#18181b" text-anchor="start">All AWS infrastructure and changes are created first in AWS Emulator with scripts/aws-rehearsal.sh. Only after a clean rehearsal are they applied to real AWS.</text>
 </svg>

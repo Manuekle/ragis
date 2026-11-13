@@ -9,7 +9,7 @@ Start with what you need:
 | Call the API | [../packages/contracts/openapi.yaml](../packages/contracts/openapi.yaml) and [features.md#api-integrations](features.md#api-integrations) |
 | Run it and develop | [development.md](development.md) |
 | Know where each environment runs and what it costs | [environments.md](environments.md) |
-| Try AWS infrastructure without touching AWS | [guides/floci.md](guides/floci.md) |
+| Try AWS infrastructure without touching AWS | [guides/aws-emulator.md](guides/aws-emulator.md) |
 | Configure variables and secrets | [configuration.md](configuration.md) |
 | Understand sign-in | [authentication.md](authentication.md) |
 | Review security controls | [security.md](security.md) |
@@ -23,14 +23,14 @@ Start with what you need:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/environments-dark.svg">
-  <img alt="Local, rehearsal in Floci and real AWS" src="diagrams/environments.svg">
+  <img alt="Local, rehearsal in AWS Emulator and real AWS" src="diagrams/environments.svg">
 </picture>
 
 | Folder | Contents |
 |---|---|
 | `docs/` | This documentation |
 | `docs/adr/` | Architecture decision records (ADRs) |
-| `docs/guides/` | Practical guides (Floci) |
+| `docs/guides/` | Practical guides (AWS Emulator) |
 | `docs/diagrams/` | SVG diagrams generated with `make diagrams` |
 | `docs/assets/icons/` | AWS icons, technology logos and the Ragis content glyphs used in the diagrams |
 | `docs/assets/brand/` | Ragis logo (light and dark) |

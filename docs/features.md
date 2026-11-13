@@ -10,6 +10,8 @@ By default everything runs **with no network or credentials** using the local de
 - **Bedrock:** `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
   `bedrock-claude-sonnet-5-5@v1`) and AWS credentials in the containers' environment.
 - **On-premises or offline:** `ollama-*` models with `OLLAMA_BASE_URL`.
+- **Meta Muse:** `meta-muse-spark-1.3@v1` with `META_MODEL_API_KEY` (cloud, outside AWS); see
+  [configuration.md](configuration.md#models).
 - **OCR and speech to text:** `OCR_PROVIDER=textract` and `TRANSCRIPTION_PROVIDER=transcribe` (both cloud, so not for
   `restricted` tenants). The full list of models by kind is in [architecture.md](architecture.md#model-providers).
 
@@ -25,6 +27,21 @@ Gmail (personal, visible only to its owner), Slack and ClickUp (company-level, i
 encrypted tokens, delta sync with a cursor, tombstones and deletion on disconnect (ADR-025). Validation with real OAuth
 apps is still pending. How to create each provider's apps: [connectors-setup.md](connectors-setup.md).
 
+## Public records (ADR-036)
+
+When someone needs outside facts, they turn on **Public records** under the question box in Ask and pick a country
+(their organization's by default) or *Worldwide*. Ragis then also looks up official government data through
+[Croma](https://docs.usecroma.com) — company registries, court cases, laws and gazettes, regulation and tax doctrine,
+sanctions lists, public procurement and statistics in 11 countries — and, if allowed, the web. Each record is cited
+like a document, with its register, country, dates and a link to the official page; the answer says when a fact comes
+from public records. Lookups of a private person's data by ID number are not available.
+
+Administrators turn it on in **Connected apps → Outside your documents**, choose the default country, whether web
+results are allowed and the monthly lookup limit. Only names and keywords from the question are sent to Croma, never
+documents; every answer that used public records appears in the Activity log. Without `CROMA_API_KEY` the card shows
+"Not set up"; `CROMA_DEMO=1` uses labelled sample records. The endpoint allowlist is regenerated with
+`python3 scripts/croma-catalog.py`.
+
 ## Conversation history
 
 Ask saves every question and answer in a conversation that is **private to the person who asks** (not even admins see
@@ -32,6 +49,36 @@ it). The *History* button lists the conversations, reopens them (the URL carries
 same place), renames them and deletes them permanently. If someone loses access to a cited document, or the document is
 deleted, that turn appears hidden when the history is reopened. Continuing to ask in a reopened conversation does not
 send the previous context to the model. Details and limits: ADR-028.
+
+## Documents from the chat (ADR-034)
+
+Ask can answer with a file instead of a chat message: a **PDF report**, a **Word document**, a **PowerPoint
+presentation** or an **Excel workbook** (CSV and Markdown are also offered as downloads). Two ways to ask for one:
+
+- In your own words: "Make a PowerPoint about the remote work policy", "Crea un informe en PDF de los plazos de
+  reembolso", "Exporta la tabla de tarifas a Excel" (Excel, spreadsheet or table give a workbook; say CSV for CSV).
+  Questions such as "What does the policy PDF say?" or "dame el PDF del contrato" stay normal questions.
+- With the **Answer as** chip in the composer, which forces the format.
+
+Underneath, every file is **Markdown**. The model writes it from the same authorized evidence as an answer, with a
+citation `[n]` on every fact, and the verifier checks it block by block (sentences, bullets, table rows; headings are
+kept, empty sections removed). Only that verified Markdown is stored, private to its author. Each format is produced
+**when it is downloaded**, so the same document can be taken as PDF, Word, PowerPoint, Excel, CSV or Markdown from the card in
+the chat, and the API re-checks that every cited document is still visible before handing over a file.
+
+What each format looks like:
+
+| Format | Layout |
+|---|---|
+| PDF | A4 or Letter, embedded Noto Sans, title block, blue section headings, zebra tables, page header and "Page x of y" footer, sources list with document, version, page and effective date. |
+| Word | Real Word styles (Title, Heading 1–3, List Bullet/Number), so the navigation pane and table of contents work; native tables; citations link to the sources list; page numbers in the footer. |
+| PowerPoint | 16:9. Dark cover, one slide per section (long sections continue on "(cont.)" slides), native editable tables, cited sources in each slide's footer, speaker notes, closing sources slide. |
+| Excel | One sheet per table, titled with its section, as a native Excel table (filters, sorting, frozen and printed header row) in the app's colours; a readable source column; unambiguous numbers (`$120.000`, `12,5 %`) stored as numbers in the document's language, codes such as `007` kept as text; a Content sheet for the text and a Sources sheet. No formulas: text such as `=HYPERLINK(…)` stays text. |
+| CSV | UTF-8 with BOM (opens correctly in Excel), one row per table row and a readable source column (added when the table has none, so cells carry no `[n]` marks); a document without tables becomes one row per point. Text cells that start with `=`, `+`, `-` or `@` are escaped so spreadsheets don't run them as formulas. |
+
+With the local extractive provider (no generative model) the document is built from literal sentences of the evidence
+and goes through the same verifier. Limits: `RAG_DOCUMENT_MAX_OUTPUT_TOKENS` and `DOCS_PAGE_SIZE`
+([configuration.md](configuration.md)).
 
 ## OCR
 
@@ -134,6 +181,24 @@ version of its agents. Runs are started with `Idempotency-Key`, execute with the
 wait in the **Inbox** of whoever holds the functional role (assigned in *Governance → Roles*). An approval is tied to the
 hash of what was reviewed and to the cited document versions; a rejection stops the run. **Activity** shows the
 timeline, decisions and events of each run.
+
+## Teams and requests between teams (ADR-035)
+
+Admins set up the company's departments in **Governance → Teams**: one click for common ones (Legal, Finance &
+Treasury, People…; a space with the same name becomes the team's space) or *New team*. In the same table they put each
+person in their team and choose who leads it. Each team has its own private space, so Legal's documents, answers and
+agents stay in Legal and Treasury's stay in Treasury. When the company has two or more teams, everyone carries a team
+label next to their name; with a single team the label is hidden.
+
+Anyone can **ask another team** for something with *Ask a team* in the Inbox. The request gets a number, a priority and
+an optional due date, and opens in a side panel over the Inbox. The receiving team moves it through *New → In progress →
+Waiting on requester → Done* (or declines it with a reason), assigns it to one of its people and replies in its
+timeline. When the team asks the requester for information, the requester's reply puts it back in the team's hands.
+Only the requester, the assignee and the two teams involved can see a request; admins manage teams but don't read
+their requests.
+
+The **Inbox** has two parts: *From people* (requests, as a list or a drag-and-drop board, with *For me*, *My teams* and
+*Sent by me*) and *From agents* (workflow reviews and approvals). The sidebar counter adds both.
 
 ## Ragsis Sign (ADR-023, ADR-024)
 

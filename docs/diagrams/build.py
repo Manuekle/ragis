@@ -102,13 +102,13 @@ def aws_pilot(c: Canvas) -> None:
 
 
 def environments(c: Canvas) -> None:
-    c.text(24, 36, "Three environments, one rule: Floci first, then AWS", 17, 700)
+    c.text(24, 36, "Three environments, one rule: emulator first, then AWS", 17, 700)
     cols = [
         (24, "1 · Local", "tech/docker.svg", "make up · Docker Compose",
          [("tech/postgresql.svg", "Postgres + pgvector"), ("aws/s3.svg", "SeaweedFS (S3 API)"), ("aws/sqs.svg", "ElasticMQ (SQS API)"),
           ("tech/python.svg", "Python and Fastify services"), ("tech/next-js.svg", "web with development login")]),
-        (464, "2 · Rehearsal in Floci", "aws/server.svg", "make rehearse · Terraform → localhost:4566",
-         [("aws/ec2.svg", "EC2 as a Docker container"), ("aws/s3.svg", "S3, SQS, KMS, SSM"), ("aws/cognito.svg", "Cognito and IAM"),
+        (464, "2 · Rehearsal in AWS Emulator", "aws/server.svg", "make rehearse · Terraform → 127.0.0.1:9297",
+         [("aws/ec2.svg", "EC2 left out for now (API gap)"), ("aws/s3.svg", "S3, SQS, KMS, SSM"), ("aws/cognito.svg", "Cognito and IAM"),
           ("aws/ecr.svg", "ECR and network resources"), ("tech/terraform.svg", "the same pilot modules")]),
         (904, "3 · Real AWS", "aws/group-aws-cloud.svg", "terraform apply · ragsis-pilot profile",
          [("aws/ec2.svg", "EC2 m7i-flex.large + EBS"), ("aws/s3.svg", "S3, SQS, KMS, ECR"), ("aws/cognito.svg", "Cognito (invited accounts)"),
@@ -127,7 +127,7 @@ def environments(c: Canvas) -> None:
     c.edge([(794, 235), (904, 235)], "only if the\nrehearsal passes", color=c.t["accent"], label_at=(849, 235))
     c.add(f'<rect x="24" y="430" width="1210" height="70" rx="10" fill="{c.t["accent_soft"]}" stroke="{c.t["accent"]}" stroke-width="1.3"/>')
     c.text(44, 458, "Working rule", 13, 700, c.t["accent"])
-    c.text(44, 480, "All AWS infrastructure and changes are created first in Floci with scripts/aws-rehearsal.sh. Only after a clean rehearsal are they applied to real AWS.", 12.5)
+    c.text(44, 480, "All AWS infrastructure and changes are created first in AWS Emulator with scripts/aws-rehearsal.sh. Only after a clean rehearsal are they applied to real AWS.", 12.5)
 
 
 def _mini_graph(c: Canvas, nodes: list[tuple[float, float, float, str]], edges: list[tuple[int, int]],
@@ -357,7 +357,7 @@ DIAGRAMS = {
     "rag-pipeline": (rag_pipeline, 1440, 776, "How Ragis answers", "Multimodal parsing into typed content units, a dual text and cross-modal knowledge graph with a vector index, and cross-modal hybrid retrieval with verified citations."),
     "containers": (containers, 1310, 690, "Ragis containers", "Web, API, RAG engine, ingestion worker, Postgres, S3, SQS and model providers, and their connections."),
     "aws-pilot": (aws_pilot, 1260, 790, "Pilot on AWS", "One EC2 instance running Docker Compose behind an Elastic IP, plus S3, SQS, KMS, ECR, Cognito and Systems Manager in us-east-2."),
-    "environments": (environments, 1260, 524, "Environments", "Local with Docker Compose, rehearsal in Floci and real AWS, with the rule of rehearsing in Floci first."),
+    "environments": (environments, 1260, 524, "Environments", "Local with Docker Compose, rehearsal in AWS Emulator and real AWS, with the rule of rehearsing in the emulator first."),
     "ingest": (ingest, 1240, 510, "Ingestion pipeline", "Ten steps from the presigned upload to the indexed document, including OCR, speech to text and the knowledge graph."),
     "query": (query, 1240, 510, "Query flow", "Nine steps from the question to the answer with verified citations."),
     "auth": (auth, 1180, 580, "Sign-in flow", "The login form lives in the web app and talks to Cognito from the server; the session is an httpOnly cookie."),

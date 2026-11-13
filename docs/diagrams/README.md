@@ -14,7 +14,7 @@ Each diagram has a light variant (`name.svg`) and a dark one (`name-dark.svg`). 
 | `rag-pipeline` | How a file becomes typed units, a dual knowledge graph and vectors, and how a question is answered | README, [architecture.md](../architecture.md) |
 | `containers` | Services, data and model providers | README, [architecture.md](../architecture.md) |
 | `aws-pilot` | Pilot topology in us-east-2 | [environments.md](../environments.md), [piloto-aws.md](../../ops/runbooks/piloto-aws.md) |
-| `environments` | Local, rehearsal in Floci and real AWS | README, [environments.md](../environments.md), [floci.md](../guides/floci.md) |
+| `environments` | Local, rehearsal in AWS Emulator and real AWS | README, [environments.md](../environments.md), [aws-emulator.md](../guides/aws-emulator.md) |
 | `ingest` | The ten ingestion steps | [architecture.md](../architecture.md) |
 | `query` | The nine steps of a query | [architecture.md](../architecture.md) |
 | `auth` | In-app sign-in | [authentication.md](../authentication.md) |

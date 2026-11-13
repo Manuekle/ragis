@@ -3,7 +3,7 @@
 | Runbook | When |
 |---|---|
 | [piloto-aws.md](piloto-aws.md) | Preparation, start-up, shutdown and update of the pilot on AWS Ohio |
-| [Rehearsal in Floci](../../docs/guides/floci.md) | Before creating or changing any AWS resource |
+| [Rehearsal in AWS Emulator](../../docs/guides/aws-emulator.md) | Before creating or changing any AWS resource |
 | [db-bootstrap.md](db-bootstrap.md) | Setting up an environment: DB roles without BYPASSRLS and migrations |
 | [dlq.md](dlq.md) | `ingest-dlq-not-empty` alarm |
 | [reindex.md](reindex.md) | Change of parser, chunking or embedding model |
