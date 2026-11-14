@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GlyphField } from "@/components/GlyphField";
 import { IconArrowRight, IconCheck } from "@/components/icons";
+import { polarEnabled } from "@/lib/polar";
 import { breadcrumbLd, faqLd, JsonLd, pageMetadata, webPageLd } from "@/lib/seo";
 import { takenSlots } from "@/lib/waitlist-db";
 import { PRICE_RANGE } from "../pricing/plans";
@@ -69,7 +70,7 @@ export default async function WaitlistPage() {
         art="waitlist"
       />
 
-      <Waitlist tiers={tiers}>
+      <Waitlist tiers={tiers} payments={polarEnabled()}>
         <section className="wl-sec">
           {/* renders its own heading: the team named in it changes with the demo */}
           <TeamDemo />

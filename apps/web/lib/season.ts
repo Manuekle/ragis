@@ -26,8 +26,9 @@ export type Season = {
   offer: Offer | null;
 };
 
-const BLACK_FRIDAY_PERCENT = 30;
-const HOLIDAYS_PERCENT = 20;
+// Exported so the Polar discounts (lib/polar-catalog.ts) are created with the same percentages.
+export const BLACK_FRIDAY_PERCENT = 30;
+export const HOLIDAYS_PERCENT = 20;
 
 const day = (year: number, month: number, date: number) => new Date(Date.UTC(year, month, date));
 const iso = (d: Date) => d.toISOString().slice(0, 10);

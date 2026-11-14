@@ -6,10 +6,13 @@ import type { BadgeTheme, PublicBadge } from "@/lib/badge";
 
 /**
  * Waitlist storage in Turso (TURSO_DATABASE_URL + TURSO_AUTH_TOKEN). One table: a row per
- * email, with what the person joined for. A sponsor request starts as `pending`; setting it to
- * `confirmed` (after payment) is what takes a slot on the page:
+ * email, with what the person joined for. A sponsor request starts as `pending`; `confirmed`
+ * (after payment) is what takes a slot on the page. With Polar on (lib/polar.ts) the payment
+ * webhook does it (confirmSponsorPayment); without it, by hand:
  *
  *   UPDATE waitlist SET status = 'confirmed' WHERE email = 'someone@company.com';
+ *
+ * The same database also keeps the cloud-plan subscriptions Polar reports (billing_subscriptions).
  */
 
 const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
@@ -55,18 +58,39 @@ const SCHEMA = [
     token_hash TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL DEFAULT (${NOW})
   )`,
+  // A cloud plan bought through Polar (lib/polar.ts), kept up to date by its webhooks. One row per
+  // Polar subscription. This is what tells us whom to set a workspace up for.
+  `CREATE TABLE IF NOT EXISTS billing_subscriptions (
+    polar_subscription_id TEXT PRIMARY KEY,
+    polar_customer_id TEXT,
+    email TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    period TEXT NOT NULL,
+    status TEXT NOT NULL,
+    current_period_end TEXT,
+    cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+    -- Polar's own modified_at for the subscription, so an event that arrives late never undoes a newer one.
+    polar_modified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (${NOW}),
+    updated_at TEXT NOT NULL DEFAULT (${NOW})
+  )`,
+  "CREATE INDEX IF NOT EXISTS billing_subscriptions_email ON billing_subscriptions (email)",
 ];
 
 /**
- * Tables made before badges followed the app's light and dark looks have no `theme` column (they
- * have an unused `color` one instead). SQLite can't add a column only when it is missing, so the
- * "already there" error is the expected answer on every start but the first.
+ * Columns added after a table first shipped. Tables made before badges followed the app's light
+ * and dark looks have no `theme` column (they have an unused `color` one instead), and sponsor
+ * slots only learned which Polar order paid them later. SQLite can't add a column only when it is
+ * missing, so the "already there" error is the expected answer on every start but the first.
  */
+const ADDED_COLUMNS = ["ALTER TABLE waitlist_badges ADD COLUMN theme TEXT", "ALTER TABLE waitlist ADD COLUMN polar_order_id TEXT"];
+
 async function migrate(c: Client): Promise<void> {
   await c.batch(SCHEMA, "write");
-  await c.execute("ALTER TABLE waitlist_badges ADD COLUMN theme TEXT").catch((err) => {
-    if (!/duplicate column/i.test(err instanceof Error ? err.message : String(err))) throw err;
-  });
+  for (const alter of ADDED_COLUMNS)
+    await c.execute(alter).catch((err) => {
+      if (!/duplicate column/i.test(err instanceof Error ? err.message : String(err))) throw err;
+    });
 }
 
 let client: Client | null | undefined;
@@ -429,4 +453,106 @@ export async function sponsorWall(): Promise<WallSponsor[]> {
   });
   wall = { at: Date.now(), sponsors };
   return sponsors;
+}
+
+// ── sponsor payments (Polar) ──
+
+export type SlotDue = { waitlistId: number; email: string; tier: string };
+
+/**
+ * The sponsor slot the owner of this badge asked for and has not paid yet. "forbidden" when the
+ * token is not the badge's; null when there is nothing to pay (early access, already paid, no
+ * such badge, or no database).
+ */
+export async function slotDue(slug: string, token: string): Promise<SlotDue | "forbidden" | null> {
+  const c = await db();
+  if (!c) return null;
+  const id = await ownedBadge(c, slug, token);
+  if (typeof id !== "number") return id;
+  const rs = await c.execute({
+    sql: "SELECT w.id, w.email, w.interest FROM waitlist_badges b JOIN waitlist w ON w.id = b.waitlist_id WHERE b.id = ? AND w.status = 'pending'",
+    args: [id],
+  });
+  const row = rs.rows[0];
+  if (!row || !SPONSOR_TIERS.some((tier) => tier.id === row.interest)) return null;
+  return { waitlistId: Number(row.id), email: String(row.email), tier: String(row.interest) };
+}
+
+/**
+ * confirmed: the payment took the slot. already: it was taken before (the same event delivered
+ * twice, or a second payment). full: the tier filled up while this one was being paid, so the
+ * order needs a refund. unknown: no such sign-up or tier.
+ */
+export type PaymentResult = "confirmed" | "already" | "full" | "unknown";
+
+/**
+ * A sponsor slot was paid (Polar `order.paid`). Takes the slot unless the tier is already full;
+ * the check and the update are one statement, so two payments for the last slot cannot both win.
+ * The tier paid for wins over the one asked for, in case the person changed their mind meanwhile.
+ * Throws when Turso is not configured, so the webhook answers with an error and Polar retries.
+ */
+export async function confirmSponsorPayment(waitlistId: number, tier: string, orderId: string): Promise<PaymentResult> {
+  const c = await db();
+  if (!c) throw new Error("Turso is not configured");
+  const sponsor = SPONSOR_TIERS.find((t) => t.id === tier);
+  if (!sponsor) return "unknown";
+  const taken = await c.execute({
+    sql: `UPDATE waitlist SET status = 'confirmed', interest = ?, polar_order_id = ?, updated_at = ${NOW}
+          WHERE id = ? AND status = 'pending'
+            AND (SELECT COUNT(*) FROM waitlist WHERE interest = ? AND status = 'confirmed') < ?`,
+    args: [tier, orderId, waitlistId, tier, sponsor.slots],
+  });
+  if (taken.rowsAffected === 1) {
+    slots = undefined;
+    wall = undefined;
+    return "confirmed";
+  }
+  const rs = await c.execute({ sql: "SELECT status FROM waitlist WHERE id = ?", args: [waitlistId] });
+  if (!rs.rows[0]) return "unknown";
+  return rs.rows[0].status === "confirmed" ? "already" : "full";
+}
+
+/** A sponsor order was refunded in full: the slot opens again. True when a slot was released. */
+export async function releaseSponsorSlot(orderId: string): Promise<boolean> {
+  const c = await db();
+  if (!c) throw new Error("Turso is not configured");
+  const released = await c.execute({
+    sql: `UPDATE waitlist SET status = 'pending', polar_order_id = NULL, updated_at = ${NOW} WHERE polar_order_id = ? AND status = 'confirmed'`,
+    args: [orderId],
+  });
+  if (released.rowsAffected !== 1) return false;
+  slots = undefined;
+  wall = undefined;
+  return true;
+}
+
+// ── cloud plan subscriptions (Polar) ──
+
+export type SubscriptionRecord = {
+  id: string;
+  customerId: string | null;
+  email: string;
+  plan: string;
+  period: string;
+  status: string;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  /** Polar's modified_at: an older event never overwrites a newer one. */
+  modifiedAt: string;
+};
+
+/** Stores a subscription as Polar last reported it. Throws when Turso is not configured, so Polar retries. */
+export async function saveSubscription(s: SubscriptionRecord): Promise<void> {
+  const c = await db();
+  if (!c) throw new Error("Turso is not configured");
+  await c.execute({
+    sql: `INSERT INTO billing_subscriptions (polar_subscription_id, polar_customer_id, email, plan, period, status, current_period_end, cancel_at_period_end, polar_modified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (polar_subscription_id) DO UPDATE SET
+            polar_customer_id = excluded.polar_customer_id, email = excluded.email, plan = excluded.plan, period = excluded.period,
+            status = excluded.status, current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
+            polar_modified_at = excluded.polar_modified_at, updated_at = ${NOW}
+          WHERE billing_subscriptions.polar_modified_at IS NULL OR excluded.polar_modified_at >= billing_subscriptions.polar_modified_at`,
+    args: [s.id, s.customerId, s.email, s.plan, s.period, s.status, s.currentPeriodEnd, s.cancelAtPeriodEnd ? 1 : 0, s.modifiedAt],
+  });
 }

@@ -8,6 +8,7 @@ import { IconArrowRight } from "@/components/icons";
 import { badgeLines, badgeNumber, shareText } from "@/lib/badge";
 import { findBadge, publicBadge } from "@/lib/waitlist-db";
 import { siteUrl } from "../../../site";
+import { PayNotice } from "../../PayNotice";
 import "../../waitlist.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -61,6 +62,8 @@ export default async function BadgePage({ params }: Params) {
             <div className="wl-done-head">
               <span className="badge-eyebrow">Ragis waitlist · Nº {badgeNumber(badge.number)}</span>
               <h1>{title === "Early member" ? "An early member of Ragis." : `${title} is on the Ragis waitlist.`}</h1>
+              {/* Only the badge's owner sees this, and only while a sponsor slot waits for its payment. */}
+              <PayNotice slug={slug} />
             </div>
           }
           guest={

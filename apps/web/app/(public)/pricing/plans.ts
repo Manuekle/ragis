@@ -30,6 +30,9 @@ export const PLANS = [
   },
 ] as const;
 
+/** Yearly price for a plan's monthly one, in USD: twelve months, no yearly discount. */
+export const annualPrice = (monthly: number) => monthly * 12;
+
 /** What every plan includes, listed under the plans. */
 export const EVERY_PLAN = ["Answers cited to the page", "Document-level permissions", "PII redaction", "Encryption in transit and at rest", "SSO with your identity provider", "Tables, figures and scanned pages"];
 

@@ -196,6 +196,10 @@ services:
       # Confirmación de correo de /waitlist. En local no se envía nada: el enlace sale en la página y en el log.
       WAITLIST_EMAIL_FROM: ${WAITLIST_EMAIL_FROM:-}
       WAITLIST_EMAIL_TEST: ${WAITLIST_EMAIL_TEST:-1}
+      # Pagos con Polar (docs/payments-polar.md). Vacío = el checkout queda apagado.
+      POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
+      POLAR_SERVER: ${POLAR_SERVER:-sandbox}
+      POLAR_WEBHOOK_SECRET: ${POLAR_WEBHOOK_SECRET:-}
       AUTH_MODE: ${AUTH_MODE:-dev}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_AUDIENCE:-}

@@ -40,9 +40,12 @@ How sign-in works: [authentication.md](authentication.md).
 | `API_URL` | Internal API URL (`http://api:4000` in Compose). |
 | `DEMO_BOOKING_URL` | HTTPS booking URL or email to request the demo from the landing page. |
 | `CONTACT_EMAIL`, `LEGAL_ENTITY` | Contact details and legal entity name on public pages. |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Turso database for `/waitlist` (`waitlist` table, created automatically on first use). Without them, production responds 503 and development only logs to the console. A sponsorship slot is taken on confirmation: `UPDATE waitlist SET status = 'confirmed' WHERE email = '…'`. |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Turso database for `/waitlist` (`waitlist` table, created automatically on first use). Without them, production responds 503 and development only logs to the console. A sponsorship slot is taken when its payment arrives from Polar (see below); without Polar, by hand: `UPDATE waitlist SET status = 'confirmed' WHERE email = '…'`. Polar subscriptions are stored in `billing_subscriptions` in the same database. |
 | `WAITLIST_EMAIL_FROM` | Sender verified in Amazon SES to confirm the email on `/waitlist`. With it, the sign-up stays pending (`waitlist_pending` table) and only enters `waitlist` when the person opens the email link (24 h, single use). The web needs `AWS_REGION` and `ses:SendEmail` permission on that identity. Empty = sign-ups are stored unconfirmed. |
 | `WAITLIST_EMAIL_TEST` | `1` = test mode when there is no sender: no email is sent and the confirmation link appears on the page and in the log. It is the default in `infra/docker/compose.yml`; do not use it in production. |
+| `POLAR_ACCESS_TOKEN` | Polar organization access token. With it, `/pricing` opens a Polar checkout for Team and Business Cloud and `/waitlist` charges sponsor slots online. Empty = both pages keep the old manual flow. Setup and testing: [payments-polar.md](payments-polar.md). |
+| `POLAR_SERVER` | `sandbox` or `production` (default). Must match the environment the token was created in. |
+| `POLAR_WEBHOOK_SECRET` | Secret of the Polar webhook endpoint `https://<site>/api/polar/webhook`. Without it every delivery is rejected with 401 and no payment is recorded. |
 
 ## API (`apps/api/src/config.ts`)
 

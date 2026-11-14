@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { IconArrowRight, IconCheck, IconSparkles } from "@/components/icons";
+import { IconAlert, IconArrowRight, IconCheck, IconSparkles, IconSpinner } from "@/components/icons";
 import { Seg, SoftText } from "@/components/motion";
 import { SeatStepper } from "@/components/SeatStepper";
-import { PLANS } from "./plans";
+import { annualPrice, PLANS } from "./plans";
 
 const BILLING_PERIODS = ["Monthly", "Annual"] as const;
 const usd = new Intl.NumberFormat("en-US", {
@@ -14,10 +14,38 @@ const usd = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
 });
 
-/** `discount` is a holiday percent off (lib/season.ts), applied to the self-serve plans; 0 shows list prices. */
-export function PricingPlans({ salesHref, startHref, discount = 0 }: { salesHref: string; startHref: string; discount?: number }) {
+/**
+ * `discount` is a holiday percent off (lib/season.ts), applied to the self-serve plans; 0 shows list prices.
+ * With `checkout` on (Polar is configured) "Get started" opens the payment page for the plan and period
+ * picked; otherwise it links to `startHref`. `season` is the page's own ?season= preview, passed back so
+ * the checkout applies the same discount the page showed.
+ */
+export function PricingPlans({ salesHref, startHref, discount = 0, checkout = false, season }: { salesHref: string; startHref: string; discount?: number; checkout?: boolean; season?: string }) {
   const [billingPeriod, setBillingPeriod] = useState<(typeof BILLING_PERIODS)[number]>("Monthly");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const annual = billingPeriod === "Annual";
+
+  async function subscribe(plan: string) {
+    setBusy(plan);
+    setError(null);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ plan, period: annual ? "annual" : "monthly", season }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: { message?: string } };
+      if (res.ok && data.url) {
+        window.location.assign(data.url);
+        return; // leaving the page: keep the button busy
+      }
+      setError(data.error?.message ?? "Couldn't open the payment page. Try again.");
+    } catch {
+      setError("Couldn't reach the server. Check your connection.");
+    }
+    setBusy(null);
+  }
 
   return (
     <>
@@ -40,7 +68,7 @@ export function PricingPlans({ salesHref, startHref, discount = 0 }: { salesHref
         {PLANS.map((plan) => {
           const featured = "featured" in plan;
           const contactSales = "contactSales" in plan;
-          const price = annual ? plan.monthlyPrice * 12 : plan.monthlyPrice;
+          const price = annual ? annualPrice(plan.monthlyPrice) : plan.monthlyPrice;
           const off = discount > 0 && !contactSales ? discount : 0;
           const finalPrice = off ? Math.round(price * (1 - off / 100)) : price;
 
@@ -73,10 +101,17 @@ export function PricingPlans({ salesHref, startHref, discount = 0 }: { salesHref
                   <SoftText text={`/ ${annual ? "year" : "month"} + ${plan.additionalCost}`} />
                 </span>
               </p>
-              <Link href={contactSales ? salesHref : startHref} className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`}>
-                {contactSales ? "Contact sales" : "Get started"}
-                <IconArrowRight size={16} />
-              </Link>
+              {checkout && !contactSales ? (
+                <button type="button" className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`} disabled={busy !== null} onClick={() => subscribe(plan.id)}>
+                  {busy === plan.id ? "Opening checkout…" : "Get started"}
+                  {busy === plan.id ? <IconSpinner size={16} /> : <IconArrowRight size={16} />}
+                </button>
+              ) : (
+                <Link href={contactSales ? salesHref : startHref} className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`}>
+                  {contactSales ? "Contact sales" : "Get started"}
+                  <IconArrowRight size={16} />
+                </Link>
+              )}
               <ul className="plan-features">
                 {plan.features.map((feature) => (
                   <li key={feature}>
@@ -89,6 +124,13 @@ export function PricingPlans({ salesHref, startHref, discount = 0 }: { salesHref
           );
         })}
       </div>
+
+      {error && (
+        <p className="plan-error" role="alert">
+          <IconAlert size={14} />
+          <span>{error}</span>
+        </p>
+      )}
     </>
   );
 }

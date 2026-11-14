@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { IconArrowRight, IconCandyCane, IconCheck, IconSparkles } from "@/components/icons";
+import { polarEnabled } from "@/lib/polar";
 import { currentSeason, offerEnds } from "@/lib/season";
 import { breadcrumbLd, JsonLd, pageMetadata, softwareLd, webPageLd } from "@/lib/seo";
 import { PubTitle } from "../PubTitle";
@@ -15,7 +16,8 @@ export const metadata = pageMetadata({ title: `Pricing: plans from $${PRICE_RANG
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { id: season, offer } = currentSeason((await searchParams).season);
+  const preview = (await searchParams).season;
+  const { id: season, offer } = currentSeason(preview);
   // A candy cane for the winter holidays, sparkles for Black Friday.
   const OfferIcon = season === "holidays" ? IconCandyCane : IconSparkles;
   return (
@@ -46,7 +48,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
           </p>
         )}
 
-        <PricingPlans salesHref={salesHref} startHref={signInHref} discount={offer?.percent ?? 0} />
+        <PricingPlans salesHref={salesHref} startHref={signInHref} discount={offer?.percent ?? 0} checkout={polarEnabled()} season={typeof preview === "string" ? preview : undefined} />
 
         <section className="plan-wide">
           <div>
@@ -79,7 +81,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
         </section>
 
         <p className="pub-note">
-          Prices in USD. Your order form confirms the billing period, final price, quotas and any one-time setup fee.
+          Prices in USD. {polarEnabled() ? "Payments are handled by Polar, who also collects any sales tax. " : ""}Your order form confirms the billing period, final price, quotas and any one-time setup fee.
           {offer && ` The ${offer.name} applies to order forms signed by ${offerEnds(offer)} and covers the first twelve months; setup fees are not discounted.`}
         </p>
       </div>

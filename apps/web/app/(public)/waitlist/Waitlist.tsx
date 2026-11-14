@@ -7,6 +7,7 @@ import { IconAlert, IconArrowRight, IconBuilding, IconCheck, IconMail, IconSpark
 import { Seg, SoftText } from "@/components/motion";
 import { TextField, useFormErrors } from "@/components/ui";
 import type { PublicBadge } from "@/lib/badge";
+import { PayNotice } from "./PayNotice";
 import { EARLY_ACCESS, type SponsorTier } from "./sponsors";
 
 const badgeKey = (email: string) => `ragis:waitlist:${email.trim().toLowerCase()}`;
@@ -18,7 +19,7 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD",
  * the page selects it in the form and brings the form back into view. `children` are the plain
  * sections in between (what Ragis is, who it is for), rendered on the server.
  */
-export function Waitlist({ tiers, children }: { tiers: (SponsorTier & { taken: number })[]; children: React.ReactNode }) {
+export function Waitlist({ tiers, payments = false, children }: { tiers: (SponsorTier & { taken: number })[]; /** Polar is on: a sponsor slot is paid online instead of by email. */ payments?: boolean; children: React.ReactNode }) {
   const [interest, setInterest] = useState(EARLY_ACCESS);
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
@@ -124,9 +125,12 @@ export function Waitlist({ tiers, children }: { tiers: (SponsorTier & { taken: n
                 </h2>
                 <p>
                   {tier
-                    ? `We'll write to ${email} to confirm your ${tier.name} slot and how to pay. Your tier shows on the badge once the slot is confirmed.`
+                    ? payments
+                      ? `Your ${tier.name} slot shows on the badge once it is paid. Pay below to take it, and we'll write to ${email} with what comes next.`
+                      : `We'll write to ${email} to confirm your ${tier.name} slot and how to pay. Your tier shows on the badge once the slot is confirmed.`
                     : `We'll write to ${email} when your place opens. Meanwhile, this badge is yours: put your name on it and share it.`}
                 </p>
+                {tier && payments && <PayNotice slug={badge.badge.slug} editToken={badge.editToken} />}
               </div>
             }
           />
@@ -138,7 +142,9 @@ export function Waitlist({ tiers, children }: { tiers: (SponsorTier & { taken: n
             <h2>Check your inbox.</h2>
             <p>
               {tier
-                ? `We sent a link to ${email}. Open it to confirm your email, request your ${tier.name} slot and get your badge.`
+                ? payments
+                  ? `We sent a link to ${email}. Open it to confirm your email, get your badge and pay for your ${tier.name} slot.`
+                  : `We sent a link to ${email}. Open it to confirm your email, request your ${tier.name} slot and get your badge.`
                 : `We sent a link to ${email}. Open it to confirm your email, save your place and get your badge.`}
             </p>
             <p className="wl-fine">The link works for 24 hours. If it doesn&apos;t arrive, look in your spam folder.</p>
@@ -159,7 +165,9 @@ export function Waitlist({ tiers, children }: { tiers: (SponsorTier & { taken: n
             <h2>{tier ? "Slot requested." : "You're on the list."}</h2>
             <p>
               {tier
-                ? `We'll write to ${email} to confirm your ${tier.name} slot and how to pay. Nothing has been charged.`
+                ? payments
+                  ? `We'll write to ${email} with the link to pay for your ${tier.name} slot. Nothing has been charged.`
+                  : `We'll write to ${email} to confirm your ${tier.name} slot and how to pay. Nothing has been charged.`
                 : `We'll write to ${email} when your place opens.`}
             </p>
           </div>
@@ -220,7 +228,7 @@ export function Waitlist({ tiers, children }: { tiers: (SponsorTier & { taken: n
               {busy && <IconSpinner size={16} />}
               <SoftText text={busy ? "Saving…" : tier ? "Request my slot" : "Join the waitlist"} />
             </button>
-            <p className="wl-fine">{tier ? "Nothing is charged now. We email you to confirm the slot and how to pay." : "One email when your place opens. No newsletters."}</p>
+            <p className="wl-fine">{tier ? (payments ? "Nothing is charged yet. After you confirm your email you pay securely with Polar." : "Nothing is charged now. We email you to confirm the slot and how to pay.") : "One email when your place opens. No newsletters."}</p>
           </form>
         )}
       </section>
@@ -286,7 +294,11 @@ export function Waitlist({ tiers, children }: { tiers: (SponsorTier & { taken: n
             );
           })}
         </div>
-        <p className="pub-note">Prices in USD, paid once. Reserving sends us your request. Slots are confirmed by email in the order requests arrive, and nothing is charged before that.</p>
+        <p className="pub-note">
+          {payments
+            ? "Prices in USD, paid once, handled by Polar. Reserving asks for your email first; a slot is yours when its payment goes through, first paid, first served. Nothing is charged before that."
+            : "Prices in USD, paid once. Reserving sends us your request. Slots are confirmed by email in the order requests arrive, and nothing is charged before that."}
+        </p>
       </section>
     </>
   );

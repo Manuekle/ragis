@@ -88,7 +88,7 @@ const SECTIONS: LegalSection[] = [
   {
     id: "subprocessors",
     title: "Sub-processors",
-    body: <p>We use Amazon Web Services for hosting, storage and AI model inference. We will tell organization owners before adding a sub-processor that handles customer content.</p>,
+    body: <p>We use Amazon Web Services for hosting, storage and AI model inference, and Polar as merchant of record to take payments (it receives your name, email, billing country and payment details, never your documents). We will tell organization owners before adding a sub-processor that handles customer content.</p>,
   },
   {
     id: "rights",
