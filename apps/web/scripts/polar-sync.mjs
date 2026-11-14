@@ -94,9 +94,18 @@ for (const want of catalog.products) {
     continue;
   }
   const current = have.prices.find((p) => p.amount_type === "fixed" && p.price_currency === "usd");
-  if (current?.price_amount !== want.cents)
-    await write(`update price of ${want.key}: $${(current?.price_amount ?? 0) / 100} -> $${want.cents / 100} (new subscriptions only)`, () => polar(`/v1/products/${have.id}`, { method: "PATCH", body: { prices: [price] } }));
-  else console.log(`  ok ${want.key}`);
+  const changes = {};
+  if (current?.price_amount !== want.cents) changes.prices = [price];
+  if (have.name !== want.name) changes.name = want.name;
+  if ((have.description ?? "") !== want.description) changes.description = want.description;
+  if (Object.keys(changes).length > 0) {
+    const what = [
+      changes.prices && `price $${(current?.price_amount ?? 0) / 100} -> $${want.cents / 100} (new subscriptions only)`,
+      changes.name && "name",
+      changes.description && "description",
+    ].filter(Boolean);
+    await write(`update ${want.key}: ${what.join(", ")}`, () => polar(`/v1/products/${have.id}`, { method: "PATCH", body: changes }));
+  } else console.log(`  ok ${want.key}`);
 }
 
 // ── discounts ──

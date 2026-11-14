@@ -21,9 +21,9 @@ never by id, so the same code runs against the sandbox and the live organization
 | --- | --- | --- |
 | `plan:team:monthly` / `plan:team:annual` | Ragis Team Cloud | $149 / month, $1,788 / year |
 | `plan:business:monthly` / `plan:business:annual` | Ragis Business Cloud | $499 / month, $5,988 / year |
-| `sponsor:supporter` | Ragis Sponsor · Supporter | $49 once |
-| `sponsor:backer` | Ragis Sponsor · Backer | $249 once |
-| `sponsor:founding` | Ragis Sponsor · Founding partner | $1,500 once |
+| `sponsor:supporter` | Ragis Early Access · Supporter | $49 once |
+| `sponsor:backer` | Ragis Early Access · Backer | $249 once |
+| `sponsor:founding` | Ragis Early Access · Founding partner | $1,500 once |
 
 Annual is twelve months with no yearly discount, as on `/pricing` (`annualPrice` in `plans.ts`).
 
@@ -41,8 +41,11 @@ the price.
 They apply to Team and Business only, and not to sponsor slots. If a season has an offer and Polar
 does not have its discount, the checkout is refused rather than charging more than the page showed.
 
-To change a price, edit `plans.ts` or `sponsors.ts` and run the script again: it updates the price
-of the existing product. Polar applies it to **new** subscriptions only; existing ones keep theirs.
+To change a price, name or description, edit `plans.ts` or `sponsors.ts` and run the script again:
+it updates the existing product. A new price applies to **new** subscriptions only; existing ones
+keep theirs. The sponsor products are described as founding packages (early access to the
+software): Polar reviews those descriptions, and they are built from the same blurb and perks the
+waitlist shows.
 
 ## Set it up
 

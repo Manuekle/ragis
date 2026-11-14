@@ -232,12 +232,12 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
             <h2>
               Built with the teams
               <br />
-              who backed it <em>early</em>.
+              who joined <em>early</em>.
             </h2>
           </div>
 
           <div className="gate-body land-body">
-            <p className="land-lead">The founding partners, backers and supporters who chipped in before launch. They get in first and keep their place here. The dotted seats are still open.</p>
+            <p className="land-lead">The founding partners, backers and supporters who took a founding package before launch: early access to Ragis, and their place on this wall. The dotted seats are still open.</p>
 
             <div className="land-actions">
               <div className="land-buttons">
@@ -247,7 +247,7 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
                 </Link>
               </div>
               <ul className="gate-checks land-checks">
-                {[`One-time, from ${lowestTier}`, "Invited first", "Your name stays here"].map((item) => (
+                {[`One-time, from ${lowestTier}`, "Early access", "Your name stays here"].map((item) => (
                   <li key={item}>
                     <IconCheck size={12} />
                     {item}

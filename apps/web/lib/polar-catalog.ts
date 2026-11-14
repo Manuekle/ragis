@@ -48,7 +48,23 @@ export type CatalogDiscount = {
 };
 
 type PlanInput = { id: string; name: string; monthlyPrice: number; blurb: string; contactSales?: boolean };
-type TierInput = { id: string; name: string; price: number; blurb: string };
+type TierInput = { id: string; name: string; price: number; blurb: string; slots: number; perks: readonly string[] };
+
+/**
+ * What the buyer reads at checkout for a founding package: the page's own blurb and perks, the
+ * number of seats, and what the purchase is not. Polar reviews these descriptions, so they say
+ * what is delivered (early access to the software) and nothing else.
+ */
+export function tierDescription(tier: TierInput): string {
+  return [
+    tier.blurb,
+    "",
+    "Includes:",
+    ...tier.perks.map((perk) => `- ${perk}`),
+    "",
+    `One-time payment, ${tier.slots} seats in total. No equity, no revenue share, no return.`,
+  ].join("\n");
+}
 
 const OFFER_NAMES: Record<SeasonKey, string> = { "black-friday": "Black Friday offer", holidays: "Holiday offer" };
 
@@ -73,7 +89,7 @@ export function buildCatalog({
       { key: planKey(plan.id, "monthly"), name: `Ragis ${plan.name} · Monthly`, description: plan.blurb, cents: plan.monthlyPrice * 100, interval: "month" },
       { key: planKey(plan.id, "annual"), name: `Ragis ${plan.name} · Annual`, description: plan.blurb, cents: annualPrice(plan.monthlyPrice) * 100, interval: "year" },
     ]),
-    ...tiers.map((tier): CatalogProduct => ({ key: sponsorKey(tier.id), name: `Ragis Sponsor · ${tier.name}`, description: tier.blurb, cents: tier.price * 100, interval: null })),
+    ...tiers.map((tier): CatalogProduct => ({ key: sponsorKey(tier.id), name: `Ragis Early Access · ${tier.name}`, description: tierDescription(tier), cents: tier.price * 100, interval: null })),
   ];
 
   const discounts = SEASONS.flatMap((season) =>

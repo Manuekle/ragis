@@ -237,9 +237,9 @@ export function Waitlist({ tiers, payments = false, children }: { tiers: (Sponso
 
       <section id="sponsor" className="wl-sec">
         <h2>
-          Back the build. Get in <em>first</em>.
+          Get early access. Get in <em>first</em>.
         </h2>
-        <p className="wl-sec-lead">Ragis is built by a small team. Sponsors fund the first release, and each tier has a fixed number of slots so we can keep every promise below.</p>
+        <p className="wl-sec-lead">Founding packages give you the Ragis software before the public waitlist opens. Each package has a fixed number of seats so we can support every buyer.</p>
 
         <div className="plans">
           {tiers.map((t) => {

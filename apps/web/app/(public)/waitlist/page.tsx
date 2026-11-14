@@ -13,7 +13,7 @@ import { TeamDemo } from "./TeamDemo";
 import { Waitlist } from "./Waitlist";
 import "./waitlist.css";
 
-const DESCRIPTION = "Join the Ragis waitlist for early access to AI answers from your company documents, cited to the page. Free to join; sponsors are invited first.";
+const DESCRIPTION = "Join the Ragis waitlist for early access to AI answers from your company documents, cited to the page. Free to join; founding packages get in first.";
 
 export const metadata = pageMetadata({ title: "Join the waitlist for early access", description: DESCRIPTION, path: "/waitlist" });
 
@@ -30,7 +30,7 @@ const INCLUDED = [
 
 // `text` is the plain answer, also published as FAQPage structured data; `a` overrides how it shows on the page.
 const FAQ: { q: string; text: string; a?: React.ReactNode }[] = [
-  { q: "When do I get in?", text: "We open places in small groups. Sponsors are invited first, then everyone else in the order they joined." },
+  { q: "When do I get in?", text: "We open places in small groups. People with a founding package are invited first, then everyone else in the order they joined." },
   {
     q: "What will it cost?",
     text: `Joining the waitlist is free. Cloud plans start at $${PRICE_RANGE.low} a month; see the pricing page for the details.`,

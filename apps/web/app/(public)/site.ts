@@ -31,7 +31,7 @@ export function absoluteUrl(path = "/"): string {
 export const PUBLIC_PAGES = [
   { path: "/", title: "Ragis", summary: "What Ragis is, how it answers from your documents with page citations, and how it keeps data private.", updated: "2026-11-10", priority: 1 },
   { path: "/pricing", title: "Pricing", summary: "Team Cloud, Business Cloud, Private Cloud and self-hosted plans, with quotas and prices.", updated: "2026-11-14", priority: 0.9 },
-  { path: "/waitlist", title: "Waitlist", summary: "Join the waitlist for early access, or back the project as a sponsor.", updated: "2026-11-14", priority: 0.8 },
+  { path: "/waitlist", title: "Waitlist", summary: "Join the waitlist for early access, or get in first with a founding package.", updated: "2026-11-14", priority: 0.8 },
   { path: "/privacy", title: "Privacy Policy", summary: "What Ragis collects, why, where it is stored and how to control it.", updated: "2026-11-14", priority: 0.3 },
   { path: "/terms", title: "Terms of Service", summary: "The terms that govern use of Ragis.", updated: "2026-11-09", priority: 0.3 },
 ] as const;
