@@ -18,7 +18,8 @@ from docx.shared import Pt
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from pptx import Presentation
-from pptx.util import Inches, Pt as PPt
+from pptx.util import Inches
+from pptx.util import Pt as PPt
 
 OUT = Path(__file__).resolve().parent
 FIRM = "Ortiz Lozano Abogados S.A.S."
@@ -103,13 +104,21 @@ def cronologia() -> None:
     ws2 = wb.create_sheet("Intervinientes")
     for r in [
         ("Interviniente", "Postura", "Argumento principal"),
-        ("Procuraduría General de la Nación", "Inhibición", "Convenio 190 no ratificado; derogatoria tácita por el artículo 18 de la Ley 2466 de 2025"),
+        (
+            "Procuraduría General de la Nación",
+            "Inhibición",
+            "Convenio 190 no ratificado; derogatoria tácita por el artículo 18 de la Ley 2466 de 2025",
+        ),
         ("Fundación Jacarandas", "Inhibición", "Falta de un parámetro constitucional vigente"),
         ("Instituto Colombiano de Derecho Procesal", "Inhibición", "Aprobación legislativa y ratificación son actos distintos"),
         ("Universidad Libre", "Inexequibilidad", "El artículo 25 protege el trabajo en todas sus modalidades"),
         ("Universidad de Caldas", "Inexequibilidad", "La protección no debe depender de la formalidad del vínculo"),
         ("Unión de Trabajadores de Colombia", "Inexequibilidad", "En subsidio, exequibilidad condicionada para contratistas"),
-        ("Universidad Militar Nueva Granada", "Exequibilidad condicionada", "Aplicar la ley a toda relación de subordinación en la función pública"),
+        (
+            "Universidad Militar Nueva Granada",
+            "Exequibilidad condicionada",
+            "Aplicar la ley a toda relación de subordinación en la función pública",
+        ),
         ("Universidad Externado de Colombia", "Sin solicitud expresa", "Posible derogatoria tácita por la Ley 2466 de 2025"),
     ]:
         ws2.append(r)
