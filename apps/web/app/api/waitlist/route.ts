@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { EARLY_ACCESS, INTERESTS, SPONSOR_TIERS } from "@/app/(public)/waitlist/sponsors";
+import { EARLY_ACCESS, FOUNDING_PACKAGES_OPEN, INTERESTS, SPONSOR_TIERS } from "@/app/(public)/waitlist/sponsors";
 import { companyDomain } from "@/lib/badge-logo";
 import { dropConfirmation, findBadge, newBadge, publicBadge, requestConfirmation, saveWaitlistEntry, takenSlots } from "@/lib/waitlist-db";
 import { confirmMode, sendConfirmEmail } from "@/lib/waitlist-mail";
@@ -36,7 +36,8 @@ export async function POST(req: Request) {
   const email = text(body.email, 254).toLowerCase();
   if (!EMAIL.test(email)) return fail(400, "Enter a valid email address.");
   const interest = text(body.interest, 40);
-  if (!INTERESTS.includes(interest)) return fail(400, "Pick what you're joining for.");
+  // With founding packages paused (FOUNDING_PACKAGES_OPEN) only the free sign-up is accepted, even from an old open tab.
+  if (!INTERESTS.includes(interest) || (!FOUNDING_PACKAGES_OPEN && interest !== EARLY_ACCESS)) return fail(400, "Pick what you're joining for.");
 
   const entry = { email, company: text(body.company, 120), interest };
 

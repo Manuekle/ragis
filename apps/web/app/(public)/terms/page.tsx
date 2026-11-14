@@ -2,7 +2,7 @@ import Link from "next/link";
 import { breadcrumbLd, JsonLd, pageMetadata, webPageLd } from "@/lib/seo";
 import { ContactLine, LegalPage, type LegalSection } from "../LegalPage";
 import { pageUpdated, site } from "../site";
-import { REFUND_POLICY } from "../waitlist/sponsors";
+import { FOUNDING_PACKAGES_OPEN, REFUND_POLICY } from "../waitlist/sponsors";
 
 const DESCRIPTION = "The terms that govern use of Ragis: accounts and access, your content, acceptable use, AI-generated answers, plans and fees, security, and liability.";
 
@@ -80,19 +80,24 @@ const SECTIONS: LegalSection[] = [
       </>
     ),
   },
-  {
-    id: "founding-packages",
-    title: "Founding packages",
-    body: (
-      <>
-        <p>
-          A founding package (Supporter, Backer or Founding partner, described on the <Link href="/waitlist">waitlist page</Link>) is a one-time payment for early access to the Ragis software before it opens to the public, together with the extras listed for that package. Seats are limited for each package, and access is granted by invitation, in small groups, with founding package holders first.
-        </p>
-        <p>A founding package is not a donation or an investment. It carries no equity, no revenue share and no return. Once access opens, your use of Ragis is governed by these terms.</p>
-        <p>{REFUND_POLICY}</p>
-      </>
-    ),
-  },
+  // Only while founding packages are offered (FOUNDING_PACKAGES_OPEN).
+  ...(FOUNDING_PACKAGES_OPEN
+    ? [
+        {
+          id: "founding-packages",
+          title: "Founding packages",
+          body: (
+            <>
+              <p>
+                A founding package (Supporter, Backer or Founding partner, described on the <Link href="/waitlist">waitlist page</Link>) is a one-time payment for early access to the Ragis software before it opens to the public, together with the extras listed for that package. Seats are limited for each package, and access is granted by invitation, in small groups, with founding package holders first.
+              </p>
+              <p>A founding package is not a donation or an investment. It carries no equity, no revenue share and no return. Once access opens, your use of Ragis is governed by these terms.</p>
+              <p>{REFUND_POLICY}</p>
+            </>
+          ),
+        },
+      ]
+    : []),
   {
     id: "security",
     title: "Security and confidentiality",

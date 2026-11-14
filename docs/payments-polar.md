@@ -17,6 +17,11 @@ Private Cloud and Self-hosted are sold through sales and have no checkout.
 > (`SPONSORS_ON_POLAR = false` in `sponsors.ts`), and `/waitlist` keeps its manual flow: we email
 > how to pay. The Polar pay step, webhook handling and `sponsor:*` keys described below stay in the
 > code, dormant, for the day Polar agrees to sell them.
+>
+> The packages are also **paused on the site** (`FOUNDING_PACKAGES_OPEN = false` in `sponsors.ts`)
+> while Polar reviews the account: `/waitlist` shows only the free sign-up, the landing hides its
+> wall, the terms drop the "Founding packages" section and `POST /api/waitlist` refuses a tier.
+> Setting the flag back to `true` brings all of it back.
 
 ## What exists in Polar
 

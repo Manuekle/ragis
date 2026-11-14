@@ -184,6 +184,7 @@ export function Waitlist({ tiers, payments = false, children }: { tiers: (Sponso
             <TextField label="Work email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="email" icon={IconMail} {...form.field("email")} />
             <TextField label="Company (optional)" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Where you work" autoComplete="organization" maxLength={120} icon={IconBuilding} {...form.field("company")} />
 
+            {tiers.length > 0 && (
             <div className="gate-group" role="group" aria-label="I'm joining for">
               <span className="label">I&apos;m joining for</span>
               {/* One segmented track; the pill slides to the pick and wears that tier's mesh, like the top badge. */}
@@ -205,6 +206,7 @@ export function Waitlist({ tiers, payments = false, children }: { tiers: (Sponso
                 })}
               </Seg>
             </div>
+            )}
 
             {/* Honeypot: hidden from people and assistive tech; only bots fill it in. */}
             <input className="wl-trap" type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
@@ -235,6 +237,8 @@ export function Waitlist({ tiers, payments = false, children }: { tiers: (Sponso
 
       {children}
 
+      {/* Founding packages: only while they are offered (FOUNDING_PACKAGES_OPEN); the page then passes no tiers. */}
+      {tiers.length > 0 && (
       <section id="sponsor" className="wl-sec">
         <h2>
           Get early access. Get in <em>first</em>.
@@ -301,6 +305,7 @@ export function Waitlist({ tiers, payments = false, children }: { tiers: (Sponso
             : "Prices in USD, paid once. Reserving sends us your request. Slots are confirmed by email in the order requests arrive, and nothing is charged before that."}
         </p>
       </section>
+      )}
     </>
   );
 }

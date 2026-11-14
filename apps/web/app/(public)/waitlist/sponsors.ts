@@ -47,6 +47,14 @@ export const SPONSOR_TIERS: SponsorTier[] = [
 ];
 
 /**
+ * Whether founding packages are offered at all. Paused while Polar reviews the account: the
+ * waitlist shows only the free early-access sign-up, the landing hides its wall, the terms drop
+ * the "Founding packages" section, and the sign-up API refuses a tier. Turn it back on (and
+ * decide how they are paid, see SPONSORS_ON_POLAR) to bring them back; nothing else changes.
+ */
+export const FOUNDING_PACKAGES_OPEN = false;
+
+/**
  * Whether founding packages are sold through Polar. Off since Polar's review denied payment access
  * to the sponsor and early-access products (November 2026): the three Polar products are archived,
  * scripts/polar-sync.mjs does not recreate them, and the waitlist keeps its manual flow (we email

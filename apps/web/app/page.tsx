@@ -15,7 +15,7 @@ import { faqLd, JsonLd, organizationLd, pageMetadata, softwareLd, webPageLd, web
 import { sponsorWall } from "@/lib/waitlist-db";
 import { FEATURES as CONTENT_FEATURES, STEPS as CONTENT_STEPS, LANDING_FAQ, TRUST } from "./(public)/content";
 import { demoCta, pageUpdated, publicOnly, signInHref, signInLabel, site } from "./(public)/site";
-import { SPONSOR_TIERS } from "./(public)/waitlist/sponsors";
+import { FOUNDING_PACKAGES_OPEN, SPONSOR_TIERS } from "./(public)/waitlist/sponsors";
 import "./(public)/public.css";
 import "./landing.css";
 
@@ -36,10 +36,12 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
   const season = currentSeason((await searchParams).season);
   const signedIn = !publicOnly && (await cookies()).has("ragsis_session");
   // Confirmed sponsors from the waitlist. If the database can't be reached the wall still renders, every seat open.
-  const sponsors = await sponsorWall().catch((err) => {
-    console.error("[landing] could not read sponsors:", err instanceof Error ? err.message : err);
-    return [];
-  });
+  const sponsors = FOUNDING_PACKAGES_OPEN
+    ? await sponsorWall().catch((err) => {
+        console.error("[landing] could not read sponsors:", err instanceof Error ? err.message : err);
+        return [];
+      })
+    : [];
 
   return (
     <main className="land-page">
@@ -214,6 +216,8 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
         </div>
       </div>
 
+      {/* The wall of founding packages: only while they are offered (FOUNDING_PACKAGES_OPEN). */}
+      {FOUNDING_PACKAGES_OPEN && (
       <section id="backers" className="gate land-wall">
         <DitherField className="gate-dither" pattern="horizon" intensity={0.7} speed={0.6} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
         {season.snow && <SeasonalSnow />}
@@ -262,6 +266,7 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
 
         <div className="gate-foot" />
       </section>
+      )}
 
       <SiteFooter signedIn={signedIn} onLanding />
     </main>
