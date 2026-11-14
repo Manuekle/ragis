@@ -295,6 +295,7 @@ export function Waitlist({ tiers, payments = false, children }: { tiers: (Sponso
           })}
         </div>
         <p className="pub-note">
+          A founding package is a one-time payment for early access to the Ragis software. It is not a donation or an investment: it carries no equity, no revenue share and no return.{" "}
           {payments
             ? "Prices in USD, paid once, handled by Polar. Reserving asks for your email first; a slot is yours when its payment goes through, first paid, first served. Nothing is charged before that."
             : "Prices in USD, paid once. Reserving sends us your request. Slots are confirmed by email in the order requests arrive, and nothing is charged before that."}

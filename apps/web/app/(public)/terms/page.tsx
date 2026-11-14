@@ -80,6 +80,18 @@ const SECTIONS: LegalSection[] = [
     ),
   },
   {
+    id: "founding-packages",
+    title: "Founding packages",
+    body: (
+      <>
+        <p>
+          A founding package (Supporter, Backer or Founding partner, described on the <Link href="/waitlist">waitlist page</Link>) is a one-time payment for early access to the Ragis software before it opens to the public, together with the extras listed for that package. Seats are limited for each package, and access is granted by invitation, in small groups, with founding package holders first.
+        </p>
+        <p>A founding package is not a donation or an investment. It carries no equity, no revenue share and no return. Once access opens, your use of Ragis is governed by these terms.</p>
+      </>
+    ),
+  },
+  {
     id: "security",
     title: "Security and confidentiality",
     body: (
