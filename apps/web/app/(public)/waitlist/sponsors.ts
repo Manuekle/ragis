@@ -46,6 +46,13 @@ export const SPONSOR_TIERS: SponsorTier[] = [
   },
 ];
 
+/**
+ * The refund promise for a founding package. The waitlist page, the terms and the Polar product
+ * descriptions (lib/polar-catalog.ts) all say exactly this, so change it here and run
+ * scripts/polar-sync.mjs. A full refund in Polar frees the slot again (api/polar/webhook).
+ */
+export const REFUND_POLICY = "If we haven't given you access to Ragis yet, you can ask for a full refund of your package at any time by writing to support@ragis.app.";
+
 /** Interest values the form and the API accept: plain early access, or one sponsor tier. */
 export const EARLY_ACCESS = "access";
 export const INTERESTS = [EARLY_ACCESS, ...SPONSOR_TIERS.map((tier) => tier.id)];

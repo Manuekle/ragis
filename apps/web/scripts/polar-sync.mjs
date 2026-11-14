@@ -10,7 +10,7 @@
 // `--print` only prints the catalog as JSON and needs no token.
 
 import { annualPrice, PLANS } from "../app/(public)/pricing/plans.ts";
-import { SPONSOR_TIERS } from "../app/(public)/waitlist/sponsors.ts";
+import { REFUND_POLICY, SPONSOR_TIERS } from "../app/(public)/waitlist/sponsors.ts";
 import { BLACK_FRIDAY_PERCENT, HOLIDAYS_PERCENT } from "../lib/season.ts";
 import { buildCatalog, KEY_META } from "../lib/polar-catalog.ts";
 
@@ -19,6 +19,7 @@ const catalog = buildCatalog({
   tiers: SPONSOR_TIERS,
   annualPrice,
   offers: { "black-friday": BLACK_FRIDAY_PERCENT, holidays: HOLIDAYS_PERCENT },
+  refund: REFUND_POLICY,
 });
 
 if (process.argv.includes("--print")) {

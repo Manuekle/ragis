@@ -55,7 +55,7 @@ type TierInput = { id: string; name: string; price: number; blurb: string; slots
  * number of seats, and what the purchase is not. Polar reviews these descriptions, so they say
  * what is delivered (early access to the software) and nothing else.
  */
-export function tierDescription(tier: TierInput): string {
+export function tierDescription(tier: TierInput, refund?: string): string {
   return [
     tier.blurb,
     "",
@@ -63,6 +63,7 @@ export function tierDescription(tier: TierInput): string {
     ...tier.perks.map((perk) => `- ${perk}`),
     "",
     `One-time payment, ${tier.slots} seats in total. No equity, no revenue share, no return.`,
+    ...(refund ? ["", refund] : []),
   ].join("\n");
 }
 
@@ -73,6 +74,7 @@ export function buildCatalog({
   tiers,
   annualPrice,
   offers,
+  refund,
 }: {
   plans: readonly PlanInput[];
   tiers: readonly TierInput[];
@@ -80,6 +82,8 @@ export function buildCatalog({
   annualPrice: (monthly: number) => number;
   /** Percent off the first year, per season. */
   offers: Record<SeasonKey, number>;
+  /** The refund promise appended to each founding package's description. */
+  refund?: string;
 }): { products: CatalogProduct[]; discounts: CatalogDiscount[] } {
   // Plans sold with "Contact sales" have no checkout.
   const selfServe = plans.filter((plan) => !plan.contactSales);
@@ -89,7 +93,7 @@ export function buildCatalog({
       { key: planKey(plan.id, "monthly"), name: `Ragis ${plan.name} · Monthly`, description: plan.blurb, cents: plan.monthlyPrice * 100, interval: "month" },
       { key: planKey(plan.id, "annual"), name: `Ragis ${plan.name} · Annual`, description: plan.blurb, cents: annualPrice(plan.monthlyPrice) * 100, interval: "year" },
     ]),
-    ...tiers.map((tier): CatalogProduct => ({ key: sponsorKey(tier.id), name: `Ragis Early Access · ${tier.name}`, description: tierDescription(tier), cents: tier.price * 100, interval: null })),
+    ...tiers.map((tier): CatalogProduct => ({ key: sponsorKey(tier.id), name: `Ragis Early Access · ${tier.name}`, description: tierDescription(tier, refund), cents: tier.price * 100, interval: null })),
   ];
 
   const discounts = SEASONS.flatMap((season) =>
