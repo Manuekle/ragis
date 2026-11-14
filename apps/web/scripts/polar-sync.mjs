@@ -10,13 +10,14 @@
 // `--print` only prints the catalog as JSON and needs no token.
 
 import { annualPrice, PLANS } from "../app/(public)/pricing/plans.ts";
-import { REFUND_POLICY, SPONSOR_TIERS } from "../app/(public)/waitlist/sponsors.ts";
+import { REFUND_POLICY, SPONSOR_TIERS, SPONSORS_ON_POLAR } from "../app/(public)/waitlist/sponsors.ts";
 import { BLACK_FRIDAY_PERCENT, HOLIDAYS_PERCENT } from "../lib/season.ts";
 import { buildCatalog, KEY_META } from "../lib/polar-catalog.ts";
 
 const catalog = buildCatalog({
   plans: PLANS,
-  tiers: SPONSOR_TIERS,
+  // Founding packages are not sold through Polar while SPONSORS_ON_POLAR is off; their products are archived.
+  tiers: SPONSORS_ON_POLAR ? SPONSOR_TIERS : [],
   annualPrice,
   offers: { "black-friday": BLACK_FRIDAY_PERCENT, holidays: HOLIDAYS_PERCENT },
   refund: REFUND_POLICY,

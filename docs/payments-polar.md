@@ -11,6 +11,13 @@ public site (`apps/web`):
 
 Private Cloud and Self-hosted are sold through sales and have no checkout.
 
+> **Sponsor slots are not sold through Polar right now.** Polar's review denied payment access to the
+> founding-package products (sponsorship and paid-waitlist categories), and the appeal was denied
+> too. Their three products are archived, `polar-sync.mjs` does not recreate them
+> (`SPONSORS_ON_POLAR = false` in `sponsors.ts`), and `/waitlist` keeps its manual flow: we email
+> how to pay. The Polar pay step, webhook handling and `sponsor:*` keys described below stay in the
+> code, dormant, for the day Polar agrees to sell them.
+
 ## What exists in Polar
 
 Everything is created from the site's own price lists by `apps/web/scripts/polar-sync.mjs`, so Polar

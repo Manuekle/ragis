@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SPONSOR_TIERS } from "@/app/(public)/waitlist/sponsors";
+import { SPONSOR_TIERS, SPONSORS_ON_POLAR } from "@/app/(public)/waitlist/sponsors";
 import { absoluteUrl } from "@/app/(public)/site";
 import { clientIp, createCheckout, polarEnabled } from "@/lib/polar";
 import { sponsorKey } from "@/lib/polar-catalog";
@@ -23,7 +23,8 @@ const fail = (status: number, message: string, code?: string) => NextResponse.js
 export async function GET(req: Request) {
   const slug = new URL(req.url).searchParams.get("slug") ?? "";
   const token = req.headers.get("x-badge-token") ?? "";
-  if (!polarEnabled() || !slug || !token) return NextResponse.json({ enabled: polarEnabled(), due: null });
+  const enabled = polarEnabled() && SPONSORS_ON_POLAR;
+  if (!enabled || !slug || !token) return NextResponse.json({ enabled, due: null });
   try {
     const due = await slotDue(slug, token);
     if (due === "forbidden") return fail(403, "That isn't your badge.");
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!polarEnabled()) return fail(503, "Online payment isn't open yet. We'll email you how to pay.", "checkout_off");
+  if (!polarEnabled() || !SPONSORS_ON_POLAR) return fail(503, "Online payment isn't open yet. We'll email you how to pay.", "checkout_off");
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const slug = typeof body?.slug === "string" ? body.slug : "";

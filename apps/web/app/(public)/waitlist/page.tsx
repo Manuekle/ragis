@@ -8,7 +8,7 @@ import { PRICE_RANGE } from "../pricing/plans";
 import { PubTitle } from "../PubTitle";
 import { pageUpdated } from "../site";
 import { Included } from "./Included";
-import { SPONSOR_TIERS } from "./sponsors";
+import { SPONSOR_TIERS, SPONSORS_ON_POLAR } from "./sponsors";
 import { TeamDemo } from "./TeamDemo";
 import { Waitlist } from "./Waitlist";
 import "./waitlist.css";
@@ -70,7 +70,7 @@ export default async function WaitlistPage() {
         art="waitlist"
       />
 
-      <Waitlist tiers={tiers} payments={polarEnabled()}>
+      <Waitlist tiers={tiers} payments={polarEnabled() && SPONSORS_ON_POLAR}>
         <section className="wl-sec">
           {/* renders its own heading: the team named in it changes with the demo */}
           <TeamDemo />

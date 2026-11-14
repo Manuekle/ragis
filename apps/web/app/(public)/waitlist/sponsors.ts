@@ -47,6 +47,14 @@ export const SPONSOR_TIERS: SponsorTier[] = [
 ];
 
 /**
+ * Whether founding packages are sold through Polar. Off since Polar's review denied payment access
+ * to the sponsor and early-access products (November 2026): the three Polar products are archived,
+ * scripts/polar-sync.mjs does not recreate them, and the waitlist keeps its manual flow (we email
+ * how to pay). Turn it on only after Polar agrees to sell them, then run the sync script.
+ */
+export const SPONSORS_ON_POLAR = false;
+
+/**
  * The refund promise for a founding package. The waitlist page, the terms and the Polar product
  * descriptions (lib/polar-catalog.ts) all say exactly this, so change it here and run
  * scripts/polar-sync.mjs. A full refund in Polar frees the slot again (api/polar/webhook).
