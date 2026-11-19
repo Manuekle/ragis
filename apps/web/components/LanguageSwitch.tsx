@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { LOCALES, localePath, splitLocale, type Locale } from "@/lib/i18n";
+import { LOCALE_COOKIE, LOCALES, localePath, splitLocale, type Locale } from "@/lib/i18n";
 import { useLocale } from "./LocaleProvider";
 
 const LABEL: Record<Locale, { short: string; name: string }> = {
@@ -38,6 +38,8 @@ export function LanguageSwitch() {
             data-tip={LABEL[l].name}
             onClick={(e) => {
               e.preventDefault();
+              // The choice sticks: proxy.ts won't send this browser to the other language on its next visit.
+              document.cookie = `${LOCALE_COOKIE}=${l}; path=/; max-age=31536000; samesite=lax`;
               if (l === locale) return;
               const { search, hash } = window.location;
               window.location.assign(`${href}${search}${hash}`);

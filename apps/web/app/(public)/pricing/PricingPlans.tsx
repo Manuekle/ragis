@@ -23,6 +23,7 @@ const TEXT = {
     sales: "Contact sales",
     noPage: "Couldn't open the payment page. Try again.",
     noServer: "Couldn't reach the server. Check your connection.",
+    localHint: (code: string) => `Approximate ${code} equivalent. You are charged in USD.`,
   },
   es: {
     billing: "Periodo de facturación",
@@ -37,6 +38,7 @@ const TEXT = {
     sales: "Contactar con ventas",
     noPage: "No se pudo abrir la página de pago. Inténtalo de nuevo.",
     noServer: "No se pudo conectar con el servidor. Comprueba tu conexión.",
+    localHint: (code: string) => `Equivalente aproximado en ${code}. El cobro es en USD.`,
   },
 };
 
@@ -46,10 +48,17 @@ const TEXT = {
  * picked; otherwise it links to `startHref`. `season` is the page's own ?season= preview, passed back so
  * the checkout applies the same discount the page showed.
  */
-export function PricingPlans({ salesHref, startHref, discount = 0, checkout = false, season }: { salesHref: string; startHref: string; discount?: number; checkout?: boolean; season?: string }) {
+export function PricingPlans({ salesHref, startHref, discount = 0, checkout = false, local = null, season }: { salesHref: string; startHref: string; discount?: number; checkout?: boolean; /** Visitor's currency and today's USD rate: shown as an approximate equivalent, never charged. */ local?: { currency: string; rate: number } | null; season?: string }) {
   const locale = useLocale();
   const t = TEXT[locale];
   const usd = usdFor(locale);
+  // Rounded to two significant figures at most past the thousands, so a guide never looks like a quote.
+  const localMoney = (amount: number) => {
+    if (!local) return "";
+    const raw = amount * local.rate;
+    const step = raw >= 100000 ? 1000 : raw >= 10000 ? 100 : raw >= 1000 ? 10 : 1;
+    return new Intl.NumberFormat(locale === "es" ? "es-ES" : "en-US", { style: "currency", currency: local.currency, maximumFractionDigits: 0, useGrouping: "always" }).format(Math.round(raw / step) * step);
+  };
   const plans = plansFor(locale);
   const [billingPeriod, setBillingPeriod] = useState<(typeof BILLING_PERIODS)[number]>("Monthly");
   const [busy, setBusy] = useState<string | null>(null);
@@ -131,6 +140,11 @@ export function PricingPlans({ salesHref, startHref, discount = 0, checkout = fa
                   <SoftText text={`/ ${annual ? t.year : t.month} + ${plan.additionalCost}`} />
                 </span>
               </p>
+              {local && (
+                <p className="plan-local" title={t.localHint(local.currency)}>
+                  ≈ <SoftText text={`${localMoney(finalPrice)} / ${annual ? t.year : t.month}`} />
+                </p>
+              )}
               {checkout && !contactSales ? (
                 <button type="button" className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`} disabled={busy !== null} onClick={() => subscribe(plan.id)}>
                   {busy === plan.id ? t.opening : t.start}

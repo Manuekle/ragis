@@ -6,6 +6,28 @@ export const LOCALES = ["en", "es"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "en";
 
+/** Cookie that remembers the language the visitor picked (or was sent to): "en" or "es". */
+export const LOCALE_COOKIE = "ragis_lang";
+
+/**
+ * The language an Accept-Language header asks for, among ours: the supported tag with the highest
+ * q wins ("es-MX,es;q=0.9,en;q=0.8" is Spanish, "en-US,es;q=0.5" is English). No header, or no
+ * language of ours in it, is English.
+ */
+export function preferredLocale(header: string | null): Locale {
+  let best: { locale: Locale; q: number } | null = null;
+  for (const part of (header ?? "").split(",")) {
+    const [tag = "", ...params] = part.trim().split(";");
+    const base = tag.trim().toLowerCase().split("-")[0];
+    if (base !== "en" && base !== "es") continue;
+    const qParam = params.find((p) => p.trim().startsWith("q="));
+    const q = qParam ? Number.parseFloat(qParam.trim().slice(2)) : 1;
+    if (Number.isNaN(q) || q <= 0) continue;
+    if (!best || q > best.q) best = { locale: base, q };
+  }
+  return best?.locale ?? "en";
+}
+
 /** Request header proxy.ts sets on /es/* requests. Absent means English. */
 export const LOCALE_HEADER = "x-ragis-locale";
 

@@ -1,6 +1,7 @@
 import { LocaleLink as Link } from "@/components/LocaleProvider";
 import { IconArrowRight, IconCandyCane, IconCheck, IconSparkles } from "@/components/icons";
 import { polarEnabled } from "@/lib/polar";
+import { localCurrency } from "@/lib/fx";
 import { getLocale } from "@/lib/locale";
 import { currentSeason, offerEnds, offerName } from "@/lib/season";
 import { breadcrumbLd, JsonLd, pageMetadata, softwareLd, webPageLd } from "@/lib/seo";
@@ -27,6 +28,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
   const locale = await getLocale();
   const es = locale === "es";
   const preview = (await searchParams).season;
+  const local = await localCurrency((await searchParams).country);
   const { id: season, offer } = currentSeason(preview);
   // A candy cane for the winter holidays, sparkles for Black Friday.
   const OfferIcon = season === "holidays" ? IconCandyCane : IconSparkles;
@@ -60,7 +62,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
           </p>
         )}
 
-        <PricingPlans salesHref={salesHref} startHref={signInHref} discount={offer?.percent ?? 0} checkout={polarEnabled()} season={typeof preview === "string" ? preview : undefined} />
+        <PricingPlans salesHref={salesHref} startHref={signInHref} discount={offer?.percent ?? 0} checkout={polarEnabled()} local={local ? { currency: local.currency, rate: local.rate } : null} season={typeof preview === "string" ? preview : undefined} />
 
         <section className="plan-wide">
           <div>
@@ -94,8 +96,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
 
         <p className="pub-note">
           {es
-            ? `Precios en USD. ${polarEnabled() ? "Los pagos los gestiona Polar, que también cobra los impuestos sobre las ventas que correspondan. " : ""}Tu formulario de pedido confirma el periodo de facturación, el precio final, las cuotas y cualquier cuota de configuración única.`
-            : `Prices in USD. ${polarEnabled() ? "Payments are handled by Polar, who also collects any sales tax. " : ""}Your order form confirms the billing period, final price, quotas and any one-time setup fee.`}
+            ? `Precios en USD. ${polarEnabled() ? "Los pagos los gestiona Polar, que también cobra los impuestos sobre las ventas que correspondan. " : ""}Tu formulario de pedido confirma el periodo de facturación, el precio final, las cuotas y cualquier cuota de configuración única.${local ? ` El cobro es siempre en USD; el importe en ${local.currency} es solo una referencia al tipo de cambio de hoy y puede variar.` : ""}`
+            : `Prices in USD. ${polarEnabled() ? "Payments are handled by Polar, who also collects any sales tax. " : ""}Your order form confirms the billing period, final price, quotas and any one-time setup fee.${local ? ` You are always charged in USD; the ${local.currency} amount is only a guide at today's exchange rate and can vary.` : ""}`}
           {offer &&
             (es
               ? ` La ${offerName(offer, locale).toLowerCase()} se aplica a los formularios de pedido firmados hasta el ${offerEnds(offer, locale)} y cubre los primeros doce meses; las cuotas de configuración no tienen descuento.`
