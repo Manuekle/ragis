@@ -1,18 +1,44 @@
 "use client";
 
-import Link from "next/link";
+import { LocaleLink as Link, useLocale } from "@/components/LocaleProvider";
 import { useState } from "react";
 import { IconAlert, IconArrowRight, IconCheck, IconSparkles, IconSpinner } from "@/components/icons";
 import { Seg, SoftText } from "@/components/motion";
 import { SeatStepper } from "@/components/SeatStepper";
-import { annualPrice, PLANS } from "./plans";
+import { usdFor } from "@/lib/i18n";
+import { annualPrice, plansFor } from "./plans";
 
 const BILLING_PERIODS = ["Monthly", "Annual"] as const;
-const usd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 0,
-});
+const TEXT = {
+  en: {
+    billing: "Billing period",
+    periods: { Monthly: "Monthly", Annual: "Annual" },
+    recommended: "Recommended",
+    from: "From",
+    was: (price: string) => `was ${price}`,
+    year: "year",
+    month: "month",
+    opening: "Opening checkout…",
+    start: "Get started",
+    sales: "Contact sales",
+    noPage: "Couldn't open the payment page. Try again.",
+    noServer: "Couldn't reach the server. Check your connection.",
+  },
+  es: {
+    billing: "Periodo de facturación",
+    periods: { Monthly: "Mensual", Annual: "Anual" },
+    recommended: "Recomendado",
+    from: "Desde",
+    was: (price: string) => `antes ${price}`,
+    year: "año",
+    month: "mes",
+    opening: "Abriendo el pago…",
+    start: "Empezar",
+    sales: "Contactar con ventas",
+    noPage: "No se pudo abrir la página de pago. Inténtalo de nuevo.",
+    noServer: "No se pudo conectar con el servidor. Comprueba tu conexión.",
+  },
+};
 
 /**
  * `discount` is a holiday percent off (lib/season.ts), applied to the self-serve plans; 0 shows list prices.
@@ -21,6 +47,10 @@ const usd = new Intl.NumberFormat("en-US", {
  * the checkout applies the same discount the page showed.
  */
 export function PricingPlans({ salesHref, startHref, discount = 0, checkout = false, season }: { salesHref: string; startHref: string; discount?: number; checkout?: boolean; season?: string }) {
+  const locale = useLocale();
+  const t = TEXT[locale];
+  const usd = usdFor(locale);
+  const plans = plansFor(locale);
   const [billingPeriod, setBillingPeriod] = useState<(typeof BILLING_PERIODS)[number]>("Monthly");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,16 +70,16 @@ export function PricingPlans({ salesHref, startHref, discount = 0, checkout = fa
         window.location.assign(data.url);
         return; // leaving the page: keep the button busy
       }
-      setError(data.error?.message ?? "Couldn't open the payment page. Try again.");
+      setError(data.error?.message ?? t.noPage);
     } catch {
-      setError("Couldn't reach the server. Check your connection.");
+      setError(t.noServer);
     }
     setBusy(null);
   }
 
   return (
     <>
-      <Seg className="plan-billing" role="group" aria-label="Billing period">
+      <Seg className="plan-billing" role="group" aria-label={t.billing}>
         {BILLING_PERIODS.map((period) => (
           <button
             key={period}
@@ -57,7 +87,7 @@ export function PricingPlans({ salesHref, startHref, discount = 0, checkout = fa
             aria-pressed={billingPeriod === period}
             onClick={() => setBillingPeriod(period)}
           >
-            {period}
+            {t.periods[period]}
           </button>
         ))}
       </Seg>
@@ -65,7 +95,7 @@ export function PricingPlans({ salesHref, startHref, discount = 0, checkout = fa
       <SeatStepper />
 
       <div className="plans">
-        {PLANS.map((plan) => {
+        {plans.map((plan) => {
           const featured = "featured" in plan;
           const contactSales = "contactSales" in plan;
           const price = annual ? annualPrice(plan.monthlyPrice) : plan.monthlyPrice;
@@ -79,18 +109,18 @@ export function PricingPlans({ salesHref, startHref, discount = 0, checkout = fa
                 {featured && (
                   <span className="plan-badge">
                     <IconSparkles size={13} variant="duotone" />
-                    Recommended
+                    {t.recommended}
                   </span>
                 )}
               </header>
               <p className="plan-blurb">{plan.blurb}</p>
               <p className="plan-price">
                 <span className="plan-from">
-                  From
+                  {t.from}
                   {off > 0 && <span className="plan-off">-{off}%</span>}
                 </span>
                 {off > 0 && (
-                  <s className="plan-was" aria-label={`was ${usd.format(price)}`}>
+                  <s className="plan-was" aria-label={t.was(usd.format(price))}>
                     <SoftText text={usd.format(price)} />
                   </s>
                 )}
@@ -98,17 +128,17 @@ export function PricingPlans({ salesHref, startHref, discount = 0, checkout = fa
                   <SoftText text={usd.format(finalPrice)} />
                 </strong>
                 <span className="plan-unit">
-                  <SoftText text={`/ ${annual ? "year" : "month"} + ${plan.additionalCost}`} />
+                  <SoftText text={`/ ${annual ? t.year : t.month} + ${plan.additionalCost}`} />
                 </span>
               </p>
               {checkout && !contactSales ? (
                 <button type="button" className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`} disabled={busy !== null} onClick={() => subscribe(plan.id)}>
-                  {busy === plan.id ? "Opening checkout…" : "Get started"}
+                  {busy === plan.id ? t.opening : t.start}
                   {busy === plan.id ? <IconSpinner size={16} /> : <IconArrowRight size={16} />}
                 </button>
               ) : (
                 <Link href={contactSales ? salesHref : startHref} className={`gate-cta plan-cta${featured ? " halftone" : " quiet"}`}>
-                  {contactSales ? "Contact sales" : "Get started"}
+                  {contactSales ? t.sales : t.start}
                   <IconArrowRight size={16} />
                 </Link>
               )}

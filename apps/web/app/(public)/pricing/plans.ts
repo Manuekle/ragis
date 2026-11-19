@@ -1,3 +1,5 @@
+import type { Locale } from "@/lib/i18n";
+
 // Plans shown on /pricing and described in the structured data and llms.txt.
 // Quotas mirror the `plans` table (db/migrations/0001_init.sql, graph_enabled from 0005).
 // Prices are the commercial starting points from the master plan, section 19.
@@ -38,3 +40,35 @@ export const EVERY_PLAN = ["Answers cited to the page", "Document-level permissi
 
 /** Lowest and highest monthly starting price, in USD. */
 export const PRICE_RANGE = { low: Math.min(...PLANS.map((p) => p.monthlyPrice)), high: Math.max(...PLANS.map((p) => p.monthlyPrice)) };
+
+/** The words of each plan, EVERY_PLAN and the extra-cost labels in Spanish. Product names stay as they are. */
+const PLAN_TEXT_ES = {
+  team: {
+    blurb: "Para un equipo o departamento que empieza.",
+    additionalCost: "configuración",
+    features: ["3.000 consultas / mes", "2.000 documentos · 5 GB", "50 MB por archivo · 500 páginas por documento", "Búsqueda híbrida con citas de página", "30 consultas / minuto"],
+  },
+  business: {
+    blurb: "Para empresas medianas con muchos equipos.",
+    additionalCost: "configuración",
+    features: ["20.000 consultas / mes", "20.000 documentos · 50 GB", "100 MB por archivo · 2.000 páginas por documento", "Reordenación para respuestas más precisas", "Grafo de conocimiento entre documentos", "120 consultas / minuto"],
+  },
+  private: {
+    blurb: "Una infraestructura dedicada para datos sensibles.",
+    additionalCost: "infraestructura",
+    features: ["200.000 consultas / mes", "200.000 documentos · 500 GB", "500 MB por archivo · 5.000 páginas por documento", "Cuenta de AWS, VPC y claves KMS dedicadas", "SLA e integraciones a medida", "600 consultas / minuto"],
+  },
+} as const;
+
+const EVERY_PLAN_ES = ["Respuestas citadas con la página", "Permisos a nivel de documento", "Ocultación de datos personales (PII)", "Cifrado en tránsito y en reposo", "SSO con tu proveedor de identidad", "Tablas, figuras y páginas escaneadas"];
+
+type Plan = (typeof PLANS)[number];
+type LocalizedPlan = Omit<Plan, "blurb" | "features" | "additionalCost"> & { blurb: string; features: readonly string[]; additionalCost: string };
+
+/** The plans with their text in a language. English is the list itself. */
+export function plansFor(locale: Locale): readonly LocalizedPlan[] {
+  return locale === "es" ? PLANS.map((plan) => ({ ...plan, ...PLAN_TEXT_ES[plan.id] })) : PLANS;
+}
+
+/** What every plan includes, in a language. */
+export const everyPlanFor = (locale: Locale): string[] => (locale === "es" ? EVERY_PLAN_ES : EVERY_PLAN);

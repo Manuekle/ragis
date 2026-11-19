@@ -1,10 +1,16 @@
+import { getLocale } from "@/lib/locale";
 import { breadcrumbLd, JsonLd, pageMetadata, webPageLd } from "@/lib/seo";
 import { ContactLine, LegalPage, type LegalSection } from "../LegalPage";
 import { pageUpdated, site } from "../site";
 
 const DESCRIPTION = "What Ragis collects, why, where it is stored and how to control it. We don't sell personal data or use your documents to train AI models.";
 
-export const metadata = pageMetadata({ title: "Privacy Policy", description: DESCRIPTION, path: "/privacy" });
+const DESCRIPTION_ES = "Qué datos recoge Ragis, por qué, dónde se guardan y cómo controlarlos. No vendemos datos personales ni usamos tus documentos para entrenar modelos de IA.";
+
+export async function generateMetadata() {
+  const locale = await getLocale();
+  return locale === "es" ? pageMetadata({ title: "Política de privacidad", description: DESCRIPTION_ES, path: "/privacy", locale }) : pageMetadata({ title: "Privacy Policy", description: DESCRIPTION, path: "/privacy" });
+}
 
 // Template text grounded in the platform's security design (master plan §12). Have counsel review it before launch.
 const SECTIONS: LegalSection[] = [
@@ -123,11 +129,141 @@ const SECTIONS: LegalSection[] = [
   },
 ];
 
-export default function PrivacyPage() {
+
+// Spanish version of the same sections, in the same order. A translation of the text above: change both together, and have counsel review it before launch.
+const SECTIONS_ES: LegalSection[] = [
+  {
+    id: "roles",
+    title: "Quiénes somos y cuál es nuestro papel",
+    body: (
+      <>
+        <p>Ragis lo presta {site.legalEntity}. Respecto a los datos de cuenta, como tu nombre y tu correo de trabajo, decidimos cómo se usan y actuamos como responsable del tratamiento.</p>
+        <p>Respecto a los documentos y las preguntas que tu organización introduce en Ragis, tu organización es la responsable y nosotros tratamos esos datos solo siguiendo sus instrucciones, como encargados del tratamiento. Antes de la incorporación se puede firmar un acuerdo de tratamiento de datos.</p>
+      </>
+    ),
+  },
+  {
+    id: "collect",
+    title: "Qué datos recogemos",
+    body: (
+      <ul>
+        <li>
+          <strong>Datos de cuenta:</strong> nombre, correo de trabajo, organización, rol y eventos de inicio de sesión de tu proveedor de identidad.
+        </li>
+        <li>
+          <strong>Contenido del cliente:</strong> los documentos que subes, el texto y las imágenes extraídos de ellos, tus preguntas y las respuestas generadas.
+        </li>
+        <li>
+          <strong>Datos de uso:</strong> identificadores de solicitud, tiempos, el modelo usado, recuento de tokens y uso de cuotas. Los registros habituales no guardan las preguntas completas ni el texto de los documentos.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "use",
+    title: "Cómo los usamos",
+    body: (
+      <>
+        <p>Usamos los datos para prestar el Servicio: indexar documentos, responder preguntas con citas, aplicar permisos y cuotas, facturar, dar soporte y mantener la plataforma segura.</p>
+        <p>No vendemos datos personales y no usamos el contenido del cliente para entrenar modelos de IA.</p>
+      </>
+    ),
+  },
+  {
+    id: "ai",
+    title: "Tratamiento con IA",
+    body: (
+      <p>
+        Las respuestas las generan modelos de Amazon Bedrock, en la región acordada con tu organización. Cada organización tiene una lista aprobada de modelos y regiones, y las solicitudes nunca pasan en silencio a un proveedor que no esté en esa lista. Los datos personales detectados en los documentos pueden ocultarse antes de indexarlos.
+      </p>
+    ),
+  },
+  {
+    id: "location",
+    title: "Dónde se almacenan los datos",
+    body: (
+      <p>
+        Los datos se alojan en Amazon Web Services, por defecto en Estados Unidos (us-east-1). Otras regiones, como São Paulo (sa-east-1), están disponibles a petición. Los clientes de Private Cloud obtienen una cuenta de AWS, una red y claves de cifrado dedicadas. Cuando los datos salen de tu país aplicamos las garantías que exige la ley aplicable.
+      </p>
+    ),
+  },
+  {
+    id: "security",
+    title: "Seguridad",
+    body: (
+      <ul>
+        <li>Cifrado en tránsito y en reposo, con claves limitadas por entorno y, en los planes superiores, por cliente.</li>
+        <li>Los datos de cada organización están aislados a nivel de base de datos y de almacenamiento, y los permisos se comprueban antes de recuperar cualquier pasaje.</li>
+        <li>Los archivos se guardan de forma privada y se entregan mediante enlaces firmados de corta duración.</li>
+        <li>El acceso administrativo exige autenticación fuerte, aplica el mínimo privilegio y queda auditado.</li>
+      </ul>
+    ),
+  },
+  {
+    id: "retention",
+    title: "Conservación y eliminación",
+    body: (
+      <>
+        <p>El contenido del cliente se conserva mientras tu organización lo mantenga en Ragis. Al eliminar un documento se quitan de la búsqueda sus pasajes, sus vectores, las respuestas en caché y los enlaces del grafo.</p>
+        <p>Cuando una organización cierra su cuenta eliminamos su contenido del Servicio activo. Las copias de seguridad caducan según su calendario habitual, y podemos conservar más tiempo registros de seguridad limitados cuando la ley lo exija.</p>
+      </>
+    ),
+  },
+  {
+    id: "subprocessors",
+    title: "Subencargados",
+    body: <p>Usamos Amazon Web Services para el alojamiento, el almacenamiento y la inferencia de los modelos de IA, y Polar como comerciante registrado para cobrar los pagos (recibe tu nombre, correo, país de facturación y datos de pago, nunca tus documentos). Avisaremos a los propietarios de la organización antes de incorporar un subencargado que trate contenido del cliente.</p>,
+  },
+  {
+    id: "rights",
+    title: "Tus derechos",
+    body: (
+      <>
+        <p>
+          Según dónde vivas, puedes pedir acceder a tus datos personales, corregirlos, eliminarlos o exportarlos, u oponerte a algunos tratamientos. Esto incluye los derechos de la Ley 1581 de 2012 de Colombia y, cuando corresponda, del RGPD.
+        </p>
+        <p>Si tus datos están en documentos subidos por tu empleador, contacta primero con tu organización; la ayudaremos a responder.</p>
+      </>
+    ),
+  },
+  {
+    id: "cookies",
+    title: "Cookies",
+    body: <p>Usamos una cookie esencial para mantener tu sesión iniciada y el almacenamiento local de tu navegador para recordar preferencias como el tema y el último espacio de trabajo. No usamos cookies publicitarias ni de seguimiento entre sitios.</p>,
+  },
+  {
+    id: "changes",
+    title: "Cambios",
+    body: <p>Publicaremos las actualizaciones aquí y cambiaremos la fecha de la parte superior. Si los cambios son importantes, avisaremos con antelación a los propietarios de la organización.</p>,
+  },
+  {
+    id: "contact",
+    title: "Contacto",
+    body: (
+      <p>
+        Para consultas o solicitudes sobre privacidad, <ContactLine />.
+      </p>
+    ),
+  },
+];
+
+export default async function PrivacyPage() {
+  const locale = await getLocale();
+  const es = locale === "es";
   return (
     <>
-      <JsonLd graph={[webPageLd({ path: "/privacy", name: "Privacy Policy", description: DESCRIPTION, updated: pageUpdated("/privacy") }), breadcrumbLd([{ name: "Privacy Policy", path: "/privacy" }])]} />
-      <LegalPage title="Privacy Policy." lead="What we collect, why, and how you stay in control." sections={SECTIONS} art="privacy" />
+      <JsonLd
+        graph={[
+          webPageLd({ path: "/privacy", name: es ? "Política de privacidad" : "Privacy Policy", description: es ? DESCRIPTION_ES : DESCRIPTION, updated: pageUpdated("/privacy"), locale }),
+          breadcrumbLd([{ name: es ? "Política de privacidad" : "Privacy Policy", path: "/privacy" }], locale),
+        ]}
+      />
+      <LegalPage
+        title={es ? "Política de privacidad." : "Privacy Policy."}
+        lead={es ? "Qué datos recogemos, por qué y cómo mantienes el control." : "What we collect, why, and how you stay in control."}
+        sections={es ? SECTIONS_ES : SECTIONS}
+        art="privacy"
+      />
     </>
   );
 }

@@ -2,9 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { IconAlert, IconArrowRight, IconSparkles, IconSpinner } from "@/components/icons";
+import { useLocale } from "@/components/LocaleProvider";
 import { SoftText } from "@/components/motion";
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
+
+const TEXT = {
+  en: {
+    noPage: "Couldn't open the payment page. Try again.",
+    noServer: "Couldn't reach the server. Check your connection.",
+    late: (name: string) => `Your payment is taking longer than usual to show up. Refresh in a minute. If your ${name} slot isn't confirmed by then, reply to the receipt email.`,
+    received: (name: string) => `Payment received. Confirming your ${name} slot…`,
+    waiting: (name: string) => `Your ${name} slot is waiting for its payment. It is yours once the payment goes through, first paid, first served.`,
+    opening: "Opening checkout…",
+    pay: (price: string) => `Pay ${price} with Polar`,
+    fine: "Paid once, in USD. Polar processes the payment and collects any sales tax.",
+  },
+  es: {
+    noPage: "No se pudo abrir la página de pago. Inténtalo de nuevo.",
+    noServer: "No se pudo conectar con el servidor. Comprueba tu conexión.",
+    late: (name: string) => `Tu pago tarda más de lo habitual en aparecer. Actualiza en un minuto. Si tu plaza ${name} no está confirmada para entonces, responde al correo del recibo.`,
+    received: (name: string) => `Pago recibido. Confirmando tu plaza ${name}…`,
+    waiting: (name: string) => `Tu plaza ${name} espera su pago. Es tuya cuando el pago se complete: el primero que paga, el primero que entra.`,
+    opening: "Abriendo el pago…",
+    pay: (price: string) => `Pagar ${price} con Polar`,
+    fine: "Pago único, en USD. Polar procesa el pago y cobra los impuestos sobre las ventas que correspondan.",
+  },
+};
 
 // The same key the badge itself uses to remember its owner in this browser (components/badge/BadgeShowcase.tsx).
 const tokenKey = (slug: string) => `ragis:badge:${slug}`;
@@ -20,6 +44,7 @@ type Due = { tier: string; name: string; price: number };
  * notice checks every few seconds and then reloads the page so the badge wears its tier.
  */
 export function PayNotice({ slug, editToken }: { slug: string; editToken?: string | null }) {
+  const t = TEXT[useLocale()];
   const [due, setDue] = useState<Due | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [returned, setReturned] = useState(false);
@@ -76,9 +101,9 @@ export function PayNotice({ slug, editToken }: { slug: string; editToken?: strin
         window.location.assign(data.url);
         return; // leaving the page: keep the button busy
       }
-      setError(data.error?.message ?? "Couldn't open the payment page. Try again.");
+      setError(data.error?.message ?? t.noPage);
     } catch {
-      setError("Couldn't reach the server. Check your connection.");
+      setError(t.noServer);
     }
     setBusy(false);
   }
@@ -89,9 +114,7 @@ export function PayNotice({ slug, editToken }: { slug: string; editToken?: strin
     return (
       <div className="wl-pay" role="status">
         <p>
-          {late
-            ? `Your payment is taking longer than usual to show up. Refresh in a minute. If your ${due.name} slot isn't confirmed by then, reply to the receipt email.`
-            : `Payment received. Confirming your ${due.name} slot…`}
+          {late ? t.late(due.name) : t.received(due.name)}
         </p>
         {!late && <IconSpinner size={16} />}
       </div>
@@ -99,9 +122,7 @@ export function PayNotice({ slug, editToken }: { slug: string; editToken?: strin
 
   return (
     <div className="wl-pay">
-      <p>
-        Your {due.name} slot is waiting for its payment. It is yours once the payment goes through, first paid, first served.
-      </p>
+      <p>{t.waiting(due.name)}</p>
       {error && (
         <p className="wl-error" role="alert">
           <IconAlert size={14} />
@@ -110,10 +131,10 @@ export function PayNotice({ slug, editToken }: { slug: string; editToken?: strin
       )}
       <button type="button" className="gate-cta halftone" disabled={busy} onClick={pay}>
         {busy ? <IconSpinner size={16} /> : <IconSparkles size={16} variant="duotone" />}
-        <SoftText text={busy ? "Opening checkout…" : `Pay ${usd.format(due.price)} with Polar`} />
+        <SoftText text={busy ? t.opening : t.pay(usd.format(due.price))} />
         {!busy && <IconArrowRight size={16} />}
       </button>
-      <p className="wl-fine">Paid once, in USD. Polar processes the payment and collects any sales tax.</p>
+      <p className="wl-fine">{t.fine}</p>
     </div>
   );
 }

@@ -46,6 +46,25 @@ export const SPONSOR_TIERS: SponsorTier[] = [
   },
 ];
 
+/** The tiers' blurbs and perks in Spanish, by tier id. Names, prices and slots are the same in both languages. */
+const SPONSOR_TEXT_ES: Record<string, Pick<SponsorTier, "blurb" | "perks">> = {
+  supporter: {
+    blurb: "Acceso anticipado antes de la lista de espera pública.",
+    perks: ["Acceso anticipado al espacio de trabajo en la nube de Ragis, antes de la lista de espera pública", "Tu nombre en la lista de colaboradores", "Notas de construcción del equipo a medida que publicamos"],
+  },
+  backer: {
+    blurb: "Acceso anticipado, configurado con tus propios documentos.",
+    perks: ["Todo lo de Supporter", "Una sesión guiada de incorporación con tus propios documentos", "Voto sobre lo que construimos a continuación", "Soporte prioritario durante el acceso anticipado"],
+  },
+  founding: {
+    blurb: "Acceso anticipado, con voz en cómo crece Ragis.",
+    perks: ["Todo lo de Backer", "Tu logotipo y un enlace en la página de la lista de espera de Ragis", "Una línea directa con las personas que construyen Ragis", "Una llamada de hoja de ruta cada trimestre"],
+  },
+};
+
+/** The sponsor tiers with their text in a language. */
+export const sponsorTiersFor = (locale: "en" | "es"): SponsorTier[] => (locale === "es" ? SPONSOR_TIERS.map((tier) => ({ ...tier, ...SPONSOR_TEXT_ES[tier.id] })) : SPONSOR_TIERS);
+
 /**
  * Whether founding packages are offered at all. Paused while Polar reviews the account: the
  * waitlist shows only the free early-access sign-up, the landing hides its wall, the terms drop
@@ -68,6 +87,9 @@ export const SPONSORS_ON_POLAR = false;
  * scripts/polar-sync.mjs. A full refund in Polar frees the slot again (api/polar/webhook).
  */
 export const REFUND_POLICY = "If we haven't given you access to Ragis yet, you can ask for a full refund of your package at any time by writing to support@ragis.app.";
+
+/** The same promise in Spanish, for the Spanish pages. Keep it saying what REFUND_POLICY says. */
+export const REFUND_POLICY_ES = "Si todavía no te hemos dado acceso a Ragis, puedes pedir en cualquier momento el reembolso completo de tu paquete escribiendo a support@ragis.app.";
 
 /** Interest values the form and the API accept: plain early access, or one sponsor tier. */
 export const EARLY_ACCESS = "access";

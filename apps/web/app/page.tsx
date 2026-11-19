@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/Brand";
 import { DitherField } from "@/components/DitherField";
@@ -10,18 +11,25 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SponsorWall } from "@/components/SponsorWall";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IconActivity, IconAgent, IconArrowRight, IconCheck, IconChat, IconFiles, IconShield, IconSignature, IconWorkflow } from "@/components/icons";
+import type { Locale } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale";
 import { currentSeason } from "@/lib/season";
 import { faqLd, JsonLd, organizationLd, pageMetadata, softwareLd, webPageLd, websiteLd } from "@/lib/seo";
 import { sponsorWall } from "@/lib/waitlist-db";
-import { FEATURES as CONTENT_FEATURES, STEPS as CONTENT_STEPS, LANDING_FAQ, TRUST } from "./(public)/content";
-import { demoCta, pageUpdated, publicOnly, signInHref, signInLabel, site } from "./(public)/site";
+import { contentFor } from "./(public)/content";
+import { demoCta, demoLabel, pageUpdated, publicOnly, signInHref, signInLabelFor, site, SITE_TEXT } from "./(public)/site";
 import { FOUNDING_PACKAGES_OPEN, SPONSOR_TIERS } from "./(public)/waitlist/sponsors";
 import "./(public)/public.css";
 import "./landing.css";
+import { LANDING } from "./landing-copy";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = pageMetadata({ title: `${site.name}: ${site.tagline}`, description: site.description, path: "/", absoluteTitle: true });
+export async function generateMetadata() {
+  const locale = await getLocale();
+  const text = SITE_TEXT[locale];
+  return pageMetadata({ title: `${site.name}: ${text.tagline}`, description: text.description, path: "/", absoluteTitle: true, locale });
+}
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
 const lowestTier = usd.format(Math.min(...SPONSOR_TIERS.map((tier) => tier.price)));
@@ -34,6 +42,10 @@ const lowestTier = usd.format(Math.min(...SPONSOR_TIERS.map((tier) => tier.price
  */
 export default async function Landing({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const season = currentSeason((await searchParams).season);
+  const locale = await getLocale();
+  const t = LANDING[locale];
+  const text = SITE_TEXT[locale];
+  const { STEPS, FEATURES, TRUST, LANDING_FAQ } = landingContent(locale);
   const signedIn = !publicOnly && (await cookies()).has("ragsis_session");
   // Confirmed sponsors from the waitlist. If the database can't be reached the wall still renders, every seat open.
   const sponsors = FOUNDING_PACKAGES_OPEN
@@ -45,12 +57,12 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
 
   return (
     <main className="land-page">
-      <JsonLd graph={[organizationLd(), websiteLd(), webPageLd({ path: "/", name: `${site.name}: ${site.tagline}`, description: site.description, updated: pageUpdated("/") }), softwareLd(), faqLd(LANDING_FAQ)]} />
+      <JsonLd graph={[organizationLd(locale), websiteLd(locale), webPageLd({ path: "/", name: `${site.name}: ${text.tagline}`, description: text.description, updated: pageUpdated("/"), locale }), softwareLd({ locale }), faqLd(LANDING_FAQ)]} />
       <section className="gate land">
         <DitherField className="gate-dither" pattern="horizon" intensity={0.7} speed={0.6} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
         {season.snow && <SeasonalSnow />}
 
-        <Header signedIn={signedIn} />
+        <Header signedIn={signedIn} locale={locale} />
 
         <div className="gate-col land-col">
           <i className="gate-beam" data-line="left" aria-hidden="true" />
@@ -64,29 +76,30 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
             <i className="gate-x" data-at="bl" aria-hidden="true" />
             <i className="gate-x" data-at="br" aria-hidden="true" />
             <h1>
-              Answers your company
+              {t.titleA}
               <br />
-              can <em>cite</em>.
+              {t.titleB}
+              <em>{t.cite}</em>.
             </h1>
           </div>
 
           <div className="gate-body land-body">
-            <p className="land-lead">Ragis reads your documents and answers with the exact page it came from. Permission-aware, PII-redacted, every claim traceable.</p>
+            <p className="land-lead">{t.lead}</p>
 
             <div className="land-actions">
               <div className="land-buttons">
                 <Link href={signedIn ? "/app" : "/waitlist"} className="gate-cta land-cta">
-                  {signedIn ? "Open workspace" : "Join the waitlist"}
+                  {signedIn ? t.openWorkspace : t.join}
                   <IconArrowRight size={16} />
                 </Link>
                 {!signedIn && demoCta && (
                   <a href={demoCta.href} className="gate-cta land-cta quiet premium">
-                    {demoCta.label}
+                    {demoLabel(locale)}
                   </a>
                 )}
               </div>
               <ul className="gate-checks land-checks">
-                {["Cited answers", "Permission-aware", "PII redacted"].map((item) => (
+                {t.checks.map((item) => (
                   <li key={item}>
                     <IconCheck size={12} />
                     {item}
@@ -105,7 +118,7 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
       <div className="land-more-wrap">
         <div className="land-more">
           <section className="land-sec land-proof" aria-labelledby="land-proof-title">
-            <ul className="land-proof-logos" aria-label="Universities">
+            <ul className="land-proof-logos" aria-label={t.universities}>
               {UNIVERSITIES.map(({ name, src, width, height }) => (
                 <li key={name}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- small static logo, already sized */}
@@ -115,12 +128,13 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
             </ul>
             <div className="land-proof-copy">
               <h2 id="land-proof-title">
-                People at these universities already use <em>Ragis</em>.
+                {t.proofTitleA}
+                <em>{t.proofTitleB}</em>.
               </h2>
-              <p>Students and researchers from Stanford, Duke and MIT already ask Ragis about their own documents.</p>
+              <p>{t.proofText}</p>
               {!signedIn && (
                 <Link href="/waitlist" className="land-pill land-proof-cta">
-                  Join them
+                  {t.joinThem}
                   <IconArrowRight size={14} />
                 </Link>
               )}
@@ -130,7 +144,8 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
           <section id="how" className="land-sec">
             <div className="land-intro">
               <h2>
-                From a folder of files to an answer you can <em>check</em>.
+                {t.howA}
+                <em>{t.howB}</em>.
               </h2>
               <Illustration name="landing" className="land-ill" />
             </div>
@@ -150,7 +165,9 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
 
           <section className="land-sec">
             <h2>
-              Once it knows your documents, it can <em>act</em> on them.
+              {t.actA}
+              <em>{t.actB}</em>
+              {locale === "es" ? " sobre ellos." : " on them."}
             </h2>
             <ul className="land-feats">
               {FEATURES.map(({ Icon, title, text }) => (
@@ -167,7 +184,9 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
 
           <section className="land-sec">
             <h2>
-              Everyone sees what they&apos;re <em>allowed</em> to see.
+              {t.allowedA}
+              <em>{t.allowedB}</em>
+              {locale === "es" ? " ver." : " to see."}
             </h2>
             <ul className="land-trust">
               {TRUST.map(({ title, text }) => (
@@ -184,7 +203,8 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
 
           <section className="land-sec">
             <h2>
-              Questions, <em>answered</em>.
+              {t.faqA}
+              <em>{t.faqB}</em>.
             </h2>
             <ul className="land-faq">
               {LANDING_FAQ.map(({ q, text }) => (
@@ -199,16 +219,17 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
           <section className="land-sec land-final glyph-host">
             <GlyphField />
             <h2>
-              Try it on your own <em>documents</em>.
+              {t.tryA}
+              <em>{t.tryB}</em>.
             </h2>
             <div className="land-buttons">
               <Link href={signedIn ? "/app" : "/waitlist"} className="gate-cta land-cta">
-                {signedIn ? "Open workspace" : "Join the waitlist"}
+                {signedIn ? t.openWorkspace : t.join}
                 <IconArrowRight size={16} />
               </Link>
               {!signedIn && demoCta && (
                 <a href={demoCta.href} className="gate-cta land-cta quiet premium">
-                  {demoCta.label}
+                  {demoLabel(locale)}
                 </a>
               )}
             </div>
@@ -234,24 +255,25 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
             <i className="gate-x" data-at="bl" aria-hidden="true" />
             <i className="gate-x" data-at="br" aria-hidden="true" />
             <h2>
-              Built with the teams
+              {t.wallA}
               <br />
-              who joined <em>early</em>.
+              {t.wallB}
+              <em>{t.wallC}</em>.
             </h2>
           </div>
 
           <div className="gate-body land-body">
-            <p className="land-lead">The founding partners, backers and supporters who took a founding package before launch: early access to Ragis, and their place on this wall. The dotted seats are still open.</p>
+            <p className="land-lead">{t.wallLead}</p>
 
             <div className="land-actions">
               <div className="land-buttons">
                 <Link href="/waitlist#sponsor" className="gate-cta land-cta">
-                  Take a seat
+                  {t.takeSeat}
                   <IconArrowRight size={16} />
                 </Link>
               </div>
               <ul className="gate-checks land-checks">
-                {[`One-time, from ${lowestTier}`, "Early access", "Your name stays here"].map((item) => (
+                {[t.oneTime(lowestTier), t.earlyAccess, t.nameStays].map((item) => (
                   <li key={item}>
                     <IconCheck size={12} />
                     {item}
@@ -273,22 +295,24 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
   );
 }
 
-function Header({ signedIn }: { signedIn: boolean }) {
+function Header({ signedIn, locale }: { signedIn: boolean; locale: Locale }) {
+  const t = LANDING[locale];
   return (
     <header className="gate-top">
       <Brand />
       <nav className="land-nav">
         <Link href="/pricing" className="land-link">
-          Pricing
+          {t.pricing}
         </Link>
+        <LanguageSwitch />
         <ThemeToggle />
         {signedIn ? (
           <Link href="/app" className="land-pill">
-            Open workspace
+            {t.openWorkspace}
           </Link>
         ) : (
           <Link href={signInHref} className="land-pill">
-            {signInLabel}
+            {signInLabelFor(locale)}
           </Link>
         )}
       </nav>
@@ -304,5 +328,12 @@ const UNIVERSITIES = [
 ];
 
 // The words live in (public)/content.ts, shared with /llms.txt; the icons go with them in order.
-const STEPS = CONTENT_STEPS.map((step, i) => ({ ...step, Icon: [IconFiles, IconChat, IconShield][i] }));
-const FEATURES = CONTENT_FEATURES.map((feature, i) => ({ ...feature, Icon: [IconAgent, IconWorkflow, IconSignature, IconActivity][i] }));
+function landingContent(locale: Locale) {
+  const { STEPS, FEATURES, TRUST, LANDING_FAQ } = contentFor(locale);
+  return {
+    STEPS: STEPS.map((step, i) => ({ ...step, Icon: [IconFiles, IconChat, IconShield][i]! })),
+    FEATURES: FEATURES.map((feature, i) => ({ ...feature, Icon: [IconAgent, IconWorkflow, IconSignature, IconActivity][i]! })),
+    TRUST,
+    LANDING_FAQ,
+  };
+}

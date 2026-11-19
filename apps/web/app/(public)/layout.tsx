@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/Brand";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { demoCta, publicOnly, signInHref, signInLabel } from "./site";
+import { getLocale } from "@/lib/locale";
+import { demoCta, demoLabel, publicOnly, signInHref, signInLabelFor } from "./site";
 import "../landing.css";
 import "./public.css";
 
@@ -13,25 +15,28 @@ import "./public.css";
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const signedIn = !publicOnly && (await cookies()).has("ragsis_session");
+  const locale = await getLocale();
+  const es = locale === "es";
 
   return (
     <main className="gate pub">
       <header className="gate-top pub-top">
-        <Link href="/" className="pub-home" aria-label="Ragis home">
+        <Link href="/" className="pub-home" aria-label={es ? "Inicio de Ragis" : "Ragis home"}>
           <Brand />
         </Link>
         <nav className="land-nav">
           <Link href="/pricing" className="pub-link">
-            Pricing
+            {es ? "Precios" : "Pricing"}
           </Link>
           {!signedIn && demoCta && (
             <a href={demoCta.href} className="pub-link">
-              {demoCta.label}
+              {demoLabel(locale)}
             </a>
           )}
+          <LanguageSwitch />
           <ThemeToggle />
           <Link href={signedIn ? "/app" : signInHref} className="land-pill">
-            {signedIn ? "Open workspace" : signInLabel}
+            {signedIn ? (es ? "Abrir el espacio de trabajo" : "Open workspace") : signInLabelFor(locale)}
           </Link>
         </nav>
       </header>

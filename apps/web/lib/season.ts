@@ -81,7 +81,16 @@ export function currentSeason(preview?: string | string[]): Season {
   return seasonAt(now);
 }
 
-/** "January 6", for "until January 6". */
-export function offerEnds(offer: Offer) {
-  return new Date(`${offer.ends}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+/** "January 6", for "until January 6"; in Spanish "6 de enero". */
+export function offerEnds(offer: Offer, locale: "en" | "es" = "en") {
+  const date = new Date(`${offer.ends}T00:00:00Z`);
+  return locale === "es"
+    ? date.toLocaleDateString("es-ES", { month: "long", day: "numeric", timeZone: "UTC" })
+    : date.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+}
+
+/** The offer's name in a language: "Black Friday offer" / "Oferta de Black Friday". */
+export function offerName(offer: Offer, locale: "en" | "es" = "en") {
+  if (locale === "en") return offer.name;
+  return offer.name.startsWith("Black Friday") ? "Oferta de Black Friday" : offer.name.startsWith("Holiday") ? "Oferta de fiestas" : offer.name;
 }

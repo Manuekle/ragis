@@ -1,3 +1,4 @@
+import { usdFor, type Locale } from "@/lib/i18n";
 import { PLANS } from "./pricing/plans";
 
 // What the landing says about Ragis, kept apart from its layout so /llms.txt and the structured
@@ -61,3 +62,64 @@ export const LANDING_FAQ = [
     text: `Team Cloud starts at ${price("team")} a month and Business Cloud at ${price("business")}, plus a one-time setup. Private Cloud, a dedicated stack for sensitive data, starts at ${price("private")} a month plus infrastructure. Self-hosted is an annual license. Joining the waitlist is free.`,
   },
 ] as const;
+
+// ───────────── Spanish ─────────────
+// The same four lists in Spanish, in the same order. Keep both languages in step: change an answer
+// above and change it here too.
+
+const STEPS_ES = [
+  { n: "01", title: "Conecta tus documentos", text: "Sube PDF, archivos de Word, presentaciones, hojas de cálculo y escaneos. Ragis lee el texto, las tablas, los gráficos y las figuras." },
+  { n: "02", title: "Pregunta en lenguaje natural", text: "Cualquiera del equipo hace una pregunta. Las respuestas salen solo de tus documentos, nunca de la web abierta." },
+  { n: "03", title: "Comprueba la fuente", text: "Cada afirmación enlaza al documento y la página de los que sale. Las afirmaciones que las fuentes no respaldan se descartan antes de que las veas." },
+] as const;
+
+const FEATURES_ES = [
+  { title: "Agentes", text: "Crea asistentes para un equipo o una tarea en Agent Studio. Define qué pueden usar, pruébalos en un entorno aislado y publica versiones." },
+  { title: "Flujos de trabajo", text: "Convierte un proceso recurrente en pasos que se ejecutan solos y esperan a una persona cuando hace falta una decisión." },
+  { title: "Firmas", text: "Envía un documento a firmar y conserva un registro verificable de quién firmó qué y cuándo." },
+  { title: "Registro de auditoría", text: "Consulta quién preguntó qué, qué fuentes se usaron y cuánto costó cada llamada a un modelo." },
+] as const;
+
+const TRUST_ES = [
+  { title: "Respuestas que respetan permisos", text: "El acceso sigue las reglas de tu organización, espacio de trabajo, grupo y documento. Una pregunta nunca muestra un archivo que no podrías abrir." },
+  { title: "Datos personales ocultos", text: "Los datos personales se detectan y se enmascaran cuando se ingieren los documentos." },
+  { title: "Elige dónde se ejecutan los modelos", text: "Elige los modelos y la región, o ejecútalos en tus propios servidores para equipos con restricciones." },
+  { title: "Inicio de sesión único", text: "Conéctalo a tu proveedor de identidad. Claves de API con alcance por espacio de trabajo para integraciones." },
+] as const;
+
+const usdEs = usdFor("es");
+const priceEs = (id: (typeof PLANS)[number]["id"]) => usdEs.format(PLANS.find((plan) => plan.id === id)!.monthlyPrice);
+
+const LANDING_FAQ_ES = [
+  {
+    q: "¿Qué es Ragis?",
+    text: "Ragis es un asistente de IA para los documentos de tu empresa. Lee PDF, archivos de Word, presentaciones, hojas de cálculo y escaneos, y responde en lenguaje natural con el documento y la página exactos de los que sale cada afirmación.",
+  },
+  {
+    q: "¿Cómo sé que una respuesta es correcta?",
+    text: "Cada afirmación enlaza al documento y la página de los que sale, así que cualquiera puede abrir la fuente y comprobarla. Las respuestas salen solo de tus documentos, nunca de la web abierta, y las afirmaciones que las fuentes no respaldan se descartan antes de que las veas.",
+  },
+  {
+    q: "¿Puede alguien obtener respuestas de archivos que no tiene permiso para abrir?",
+    text: "No. El acceso sigue las reglas de tu organización, espacio de trabajo, grupo y documento, de modo que una pregunta nunca muestra un archivo que la persona que pregunta no podría abrir.",
+  },
+  {
+    q: "¿Entrenan modelos de IA con nuestros documentos?",
+    text: "No. Tus documentos y preguntas nunca se usan para entrenar modelos de IA, y los datos personales se detectan y se enmascaran cuando se añaden los documentos.",
+  },
+  {
+    q: "¿Dónde se ejecutan los modelos de IA?",
+    text: "Las respuestas las generan modelos de Amazon Bedrock, en la región acordada con tu organización. Los equipos con datos restringidos pueden ejecutar Ragis en sus propios servidores con modelos locales.",
+  },
+  {
+    q: "¿Cuánto cuesta Ragis?",
+    text: `Team Cloud empieza en ${priceEs("team")} al mes y Business Cloud en ${priceEs("business")}, más una configuración única. Private Cloud, una infraestructura dedicada para datos sensibles, empieza en ${priceEs("private")} al mes más la infraestructura. El autoalojado es una licencia anual. Unirse a la lista de espera es gratis.`,
+  },
+] as const;
+
+/** The landing's words in a language: steps, features, reasons to trust it and the FAQ. */
+export function contentFor(locale: Locale) {
+  return locale === "es"
+    ? { STEPS: STEPS_ES, FEATURES: FEATURES_ES, TRUST: TRUST_ES, LANDING_FAQ: LANDING_FAQ_ES }
+    : { STEPS, FEATURES, TRUST, LANDING_FAQ };
+}

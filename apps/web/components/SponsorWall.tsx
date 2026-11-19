@@ -1,13 +1,37 @@
 "use client";
 
-import Link from "next/link";
+import { LocaleLink as Link, useLocale } from "@/components/LocaleProvider";
 import { useState, type CSSProperties } from "react";
 import type { SponsorTier } from "@/app/(public)/waitlist/sponsors";
 import { IconArrowRight, IconArrowUpRight, IconPlus } from "@/components/icons";
+import { usdFor } from "@/lib/i18n";
 import { Avatar, grainVars } from "@/components/ui";
 import type { WallSponsor } from "@/lib/waitlist-db";
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
+const TEXT = {
+  en: {
+    allOpen: (n: number) => `All ${n} open`,
+    someOpen: (open: number, n: number) => `${open} of ${n} open`,
+    full: "All taken",
+    logo: "Your logo here",
+    thanks: "Thank you, ",
+    moreOne: (tier: string) => `one more ${tier.toLowerCase()}`,
+    moreMany: (n: number, tier: string) => `${n} more ${tier.toLowerCase()}s`,
+    and: " and ",
+    taken: (taken: number, n: number, tier: string) => `${taken} of ${n} ${tier.toLowerCase()} places taken.`,
+  },
+  es: {
+    allOpen: (n: number) => `Las ${n} libres`,
+    someOpen: (open: number, n: number) => `${open} de ${n} libres`,
+    full: "Todas ocupadas",
+    logo: "Tu logotipo aquí",
+    thanks: "Gracias, ",
+    moreOne: (tier: string) => `otro ${tier}`,
+    moreMany: (n: number, tier: string) => `${n} ${tier}s más`,
+    and: " y ",
+    taken: (taken: number, n: number, tier: string) => `${taken} de ${n} plazas de ${tier} ocupadas.`,
+  },
+};
 
 /**
  * The landing's wall of sponsors: every slot of every tier, taken or not. Seats shrink with the
@@ -42,14 +66,17 @@ function labelOf(s: WallSponsor, kind: Kind): string {
 }
 
 /** Supporters thanked by name; the ones who left their badge blank are counted, not named "Anonymous". */
-function thanks(names: string[], tier: SponsorTier): string {
+function thanks(names: string[], tier: SponsorTier, t: (typeof TEXT)["en"]): string {
   const named = names.filter((n) => n !== ANONYMOUS);
   const unnamed = names.length - named.length;
-  const rest = unnamed === 0 ? [] : unnamed === 1 ? [`one more ${tier.name.toLowerCase()}`] : [`${unnamed} more ${tier.name.toLowerCase()}s`];
-  return list([...named, ...rest]);
+  const rest = unnamed === 0 ? [] : unnamed === 1 ? [t.moreOne(tier.name)] : [t.moreMany(unnamed, tier.name)];
+  return list([...named, ...rest], t.and);
 }
 
 function Tier({ tier, taken }: { tier: SponsorTier; taken: WallSponsor[] }) {
+  const locale = useLocale();
+  const t = TEXT[locale];
+  const usd = usdFor(locale);
   const kind = kindOf(tier);
   const open = Math.max(tier.slots - taken.length, 0);
   const names = kind === "seat" ? taken.map((s) => labelOf(s, kind)) : [];
@@ -62,11 +89,11 @@ function Tier({ tier, taken }: { tier: SponsorTier; taken: WallSponsor[] }) {
         </h3>
         {open > 0 ? (
           <Link href="/waitlist#sponsor" className="sw-take">
-            {open === tier.slots ? `All ${tier.slots} open` : `${open} of ${tier.slots} open`}
+            {open === tier.slots ? t.allOpen(tier.slots) : t.someOpen(open, tier.slots)}
             <IconArrowRight size={12} />
           </Link>
         ) : (
-          <span className="sw-full">All taken</span>
+          <span className="sw-full">{t.full}</span>
         )}
       </header>
 
@@ -83,7 +110,7 @@ function Tier({ tier, taken }: { tier: SponsorTier; taken: WallSponsor[] }) {
               {kind === "card" && (
                 <span className="sw-open-label">
                   <IconPlus size={13} />
-                  Your logo here
+                  {t.logo}
                 </span>
               )}
               {kind === "tile" && <IconPlus size={12} />}
@@ -92,9 +119,9 @@ function Tier({ tier, taken }: { tier: SponsorTier; taken: WallSponsor[] }) {
         ))}
       </ul>
       {/* the seats are too small to carry a name, so supporters are thanked by name underneath */}
-      {names.length > 0 && <p className="sw-names">Thank you, {thanks(names, tier)}.</p>}
+      {names.length > 0 && <p className="sw-names">{t.thanks}{thanks(names, tier, t)}.</p>}
       <p className="sr-only">
-        {taken.length} of {tier.slots} {tier.name.toLowerCase()} places taken.
+        {t.taken(taken.length, tier.slots, tier.name)}
       </p>
     </section>
   );
@@ -165,7 +192,7 @@ function initials(label: string): string {
 }
 
 /** "A", "A and B", "A, B and C". */
-function list(names: string[]): string {
+function list(names: string[], and: string): string {
   if (names.length < 2) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${names.slice(0, -1).join(", ")}${and}${names[names.length - 1]}`;
 }

@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
 import { DitherField } from "@/components/DitherField";
 import { IconArrowRight, IconCheck } from "@/components/icons";
+import { getLocale } from "@/lib/locale";
 import { site } from "../../site";
 import "../../waitlist/waitlist.css";
 
 // A private landing after paying: nothing here for search engines.
-export const metadata: Metadata = { title: "Thank you", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getLocale()) === "es" ? "Gracias" : "Thank you", robots: { index: false, follow: false } };
+}
 
 /** Where Polar sends the buyer after a cloud plan is paid (api/checkout). */
-export default function ThanksPage() {
+export default async function ThanksPage() {
+  const es = (await getLocale()) === "es";
   return (
     <div className="gate-col pub-col pub-col-wide wl">
       <i className="gate-beam" data-line="left" aria-hidden="true" />
@@ -21,11 +25,13 @@ export default function ThanksPage() {
           <span className="wl-done-mark">
             <IconCheck size={20} strokeWidth={2.2} />
           </span>
-          <h1>Thank you. You&apos;re in.</h1>
-          <p>Your payment went through, and Polar emailed you the receipt. We&apos;ll write to the address you paid with to set up your workspace.</p>
-          <p className="wl-fine">Questions about the payment? {site.contactEmail ? <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a> : "Reply to the receipt email."}</p>
+          <h1>{es ? "Gracias. Ya estás dentro." : "Thank you. You're in."}</h1>
+          <p>{es ? "Tu pago se ha completado y Polar te ha enviado el recibo por correo. Te escribiremos a la dirección con la que pagaste para configurar tu espacio de trabajo." : "Your payment went through, and Polar emailed you the receipt. We'll write to the address you paid with to set up your workspace."}</p>
+          <p className="wl-fine">
+            {es ? "¿Dudas sobre el pago?" : "Questions about the payment?"} {site.contactEmail ? <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a> : es ? "Responde al correo del recibo." : "Reply to the receipt email."}
+          </p>
           <Link href="/" className="wl-back">
-            Back to Ragis
+            {es ? "Volver a Ragis" : "Back to Ragis"}
             <IconArrowRight size={14} />
           </Link>
         </div>

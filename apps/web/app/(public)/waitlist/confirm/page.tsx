@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import { DitherField } from "@/components/DitherField";
+import { getLocale } from "@/lib/locale";
 import { Confirm } from "./Confirm";
 import "../waitlist.css";
 
 // The link carries a one-time token: keep the page out of search results and the token out of
 // the Referer header of anything the page loads or links to.
-export const metadata: Metadata = {
-  title: "Confirm your place",
-  robots: { index: false, follow: false },
-  referrer: "no-referrer",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: (await getLocale()) === "es" ? "Confirma tu lugar" : "Confirm your place",
+    robots: { index: false, follow: false },
+    referrer: "no-referrer",
+  };
+}
 
 /** Where the link in the confirmation email lands. */
 export default async function ConfirmPage({ searchParams }: { searchParams: Promise<{ token?: string | string[] }> }) {

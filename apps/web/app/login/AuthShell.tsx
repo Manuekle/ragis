@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
 import { Brand } from "@/components/Brand";
 import { DitherField } from "@/components/DitherField";
 import { IconCheck } from "@/components/icons";
@@ -10,12 +10,15 @@ import { IconCheck } from "@/components/icons";
  * A Magic UI DitherField (horizon pattern) glows up from the bottom band that the empty foot row reserves.
  */
 export function AuthShell({
+  home = "Ragis home",
   title,
   lead,
   aside,
   linkBrandToHome = false,
   children,
 }: {
+  /** Accessible name of the brand link; Spanish pages pass theirs. */
+  home?: string;
   title: React.ReactNode;
   lead?: React.ReactNode;
   aside?: React.ReactNode;
@@ -27,7 +30,7 @@ export function AuthShell({
       <DitherField className="gate-dither" pattern="horizon" intensity={0.7} speed={0.6} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
       <header className="gate-top">
         {linkBrandToHome ? (
-          <Link href="/" aria-label="Ragis home" style={{ display: "inline-flex" }}>
+          <Link href="/" aria-label={home} style={{ display: "inline-flex" }}>
             <Brand />
           </Link>
         ) : (

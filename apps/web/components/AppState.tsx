@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ApiError } from "@/lib/api";
+import type { Locale } from "@/lib/i18n";
 
 // Each drawing ships a second file with light ink (`<file>-dark.svg`); CSS shows the one that matches the theme.
 // Empty and error states carry a drawing, never an icon tile.
@@ -33,6 +34,13 @@ const copy: Record<ErrorKind, { title: string; text: string }> = {
   notFound: { title: "Page not found", text: "This page doesn’t exist or was moved." },
 };
 
+const copyEs: Record<ErrorKind, { title: string; text: string }> = {
+  forbidden: { title: "Acceso denegado", text: "Pide acceso a esta página a un administrador de la organización." },
+  server: { title: "Algo salió mal", text: "No pudimos cargar esta página. Inténtalo de nuevo." },
+  offline: { title: "Sin conexión", text: "Comprueba tu conexión e inténtalo de nuevo." },
+  notFound: { title: "Página no encontrada", text: "Esta página no existe o se movió." },
+};
+
 export function StateIllustration({ kind }: { kind: keyof typeof illustrations }) {
   const { file, width, height } = illustrations[kind];
   return (
@@ -55,13 +63,15 @@ export function requestErrorKind(error: unknown): ErrorKind | null {
   return error.status >= 500 ? "server" : null;
 }
 
-export function AppErrorState({ kind, backHref = "/app", backLabel = "Back to organizations", onRetry }: {
+export function AppErrorState({ kind, backHref = "/app", backLabel = "Back to organizations", onRetry, locale = "en" }: {
   kind: ErrorKind;
   backHref?: string;
   backLabel?: string;
   onRetry?: () => void;
+  /** Spanish on the public site's own error pages; the workspace is English. */
+  locale?: Locale;
 }) {
-  const { title, text } = copy[kind];
+  const { title, text } = (locale === "es" ? copyEs : copy)[kind];
   const linkOnly = kind === "forbidden" || kind === "notFound";
   return (
     <div className="app-error-state">
@@ -73,7 +83,7 @@ export function AppErrorState({ kind, backHref = "/app", backLabel = "Back to or
       {linkOnly ? (
         <Link className="btn ghost" href={backHref}>{backLabel}</Link>
       ) : (
-        <button type="button" className="ghost" onClick={onRetry}>Try again</button>
+        <button type="button" className="ghost" onClick={onRetry}>{locale === "es" ? "Reintentar" : "Try again"}</button>
       )}
     </div>
   );

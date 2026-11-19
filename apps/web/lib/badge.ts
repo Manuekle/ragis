@@ -268,6 +268,7 @@ export function badgeLines(badge: Pick<PublicBadge, "name" | "company">): { titl
 }
 
 /** Text people post with their badge. */
-export function shareText(badge: Pick<PublicBadge, "number">): string {
+export function shareText(badge: Pick<PublicBadge, "number">, locale: "en" | "es" = "en"): string {
+  if (locale === "es") return `Soy el Nº ${badgeNumber(badge.number)} en la lista de espera de Ragis: respuestas de los documentos de tu empresa, cada una con su fuente.`;
   return `I'm Nº ${badgeNumber(badge.number)} on the Ragis waitlist: answers from your company's documents, each one with its source.`;
 }

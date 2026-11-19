@@ -339,3 +339,4 @@ html[data-nav="soft"] .gate-col :is(.pub-body, .wl-stage) { animation-delay: 90m
 }
 /* pages that already close on a CTA (landing, waitlist) don't need a second one in the footer */
 .gate:has(.glyph-host) .sf-cta { display: none; }
+.sf-toggles { display: inline-flex; align-items: center; gap: 8px; }

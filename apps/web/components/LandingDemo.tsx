@@ -7,6 +7,7 @@ import { FileTile } from "@/components/FileTile";
 import { LogoMark } from "@/components/Logo";
 import { typewriter } from "@/components/paperFont";
 import { IconCheck, IconFiles, IconHourglass, IconLock, IconSend, IconShield, IconSignature } from "@/components/icons";
+import { useLocale } from "@/components/LocaleProvider";
 
 /*
  * Hero product story. One expense claim goes through Ragis in a single, unbroken take:
@@ -21,6 +22,83 @@ import { IconCheck, IconFiles, IconHourglass, IconLock, IconSend, IconShield, Ic
 
 // Handwriting for the signature: legible, self-hosted by next/font at build time.
 const hand = Homemade_Apple({ weight: "400", subsets: ["latin"], display: "swap" });
+
+// ───────────── words (the story is told in the page's language) ─────────────
+
+const TEXT = {
+  en: {
+    caption: "Ragis reads an expense claim, masks the personal data, checks the hotel cost against the travel policy with a cited answer, gets a manager's approval, then signs, stamps and logs it.",
+    days: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+    brand: ["TRAVEL", "EXPENSE", "CLAIM"],
+    name: "NAME",
+    trip: "TRIP",
+    date: "DATE",
+    dateValue: "11/16/2026",
+    lodging: "LODGING",
+    nights: "NIGHTS",
+    purpose: "PURPOSE",
+    purposeValue: "Bayview Hotel, client summit",
+    signature: "SIGNATURE",
+    lines: ["Reading the claim", "Masking personal data", "Checking the travel policy", "Within policy", "Asking Michael to approve", "Approved by Michael", "Signing and sealing", "Paid and logged"],
+    employee: "Employee",
+    masked: "masked",
+    tripRow: "Trip",
+    tripValue: "San Francisco · Nov 10–13",
+    stay: "Stay",
+    stayValue: "Tue → Thu",
+    lodgingRow: "Lodging",
+    lodgingValue: "$412.80 · 3 nights",
+    purposeRow: "Purpose",
+    purposeRowValue: "Client summit",
+    question: "Is the hotel within policy?",
+    answer: ["Yes.", "$412.80", "over", "3", "nights", "is", "$137.60", "a", "night,", "under", "the", "$180", "limit", 1, "."] as (string | number)[],
+    policy: "Travel & Expense Policy",
+    verified: "Verified",
+    role: "Finance lead",
+    reviewing: "Reviewing",
+    approvedAt: "Approved · 10:44",
+    approved: "Approved",
+    waiting: "Waiting for approval",
+    verdict: "$412.80 · within policy",
+    trail: ["Signed by Michael Brooks", "Stamped and sealed", "Reimbursement sent", "Logged to the audit trail"],
+  },
+  es: {
+    caption: "Ragis lee una solicitud de gastos, oculta los datos personales, comprueba el coste del hotel con la política de viajes mediante una respuesta citada, recibe la aprobación de un responsable y después la firma, la sella y la registra.",
+    days: ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"],
+    brand: ["SOLICITUD", "DE GASTOS", "DE VIAJE"],
+    name: "NOMBRE",
+    trip: "VIAJE",
+    date: "FECHA",
+    dateValue: "16/11/2026",
+    lodging: "ALOJAMIENTO",
+    nights: "NOCHES",
+    purpose: "MOTIVO",
+    purposeValue: "Hotel Bayview, cumbre con clientes",
+    signature: "FIRMA",
+    lines: ["Leyendo la solicitud", "Ocultando datos personales", "Comprobando la política de viajes", "Dentro de la política", "Pidiendo la aprobación de Michael", "Aprobado por Michael", "Firmando y sellando", "Pagado y registrado"],
+    employee: "Empleada",
+    masked: "oculto",
+    tripRow: "Viaje",
+    tripValue: "San Francisco · 10–13 nov",
+    stay: "Estancia",
+    stayValue: "Mar → Jue",
+    lodgingRow: "Alojamiento",
+    lodgingValue: "$412.80 · 3 noches",
+    purposeRow: "Motivo",
+    purposeRowValue: "Cumbre con clientes",
+    question: "¿El hotel cumple la política?",
+    answer: ["Sí.", "$412.80", "por", "3", "noches", "son", "$137.60", "la", "noche,", "por", "debajo", "del", "límite", "de", "$180", 1, "."] as (string | number)[],
+    policy: "Política de viajes y gastos",
+    verified: "Verificado",
+    role: "Responsable de finanzas",
+    reviewing: "Revisando",
+    approvedAt: "Aprobado · 10:44",
+    approved: "Aprobado",
+    waiting: "Esperando aprobación",
+    verdict: "$412.80 · dentro de la política",
+    trail: ["Firmado por Michael Brooks", "Sellado y estampado", "Reembolso enviado", "Registrado en la auditoría"],
+  },
+};
 
 // ───────────── timeline (ms) ─────────────
 
@@ -104,6 +182,7 @@ function In({ at, className, style, children, as: Tag = "div" }: { at: number; c
 // ───────────── shell ─────────────
 
 export function LandingDemo() {
+  const locale = useLocale();
   const [run, setRun] = useState(0);
   const [still, setStill] = useState(false);
   const clock = useRef<Clock>(null as unknown as Clock);
@@ -189,9 +268,7 @@ export function LandingDemo() {
         hold.current.hover = false;
       }}
     >
-      <figcaption className="sr-only">
-        Ragis reads an expense claim, masks the personal data, checks the hotel cost against the travel policy with a cited answer, gets a manager&apos;s approval, then signs, stamps and logs it.
-      </figcaption>
+      <figcaption className="sr-only">{TEXT[locale].caption}</figcaption>
       <ClockContext.Provider value={clock.current}>
         <Story key={run} />
       </ClockContext.Provider>
@@ -213,8 +290,6 @@ function Story() {
 }
 
 // ───────────── the paper ─────────────
-
-const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
 /** The sweep itself is a CSS transform animation (compositor only); the clock only says when it runs. */
 function Beam() {
@@ -242,6 +317,7 @@ function Pen({ at, className, d, viewBox }: { at: number; className: string; d: 
 }
 
 function Paper() {
+  const t = TEXT[useLocale()];
   const masked = useAfter(T.mask);
   const signing = useAfter(T.sign[0]);
   const stamped = useAfter(T.stamp);
@@ -251,53 +327,53 @@ function Paper() {
 
       <div className="ld-p-head">
         <span className="ld-p-brand">
-          <span>TRAVEL</span>
-          <span>EXPENSE</span>
-          <span>CLAIM</span>
+          {t.brand.map((word) => (
+            <span key={word}>{word}</span>
+          ))}
         </span>
         <span className="ld-p-no">2411</span>
       </div>
 
-      <Field at={T.rows.name} label="NAME" className="ld-f-name">
+      <Field at={T.rows.name} label={t.name} className="ld-f-name">
         <span className="ld-redact" data-on={masked ? "" : undefined}>
           Emily Carter
         </span>
       </Field>
 
       <div className="ld-p-split">
-        <Field at={T.rows.trip} label="TRIP">
+        <Field at={T.rows.trip} label={t.trip}>
           San Francisco, CA
         </Field>
-        <Field at={T.rows.trip} label="DATE">
-          11/16/2026
+        <Field at={T.rows.trip} label={t.date}>
+          {t.dateValue}
         </Field>
       </div>
 
       <In at={T.rows.days} className="ld-days">
-        {DAYS.map((d) => (
+        {t.days.map((d) => (
           <span key={d}>{d}</span>
         ))}
         <Pen at={T.circleDays} className="ld-pen-days" viewBox="0 0 120 30" d="M10 17C9 7 52 3 84 4c22 1 33 6 31 13-2 8-38 10-66 9C25 25 6 22 8 14 10 7 30 4 52 3" />
       </In>
 
       <div className="ld-p-split">
-        <Field at={T.rows.lodging} label="LODGING">
+        <Field at={T.rows.lodging} label={t.lodging}>
           <span className="ld-amount">
             $412.80
             <Pen at={T.circleAmount} className="ld-pen-amount" viewBox="0 0 90 30" d="M8 15C7 6 40 2 66 4c16 1 22 6 20 12-3 8-30 11-52 10C14 25 3 20 6 12 9 6 26 3 44 3" />
           </span>
         </Field>
-        <Field at={T.rows.lodging} label="NIGHTS">
+        <Field at={T.rows.lodging} label={t.nights}>
           3
         </Field>
       </div>
 
-      <Field at={T.rows.purpose} label="PURPOSE" className="ld-f-purpose">
-        Bayview Hotel, client summit
+      <Field at={T.rows.purpose} label={t.purpose} className="ld-f-purpose">
+        {t.purposeValue}
       </Field>
 
       <div className="ld-p-foot">
-        <span className="ld-f-label">SIGNATURE</span>
+        <span className="ld-f-label">{t.signature}</span>
         <span className={`ld-p-sig ${hand.className}`} data-on={signing ? "" : undefined}>
           Michael Brooks
         </span>
@@ -314,20 +390,13 @@ function Stamp() {
 
 // ───────────── what Ragis is doing ─────────────
 
-const LINES: { at: number; text: string; done?: boolean }[] = [
-  { at: 0, text: "Reading the claim" },
-  { at: T.mask, text: "Masking personal data" },
-  { at: T.ask, text: "Checking the travel policy" },
-  { at: T.verified, text: "Within policy", done: true },
-  { at: T.approve, text: "Asking Michael to approve" },
-  { at: T.approved, text: "Approved by Michael", done: true },
-  { at: T.seal, text: "Signing and sealing" },
-  { at: T.stamp + 600, text: "Paid and logged", done: true },
-];
+const LINE_AT = [0, T.mask, T.ask, T.verified, T.approve, T.approved, T.seal, T.stamp + 600];
+const LINE_DONE = [false, false, false, true, false, true, false, true];
 
 function Narration() {
-  const i = useClockValue((t) => LINES.reduce((acc, l, k) => (t >= l.at ? k : acc), 0));
-  const line = LINES[i]!;
+  const words = TEXT[useLocale()].lines;
+  const i = useClockValue((t) => LINE_AT.reduce((acc, at, k) => (t >= at ? k : acc), 0));
+  const line = { text: words[i]!, done: LINE_DONE[i] };
   return (
     <div className="ld-narr">
       <span className="ld-narr-mark" data-done={line.done ? "" : undefined}>
@@ -377,11 +446,12 @@ function Panel() {
 
 // 1 · read: each field arrives as the beam crosses it on the paper
 function ReadPhase() {
+  const t = TEXT[useLocale()];
   const masked = useAfter(T.mask);
   const rows: { at: number; label: string; value: ReactNode }[] = [
     {
       at: T.rows.name,
-      label: "Employee",
+      label: t.employee,
       value: (
         <span className="ld-x-mask">
           <span className="ld-redact" data-on={masked ? "" : undefined}>
@@ -389,15 +459,15 @@ function ReadPhase() {
           </span>
           <span className="ld-x-tag" data-on={masked ? "" : undefined}>
             <IconShield size={11} />
-            masked
+            {t.masked}
           </span>
         </span>
       ),
     },
-    { at: T.rows.trip, label: "Trip", value: "San Francisco · Nov 10–13" },
-    { at: T.rows.days, label: "Stay", value: "Tue → Thu" },
-    { at: T.rows.lodging, label: "Lodging", value: "$412.80 · 3 nights" },
-    { at: T.rows.purpose, label: "Purpose", value: "Client summit" },
+    { at: T.rows.trip, label: t.tripRow, value: t.tripValue },
+    { at: T.rows.days, label: t.stay, value: t.stayValue },
+    { at: T.rows.lodging, label: t.lodgingRow, value: t.lodgingValue },
+    { at: T.rows.purpose, label: t.purposeRow, value: t.purposeRowValue },
   ];
   return (
     <ul className="ld-x">
@@ -412,10 +482,10 @@ function ReadPhase() {
 }
 
 // 2 · ask: a cited answer, while the pen circles the figures it used
-const QUESTION = "Is the hotel within policy?";
-const ANSWER: (string | number)[] = ["Yes.", "$412.80", "over", "3", "nights", "is", "$137.60", "a", "night,", "under", "the", "$180", "limit", 1, "."];
-
 function AskPhase() {
+  const t = TEXT[useLocale()];
+  const QUESTION = t.question;
+  const ANSWER = t.answer;
   const typed = useProgress(T.type[0], T.type[1], QUESTION.length);
   const answering = useAfter(T.answer);
   let w = 0;
@@ -448,12 +518,12 @@ function AskPhase() {
         <In at={T.source} as="span" className="ld-rise ld-src">
           <span className="ld-src-n">1</span>
           <FileTile ext="pdf" size={16} />
-          Travel &amp; Expense Policy
+          {t.policy}
           <span className="ld-src-loc">p. 4</span>
         </In>
         <In at={T.verified} as="span" className="ld-rise ld-verified">
           <i className="land-dot" aria-hidden="true" />
-          Verified
+          {t.verified}
         </In>
       </div>
     </div>
@@ -502,6 +572,7 @@ function Confetti() {
 }
 
 function ApprovePhase() {
+  const t = TEXT[useLocale()];
   const approved = useAfter(T.approved);
   return (
     <div className="ld-approve">
@@ -509,16 +580,16 @@ function ApprovePhase() {
         <span className="avatar ld-avatar" style={avatarStyle("Michael Brooks")} aria-hidden="true" />
         <span className="ld-person-name">
           Michael Brooks
-          <span>Finance lead</span>
+          <span>{t.role}</span>
         </span>
         <span className="ld-status" data-state={approved ? "ok" : "wait"}>
           <span className="ld-status-label" data-for="wait">
             <IconHourglass size={12} />
-            Reviewing
+            {t.reviewing}
           </span>
           <span className="ld-status-label" data-for="ok">
             <IconCheck size={12} />
-            Approved · 10:44
+            {t.approvedAt}
           </span>
         </span>
       </In>
@@ -531,8 +602,8 @@ function ApprovePhase() {
           </svg>
         </span>
         <span className="ld-verdict-text">
-          <strong>{approved ? "Approved" : "Waiting for approval"}</strong>
-          <span>$412.80 · within policy</span>
+          <strong>{approved ? t.approved : t.waiting}</strong>
+          <span>{t.verdict}</span>
         </span>
       </div>
     </div>
@@ -541,16 +612,17 @@ function ApprovePhase() {
 
 // 4 · seal: signed, stamped, paid, on the record
 const TRAIL = [
-  { Icon: IconSignature, text: "Signed by Michael Brooks", meta: "10:44", at: T.sign[0] + 200 },
-  { Icon: IconLock, text: "Stamped and sealed", meta: "sha-256 9f3a…c21e", at: T.stamp + 150, mono: true },
-  { Icon: IconSend, text: "Reimbursement sent", meta: "$412.80", at: T.stamp + 650, mono: true },
-  { Icon: IconFiles, text: "Logged to the audit trail", meta: "EX-2411", at: T.stamp + 1150, mono: true },
+  { Icon: IconSignature, meta: "10:44", at: T.sign[0] + 200, mono: false },
+  { Icon: IconLock, meta: "sha-256 9f3a…c21e", at: T.stamp + 150, mono: true },
+  { Icon: IconSend, meta: "$412.80", at: T.stamp + 650, mono: true },
+  { Icon: IconFiles, meta: "EX-2411", at: T.stamp + 1150, mono: true },
 ];
 
 function SealPhase() {
+  const words = TEXT[useLocale()].trail;
   return (
     <ol className="ld-trail">
-      {TRAIL.map((r) => (
+      {TRAIL.map((row, k) => ({ ...row, text: words[k]! })).map((r) => (
         <In key={r.text} at={r.at} as="li" className="ld-rise ld-trail-row">
           <span className="ld-trail-ico">
             <r.Icon size={13} />

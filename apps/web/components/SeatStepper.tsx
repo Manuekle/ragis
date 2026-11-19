@@ -9,7 +9,13 @@ import { useMotionPreference } from "@/lib/fluid/use-motion-preference";
 import { DitherField } from "./DitherField";
 import { IconMinus, IconPlus, IconUser } from "./icons";
 import { SoftText } from "./motion";
+import { useLocale } from "./LocaleProvider";
 import { Avatar } from "./ui";
+
+const TEXT = {
+  en: { seats: "Seats", size: "Team size", left: (n: number) => `${n} left`, remove: "Remove a seat", add: "Add a seat", note: "Plans are priced per organization, never per seat. Add everyone who needs answers.", seat: (i: number) => `seat ${i}` },
+  es: { seats: "Puestos", size: "Tamaño del equipo", left: (n: number) => `${n} libres`, remove: "Quitar un puesto", add: "Añadir un puesto", note: "Los planes se cobran por organización, nunca por puesto. Añade a todas las personas que necesiten respuestas.", seat: (i: number) => `seat ${i}` },
+};
 
 const MIN = 1;
 const MAX = 10;
@@ -24,6 +30,7 @@ const SETTLE = springFromResponse(0.4, 0.9);
  * springs home with the release speed.
  */
 export function SeatStepper() {
+  const t = TEXT[useLocale()];
   const [count, setCount] = useState(2);
   const countRef = useRef(count);
   const origin = useRef(count);
@@ -65,12 +72,12 @@ export function SeatStepper() {
   return (
     <div className="seats-stage">
     <DitherField className="seats-dither seats-dither-wide" pattern="waves" intensity={0.5} speed={0.4} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
-    <section className="seats" aria-label="Seats">
+    <section className="seats" aria-label={t.seats}>
       <header>
-        <h2>Team size</h2>
+        <h2>{t.size}</h2>
         <span className="seats-left" aria-live="polite">
           <IconUser size={13} variant="duotone" />
-          <SoftText text={`${left} left`} />
+          <SoftText text={t.left(left)} />
         </span>
       </header>
 
@@ -85,14 +92,14 @@ export function SeatStepper() {
               animate={{ scale: filled ? 1 : 0.8, opacity: filled ? 1 : 0.3, filter: filled ? "grayscale(0)" : "grayscale(1)" }}
               transition={spring(SEAT)}
             >
-              <Avatar name={`seat ${i + 1}`} animate={filled ? "hover" : undefined} />
+              <Avatar name={t.seat(i + 1)} animate={filled ? "hover" : undefined} />
             </motion.span>
           );
         })}
       </div>
 
       <div className="seats-stepper">
-        <button type="button" aria-label="Remove a seat" disabled={count <= MIN} onClick={() => set(count - 1)}>
+        <button type="button" aria-label={t.remove} disabled={count <= MIN} onClick={() => set(count - 1)}>
           <IconMinus size={16} />
         </button>
         <motion.div
@@ -101,7 +108,7 @@ export function SeatStepper() {
           className="seats-count"
           role="spinbutton"
           tabIndex={0}
-          aria-label="Seats"
+          aria-label={t.seats}
           aria-valuemin={MIN}
           aria-valuemax={MAX}
           aria-valuenow={count}
@@ -109,12 +116,12 @@ export function SeatStepper() {
         >
           <SoftText text={String(count)} />
         </motion.div>
-        <button type="button" aria-label="Add a seat" disabled={count >= MAX} onClick={() => set(count + 1)}>
+        <button type="button" aria-label={t.add} disabled={count >= MAX} onClick={() => set(count + 1)}>
           <IconPlus size={16} />
         </button>
       </div>
 
-      <p className="seats-note">Plans are priced per organization, never per seat. Add everyone who needs answers.</p>
+      <p className="seats-note">{t.note}</p>
     </section>
     </div>
   );

@@ -3,9 +3,15 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { IconChevronLeft, IconChevronRight } from "@/components/icons";
+import { useLocale } from "@/components/LocaleProvider";
 import "./included.css";
 
 export type IncludedItem = { art: string; title: string; text: string };
+
+const TEXT = {
+  en: { also: "Also ", included: "included", prev: "Previous feature", next: "Next feature", label: "Also included", item: (title: string, text: string, k: number, n: number) => `${title}. ${text} (${k} of ${n})` },
+  es: { also: "También ", included: "incluido", prev: "Función anterior", next: "Función siguiente", label: "También incluido", item: (title: string, text: string, k: number, n: number) => `${title}. ${text} (${k} de ${n})` },
+};
 
 const EVERY = 5200; // ms a feature stays open before the next one opens
 
@@ -35,6 +41,7 @@ const FOLDED = 0.5; // the folded number's size against the open one
  * With reduced motion it never moves on by itself.
  */
 export function Included({ items }: { items: IncludedItem[] }) {
+  const t = TEXT[useLocale()];
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
   const reduceMotion = useReducedMotion() ?? false;
@@ -76,17 +83,18 @@ export function Included({ items }: { items: IncludedItem[] }) {
   return (
     <>
       <h2>
-        Also <em>included</em>.
+        {t.also}
+        <em>{t.included}</em>.
       </h2>
 
       <div className="inc-nav">
         <span className="inc-count" aria-hidden="true">
           <b key={active}>{pad(active + 1)}</b> / {pad(n)}
         </span>
-        <button type="button" className="inc-arrow" aria-label="Previous feature" onClick={() => go(active - 1)}>
+        <button type="button" className="inc-arrow" aria-label={t.prev} onClick={() => go(active - 1)}>
           <IconChevronLeft size={16} />
         </button>
-        <button type="button" className="inc-arrow" aria-label="Next feature" onClick={() => go(active + 1)}>
+        <button type="button" className="inc-arrow" aria-label={t.next} onClick={() => go(active + 1)}>
           <IconChevronRight size={16} />
         </button>
       </div>
@@ -96,7 +104,7 @@ export function Included({ items }: { items: IncludedItem[] }) {
         className="inc"
         role="group"
         aria-roledescription="carousel"
-        aria-label="Also included"
+        aria-label={t.label}
         style={{ ["--n" as string]: n }}
         onPointerEnter={(e) => {
           if (e.pointerType === "mouse") hold.current.hover = true;
@@ -128,7 +136,7 @@ export function Included({ items }: { items: IncludedItem[] }) {
               type="button"
               className="inc-card"
               aria-current={open ? "true" : undefined}
-              aria-label={`${title}. ${text} (${k + 1} of ${n})`}
+              aria-label={t.item(title, text, k + 1, n)}
               tabIndex={open ? 0 : -1}
               onClick={() => go(k)}
             >
