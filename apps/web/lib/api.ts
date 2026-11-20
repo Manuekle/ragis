@@ -62,6 +62,17 @@ export interface Citation {
   ai_generated?: boolean;
 }
 
+/** ADR-037: the scope an answer used, as the API returns it. */
+export interface QueryScopeInfo {
+  type: "space" | "matter" | "folder" | "documents" | "all";
+  id?: string;
+  ids?: string[];
+  label: string | null;
+  client?: string | null;
+  case_number?: string | null;
+  workspaces: number;
+}
+
 export interface QueryResult {
   trace_id: string;
   answer: string;
@@ -78,6 +89,8 @@ export interface QueryResult {
   document?: GeneratedDocument | null;
   /** Present when the question asked for public records (ADR-036). */
   public_sources?: PublicSourcesSummary | null;
+  /** Where the question searched (ADR-037): the active space, an expediente, a folder, some documents or every space. */
+  scope?: QueryScopeInfo | null;
 }
 
 export interface PublicSourcesSummary {

@@ -85,6 +85,7 @@ import {
   GlobalSearchIcon,
   GlobeIcon,
   BankIcon,
+  Briefcase01Icon,
 } from "@hugeicons/core-free-icons";
 
 type IconData = readonly (readonly [string, { readonly [key: string]: string | number }])[];
@@ -214,6 +215,8 @@ export const IconPdf = make(Pdf01Icon);
 export const IconDocCheck = make(DocumentValidationIcon);
 export const IconLock = make(LockKeyIcon);
 export const IconFolder = make(Folder01Icon);
+/** Expediente (matter, ADR-037): a client's case. */
+export const IconBriefcase = make(Briefcase01Icon);
 export const IconEye = make(EyeIcon);
 export const IconAlert = make(Alert02Icon);
 export const IconMail = make(Mail01Icon);
