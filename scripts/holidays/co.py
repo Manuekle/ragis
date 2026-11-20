@@ -1,4 +1,4 @@
-"""Colombian public holidays (festivos) as SQL rows for the public_holidays table (ADR-037).
+"""Colombian public holidays (festivos) as SQL rows for the public_holidays table (ADR-038).
 
 Rules:
   - Fixed dates that never move: 1 Jan, 1 May, 20 Jul, 7 Aug, 8 Dec, 25 Dec (Ley 51 de 1983, art. 1).

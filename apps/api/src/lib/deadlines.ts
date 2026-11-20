@@ -1,7 +1,7 @@
 import type { Db } from "../db/pool.js";
 
 /**
- * Due dates of procedural deadlines (ADR-037). Pure functions over ISO dates ("YYYY-MM-DD", no time zone) plus the
+ * Due dates of procedural deadlines (ADR-038). Pure functions over ISO dates ("YYYY-MM-DD", no time zone) plus the
  * loader of a firm's calendar.
  *
  * Rules (Colombia; the holidays are data, so another country is rows in public_holidays):

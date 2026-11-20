@@ -3,7 +3,7 @@ import type { Config } from "../config.js";
 import type { ReminderKind } from "./deadlines.js";
 
 /**
- * Reminder emails for deadlines (ADR-037). Same SES path and sender as signature invitations (SIGNATURE_EMAIL_FROM):
+ * Reminder emails for deadlines (ADR-038). Same SES path and sender as signature invitations (SIGNATURE_EMAIL_FROM):
  * without it no reminder is sent, and the web says so on the Términos page.
  */
 export interface DeadlineReminder {

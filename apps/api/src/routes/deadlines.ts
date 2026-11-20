@@ -26,7 +26,7 @@ import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import { assertUuid, audit, isAdmin, requireAdmin, requireWorkspaceWrite, tx, type TenantContext } from "../lib/tenant.js";
 
 /**
- * Procedural deadlines ("términos", ADR-037).
+ * Procedural deadlines ("términos", ADR-038).
  *
  * The ingest worker proposes candidates with the literal sentence and page they come from; a person confirms each one
  * here (with the date it runs from and who is responsible), and only then is it a deadline. The due date is always

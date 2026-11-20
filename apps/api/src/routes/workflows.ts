@@ -451,7 +451,7 @@ export async function workflowRoutes(app: FastifyInstance, deps: Deps, runner: W
       const agents = items.filter((i) => !i.blocked_by_sod).length;
       // Two inboxes (ADR-035): what agents/workflows need from you, and what colleagues ask you (team requests).
       const people = await peopleAttentionCount(db, t.userId);
-      // Deadlines (ADR-037): mine due within two working days or overdue, and candidates waiting for confirmation.
+      // Deadlines (ADR-038): mine due within two working days or overdue, and candidates waiting for confirmation.
       const due = await deadlineAttention(db, t);
       return {
         roles: t.functionalRoles, approvals: items, my_runs: mine,

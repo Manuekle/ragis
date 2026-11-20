@@ -997,7 +997,7 @@ scoped Ask (ADR-031), so an answer could mix documents of different clients.
 **Revisit when** firms need confidential expedientes whose client name only some people may see, conflict-of-interest
 checks against counterparties, or court calendars and deadlines tied to an expediente.
 
-## ADR-037 · Procedural deadlines ("términos"): proposed from documents, confirmed by a person, computed by the server
+## ADR-038 · Procedural deadlines ("términos"): proposed from documents, confirmed by a person, computed by the server
 
 **Context.** For a law firm the costliest failure is a missed procedural deadline. Ragis indexed autos, notices and
 judgments but had no notion of a term: only team requests carried an optional due date. Lawyers count terms by hand

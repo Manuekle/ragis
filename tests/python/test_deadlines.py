@@ -1,4 +1,4 @@
-"""Candidate deadlines found at indexing time (ADR-037): literal quote, exact page, nothing invented."""
+"""Candidate deadlines found at indexing time (ADR-038): literal quote, exact page, nothing invented."""
 
 from datetime import date
 

@@ -214,7 +214,7 @@ their requests.
 The **Inbox** has two parts: *From people* (requests, as a list or a drag-and-drop board, with *For me*, *My teams* and
 *Sent by me*) and *From agents* (workflow reviews and approvals). The sidebar counter adds both.
 
-## Procedural deadlines · Términos (ADR-037)
+## Procedural deadlines · Términos (ADR-038)
 
 When a court document is indexed (auto, notice, judgment), Ragis proposes the terms it finds — "córrase traslado por
 el término de diez (10) días", "a más tardar el 5 de diciembre" — with the literal sentence and the page it comes from.

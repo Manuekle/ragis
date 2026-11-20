@@ -12,7 +12,7 @@ Besides the documents, it leaves every page of the app with something to show:
   - Workflows: three published workflows (answer with sign-off, review of filings, audit when there is evidence).
   - Inbox / Activity: runs started by the associate waiting for the partner's decision, some approved, one rejected,
     and one started by the partner that waits for the associate (and shows separation of duties).
-  - Términos (ADR-037): a fictional court order of the new labour claim, dated a few days ago, whose terms the ingest
+  - Términos (ADR-038): a fictional court order of the new labour claim, dated a few days ago, whose terms the ingest
     worker proposes as candidates; the partner confirms the transfer term (responsible: the associate) so the page
     has a live deadline, and the other candidates wait for a person. Older documents are scanned for candidates too.
 

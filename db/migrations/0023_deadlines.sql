@@ -1,4 +1,4 @@
--- ADR-037: procedural deadlines ("términos") for law firms.
+-- ADR-038: procedural deadlines ("términos") for law firms.
 --
 -- A deadline is a term a court or a law gives the firm to act (answer a claim, appeal, file evidence). It has the date
 -- of the event it runs from (notification, ejecutoria, filing), how it is counted (business days, calendar days,

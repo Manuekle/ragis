@@ -66,7 +66,7 @@ export interface Deps {
   signatureMailer?: SignatureMailer;
   /** Invitation emails to new members (same SES sender as signatures); absent = invitations send nothing. */
   memberMailer?: MemberMailer;
-  /** Deadline reminder emails (ADR-037); same SES sender as signatures. */
+  /** Deadline reminder emails (ADR-038); same SES sender as signatures. */
   deadlineMailer?: DeadlineMailer;
 }
 

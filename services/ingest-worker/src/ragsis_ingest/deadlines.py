@@ -1,4 +1,4 @@
-"""Candidate procedural deadlines ("términos") found in an indexed document (ADR-037).
+"""Candidate procedural deadlines ("términos") found in an indexed document (ADR-038).
 
 Deterministic patterns, no model: every candidate carries the literal sentence it came from and the page of the block
 that holds it, so the citation is exact by construction. A candidate is only a suggestion; a person confirms it in the

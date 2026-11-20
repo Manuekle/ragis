@@ -10,7 +10,7 @@
   # Backfill del grafo (RAG-05) tras habilitarlo en el tenant (plan u organizations.graph_mode='on').
   python -m ragsis_ingest.reindex --org <uuid> --mode graph
 
-  # Términos candidatos (ADR-037) en documentos indexados antes de la detección.
+  # Términos candidatos (ADR-038) en documentos indexados antes de la detección.
   python -m ragsis_ingest.reindex --org <uuid> --mode deadlines
 
   # Purga de un espacio vectorial retirado tras la ventana de observación.

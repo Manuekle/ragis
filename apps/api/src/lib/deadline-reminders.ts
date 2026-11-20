@@ -3,7 +3,7 @@ import { withContext } from "../db/pool.js";
 import { addDays, hourIn, loadCalendarFor, reminderFor, todayIn, type Calendar } from "./deadlines.js";
 
 /**
- * Reminder sweep for deadlines (ADR-037). Runs in the API next to the signature-invitation worker.
+ * Reminder sweep for deadlines (ADR-038). Runs in the API next to the signature-invitation worker.
  *
  * The cross-tenant read is a SECURITY DEFINER function that only returns pending deadlines in a window around today;
  * each reminder is then claimed inside its tenant (deadline_reminders, unique per deadline, kind and due date) before

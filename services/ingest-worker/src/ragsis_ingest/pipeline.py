@@ -15,10 +15,10 @@ Jobs soportados:
              mode=full        re-parsea/re-chunkea y reemplaza los chunks en una sola transacción.
              mode=graph       (RAG-05) extrae entidades/relaciones de los chunks activos sin tocarlos
                               (backfill al habilitar el grafo en un tenant).
-             mode=deadlines   (ADR-037) vuelve a buscar términos candidatos en la versión vigente (documentos
+             mode=deadlines   (ADR-038) vuelve a buscar términos candidatos en la versión vigente (documentos
                               indexados antes de que existiera la detección, o a pedido desde la web).
 
-Términos (ADR-037): al indexar un documento judicial se proponen términos candidatos (frase literal + página). Son
+Términos (ADR-038): al indexar un documento judicial se proponen términos candidatos (frase literal + página). Son
 solo sugerencias: una persona confirma cada uno en la web antes de que exista un término.
 
 Grafo (RAG-05): si el tenant tiene el grafo habilitado (plan u organización), tras el chunking se extraen
@@ -770,7 +770,7 @@ class IngestPipeline:
                 "pipeline_version": self.settings.pipeline_version})
         return f"reindexed:full:{len(ex.chunks)}"
 
-    # ------------------------------------------------------------------ términos (ADR-037)
+    # ------------------------------------------------------------------ términos (ADR-038)
     @staticmethod
     def _blocks_candidates(parsed: ParsedDocument) -> list[Candidate]:
         """Candidates from the parsed blocks (exact page per block). Never fails an ingestion."""
