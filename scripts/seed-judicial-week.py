@@ -513,8 +513,9 @@ def setup_matters(f: Firm) -> None:
                  if (m["case_number"] or "").lower() == spec["case_number"].lower()]
         matter = found[0] if found else f.r(who, "POST", "matters", json={**spec, "owner_id": f.uid[who]}).json()
         ids = []
-        for w in f.r(who, "GET", "workspaces").json()["workspaces"]:
-            docs = f.r(who, "GET", "documents", params={"workspace_id": w["id"], "limit": 200}).json()["documents"]
+        # Admins also see spaces they don't belong to (my_role null); their documents aren't readable, so skip them.
+        for w in (w for w in f.r(who, "GET", "workspaces").json()["workspaces"] if w.get("my_role")):
+            docs =f.r(who, "GET", "documents", params={"workspace_id": w["id"], "limit": 200}).json()["documents"]
             ids += [d["id"] for d in docs if d["title"] in titles and d.get("matter_id") != matter["id"]]
         if ids:
             f.r(who, "POST", "documents/matter", json={"document_ids": ids, "matter_id": matter["id"]})

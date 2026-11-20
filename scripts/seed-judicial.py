@@ -234,8 +234,9 @@ def ensure_matter(s: Session, org: str, spec: dict, titles: list[str], owner_id:
     else:
         matter = s.req("POST", f"{base}/matters", json={**spec, **({"owner_id": owner_id} if owner_id else {})}).json()
     ids = []
-    for w in s.req("GET", f"{base}/workspaces").json()["workspaces"]:
-        docs = s.req("GET", f"{base}/documents", params={"workspace_id": w["id"], "limit": 200}).json()["documents"]
+    # Admins also see spaces they don't belong to (my_role null); their documents aren't readable, so skip them.
+    for w in (w for w in s.req("GET", f"{base}/workspaces").json()["workspaces"] if w.get("my_role")):
+        docs =s.req("GET", f"{base}/documents", params={"workspace_id": w["id"], "limit": 200}).json()["documents"]
         ids += [d["id"] for d in docs if d["title"] in titles and d.get("matter_id") != matter["id"]]
     if ids:
         s.req("POST", f"{base}/documents/matter", json={"document_ids": ids, "matter_id": matter["id"]})
