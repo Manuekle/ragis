@@ -249,7 +249,7 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: {
       {t.error && (
         <div className="alert">
           <IconAlert size={16} />
-          {t.error}
+          {tr(t.error)}
         </div>
       )}
 

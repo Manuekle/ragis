@@ -77,6 +77,33 @@ export async function resolveScope(
   }
 }
 
+/**
+ * Documentos citados que quedan fuera del alcance firmado (ADR-037), con las mismas reglas que aplica el rag-engine:
+ * los espacios de `wss` y, dentro, el expediente, la carpeta con sus subcarpetas o los documentos elegidos. Se lee bajo
+ * RLS, así que un documento que la persona no puede leer también cuenta como fuera.
+ */
+export async function citedOutsideScope(db: Db, sc: InternalScope, wss: string[], cited: string[]): Promise<string[]> {
+  if (!cited.length) return [];
+  const r = await db.query(
+    `WITH RECURSIVE tree AS (
+       SELECT id FROM folders WHERE id = $3::uuid AND workspace_id = ANY($2::uuid[])
+       UNION ALL
+       SELECT f.id FROM folders f JOIN tree ON f.parent_id = tree.id
+     )
+     SELECT d.id FROM documents d
+      WHERE d.id = ANY($1::uuid[]) AND d.workspace_id = ANY($2::uuid[])
+        AND CASE $4::text
+              WHEN 'matter' THEN d.matter_id IS NOT DISTINCT FROM $5::uuid
+              WHEN 'folder' THEN d.folder_id IN (SELECT id FROM tree)
+              WHEN 'documents' THEN d.id = ANY($6::uuid[])
+              ELSE true
+            END`,
+    [cited, wss, sc.f ?? null, sc.k, sc.m ?? null, sc.d ?? []],
+  );
+  const inside = new Set(r.rows.map((row) => row.id as string));
+  return cited.filter((id) => !inside.has(id));
+}
+
 const QueryBody = z.object({
   question: z.string().trim().min(2).max(2000),
   as_of: z.string().date().optional(),
@@ -232,6 +259,23 @@ export async function runRagQuery(
     throw new ApiError(503, "rag_unavailable", "servicio de consulta no disponible");
   }
   const result = res.body as Record<string, unknown>;
+  // «Buscado en …» lo afirma la API: antes de decirlo, cada documento citado debe estar dentro del alcance. Un rag-engine
+  // que no lo aplicó (p. ej. una versión anterior a ADR-037 durante un despliegue) no puede pasar como del expediente
+  // un documento que no lo es; se responde con un error en vez de con una etiqueta falsa.
+  const cited = [
+    ...new Set(
+      ((result.citations as { document_id?: unknown }[] | undefined) ?? [])
+        .map((c) => c.document_id)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  ];
+  if (cited.length) {
+    const outside = await tx(pool, t, (db) => citedOutsideScope(db, scope.sc, scope.wss, cited));
+    if (outside.length) {
+      req?.log.error({ trace_id: result.trace_id, scope: scope.sc.k, outside: outside.length }, "rag-engine answered outside the signed scope");
+      throw new ApiError(503, "scope_not_applied", "Couldn't limit the search to where you asked. Try again in a moment.");
+    }
+  }
   result.scope = scope.info;
   if (pubDenied) {
     result.public_sources = { requested: true, lookups: 0, countries: [], sources: [], unavailable: pubDenied, demo: false };

@@ -169,12 +169,15 @@ class NoQueue implements Queue {
 /** RAG falso: cita cuando hay evidencia ("vacaciones"), se abstiene en otro caso. Registra el workspace pedido. */
 class FakeRag implements RagClient {
   calls: string[] = [];
+  /** Documento citado en cada espacio. Como el rag-engine real, solo cita documentos que existen en el espacio buscado. */
+  policy: Record<string, string> = {};
   async query(token: string, body: Record<string, unknown>) {
     const claims = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString());
     this.calls.push(claims.ws ?? claims.workspace_id ?? "");
     const q = String(body.question);
     if (/vacaciones/i.test(q)) {
-      return { status: 200, body: { trace_id: "qry_" + "1".repeat(24), answer: "Son 15 días hábiles [1].", abstained: false, citations: [{ n: 1, document_id: randomUUID(), title: "Política", page: 2, snippet: "15 días hábiles" }] } };
+      const doc = this.policy[claims.ws] ?? randomUUID();
+      return { status: 200, body: { trace_id: "qry_" + "1".repeat(24), answer: "Son 15 días hábiles [1].", abstained: false, citations: [{ n: 1, document_id: doc, title: "Política", page: 2, snippet: "15 días hábiles" }] } };
     }
     return { status: 200, body: { trace_id: "qry_" + "2".repeat(24), answer: "", abstained: true, abstain_reason: "insufficient_evidence", citations: [] } };
   }
@@ -354,6 +357,13 @@ describe("agent studio", () => {
     privateWs = (await call(owner, "POST", `/v1/organizations/${org}/workspaces`, { name: "Board" })).json().id;
     const m = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "mario@studio.test", role: "member" })).json();
     await call(owner, "POST", `/v1/organizations/${org}/workspaces/${ws}/members`, { user_id: m.user_id, role: "reader" });
+    for (const space of [ws, privateWs]) {
+      const up = await call(owner, "POST", `/v1/organizations/${org}/documents/uploads`, {
+        workspace_id: space, filename: "politica-vacaciones.md", content_type: "text/markdown", size_bytes: 10, title: "Política de vacaciones",
+      });
+      expect(up.statusCode, up.body).toBe(201);
+      rag.policy[space] = up.json().document_id;
+    }
   });
 
   it("plantillas legales en el catálogo y agente creado con nombre y propósito en el idioma de quien lee", async () => {

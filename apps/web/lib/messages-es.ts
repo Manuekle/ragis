@@ -1556,6 +1556,10 @@ export const ES: Record<string, string> = {
  // Workspace review for law firms (2026-11): server-sent texts, states, templates, Setup presets.
  "I couldn't find enough evidence in the authorized documents to answer.": "No encontré evidencia suficiente en los documentos autorizados para responder.",
  "I couldn't find enough evidence in the authorized documents to create that file. Try naming the topic with the words your documents use.": "No encontré evidencia suficiente en los documentos autorizados para crear ese archivo. Prueba a nombrar el tema con las palabras que usan tus documentos.",
+ // Errores de Preguntar que envía la API (se muestran en el turno).
+ "Couldn't limit the search to where you asked. Try again in a moment.": "No pude limitar la búsqueda a donde pediste. Inténtalo de nuevo en un momento.",
+ "The answer is taking too long. Try again in a moment.": "La respuesta está tardando demasiado. Inténtalo de nuevo en un momento.",
+ "Ragis can't reach one of its services right now. Try again in a moment.": "Ragis no puede conectar ahora con uno de sus servicios. Inténtalo de nuevo en un momento.",
  "1 source": "1 fuente",
  "{n} sources": "{n} fuentes",
  "at {time}": "en {time}",

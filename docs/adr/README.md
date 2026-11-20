@@ -982,6 +982,9 @@ scoped Ask (ADR-031), so an answer could mix documents of different clients.
 - Client and counterparty names are visible to the whole firm even to people who cannot open the case's documents;
   that is stated in the expediente form.
 - Folders keep organizing inside a space and can now also scope Ask.
+- The "Searched in …" label comes from the API, so the API checks every cited document against the signed scope before
+  returning the answer, with the same rules as the rag-engine. A rag-engine that did not apply the scope (an image older
+  than this decision during a deploy) gets a `503 scope_not_applied` instead of a mislabeled answer.
 
 **Not adopted.**
 - *Expediente = folder with fields.* Folders are per space and would not fix the split case.

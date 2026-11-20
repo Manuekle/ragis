@@ -28,14 +28,19 @@ const SECRET = "matters-test-internal-secret-0123456789abcdef";
 const storage = { presignPut: async () => "https://s3.test/put", presignGet: async () => "https://s3.test/get", head: async () => null, delete: async () => undefined, put: async () => undefined, get: async () => null } as Storage;
 const queue: Queue = { send: async () => undefined };
 
-/** Guarda los claims de alcance firmados en el token interno y responde como el rag-engine. */
+/**
+ * Guarda los claims de alcance firmados en el token interno y responde como el rag-engine. `cite` son los documentos
+ * que cita la respuesta: permite simular un rag-engine que no aplicó el alcance (p. ej. una versión anterior).
+ */
 class FakeRag implements RagClient {
   claims: Record<string, unknown> = {};
+  cite: string[] = [];
   async query(token: string) {
     this.claims = decodeJwt(token);
+    const citations = this.cite.map((id, i) => ({ n: i + 1, document_id: id, title: "doc", kind: "text" }));
     return {
       status: 200,
-      body: { trace_id: `qry_${randomUUID().replaceAll("-", "").slice(0, 24)}`, answer: "…", abstained: false, citations: [], latency_ms: 5 },
+      body: { trace_id: `qry_${randomUUID().replaceAll("-", "").slice(0, 24)}`, answer: "…", abstained: false, citations, latency_ms: 5 },
     };
   }
 }
@@ -259,5 +264,46 @@ describe("Ask with a scope (ADR-037)", () => {
     // Un expediente que no existe en la organización.
     expect((await ask(alice, general, { type: "matter", id: randomUUID() })).statusCode).toBe(404);
     expect((await ask(alice, general, { type: "documents", ids: [] })).statusCode).toBe(400);
+  });
+
+  it("never shows an answer under a scope the rag-engine did not apply", async () => {
+    // Visto en local: con un rag-engine anterior a ADR-037, «Buscado en Expediente D-16.857» citaba el Boletín, que no
+    // es del expediente. La etiqueta la pone la API, así que la API comprueba cada documento citado.
+    const { alice, base, general, litigio, doc, matter, link, ask } = await setup("guard");
+    const m = (await matter(alice, { client_name: "Parra Rosas", case_number: "D-16.857" })).json();
+    const sentencia = await doc(general, "Sentencia C-217 de 2026");
+    const boletin = await doc(general, "Boletín de jurisprudencia laboral");
+    const matriz = await doc(litigio, "Matriz de riesgos");
+    await link(alice, [sentencia, matriz], m.id);
+    const folder = (await call(alice, "POST", `${base}/folders`, { workspace_id: general, name: "Cliente" })).json().id as string;
+    const sub = (await call(alice, "POST", `${base}/folders`, { workspace_id: general, name: "Actas", parent_id: folder })).json().id as string;
+    const acta = await doc(general, "Acta de reunión", { folder: sub });
+    const cite = async (ids: string[], ws: string, scope?: object) => {
+      rag.cite = ids;
+      try {
+        return await ask(alice, ws, scope);
+      } finally {
+        rag.cite = [];
+      }
+    };
+    const refused = (r: Awaited<ReturnType<typeof ask>>) => {
+      expect(r.statusCode).toBe(503);
+      expect(r.json().error.code).toBe("scope_not_applied");
+    };
+
+    // Expediente: sus documentos en cualquier espacio, nada más.
+    expect((await cite([sentencia, matriz], general, { type: "matter", id: m.id })).statusCode).toBe(200);
+    refused(await cite([sentencia, boletin], general, { type: "matter", id: m.id }));
+    // Carpeta: ella y sus subcarpetas.
+    expect((await cite([acta], general, { type: "folder", id: folder })).statusCode).toBe(200);
+    refused(await cite([sentencia], general, { type: "folder", id: folder }));
+    // Documentos elegidos.
+    expect((await cite([sentencia], general, { type: "documents", ids: [sentencia] })).statusCode).toBe(200);
+    refused(await cite([boletin], general, { type: "documents", ids: [sentencia] }));
+    // Espacio activo: un documento de otro espacio tampoco; «todos mis espacios» sí lo cubre.
+    refused(await cite([matriz], general));
+    expect((await cite([matriz], general, { type: "all" })).statusCode).toBe(200);
+    // Sin citas (abstención) no hay nada que comprobar.
+    expect((await cite([], general, { type: "matter", id: m.id })).statusCode).toBe(200);
   });
 });
