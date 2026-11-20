@@ -339,6 +339,41 @@ paths:
       responses:
         "201": { description: "Has signed in before: joins now, or gets the new role if already a member { status: added, user_id, role }" }
         "202": { description: "Invited (expires in 14 days) { status: invited, invitation_id, email, role, expires_at, email_sent }. The email goes out only when SIGNATURE_EMAIL_FROM is set" }
+        "403": { description: "The person is an owner and the caller is not (an admin never demotes an owner)" }
+        "409": { description: "Would demote the last active owner" }
+  /v1/organizations/{org}/members/{user}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid } }]
+    patch:
+      summary: >-
+        Suspends or reactivates a member (admin, audited as member.suspended / member.reactivated). A suspended member keeps
+        the membership and every grant but gets 404 on the organization from the next request; reactivating restores the same access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, disabled] }
+      responses:
+        "200": { description: "{ id, role, status }" }
+        "400": { description: "Invalid status, or the caller targets themselves" }
+        "403": { description: "Not an admin, or the member is an owner and the caller is not" }
+        "404": { description: Not a member of this organization }
+        "409": { description: "Would leave the organization with no active owner" }
+    delete:
+      summary: >-
+        Removes a member (admin, audited as member.removed). Drops the membership, workspace and team memberships, groups and
+        functional roles in this organization and revokes open invitations to the same address. Documents, conversations and
+        audit history stay with the organization
+      responses:
+        "204": { description: Removed }
+        "400": { description: The caller targets themselves }
+        "403": { description: "Not an admin, or the member is an owner and the caller is not" }
+        "404": { description: Not a member of this organization }
+        "409": { description: "Would leave the organization with no active owner" }
   /v1/organizations/{org}/invitations:
     parameters: [{ $ref: '#/components/parameters/org' }]
     get: { summary: "Open member invitations (admin): email, role, invited_by, expires_at, expired", responses: { "200": { description: OK } } }

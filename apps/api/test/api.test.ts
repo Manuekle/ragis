@@ -173,6 +173,149 @@ describe("invitaciones por correo", () => {
   });
 });
 
+describe("quitar y suspender miembros", () => {
+  // dev-login only issues a token; the user row exists after the first authenticated request.
+  const signedIn = async (email: string) => {
+    const token = await login(email);
+    await call(token, "GET", "/v1/me");
+    return token;
+  };
+
+  it("suspender corta el acceso al momento y reactivar lo devuelve con los mismos permisos", async () => {
+    const owner = await signedIn("olga@salida.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Salida" })).json().id;
+    const ws = (await call(owner, "GET", `/v1/organizations/${org}/workspaces`)).json().workspaces[0].id;
+    const asociado = await signedIn("asociado@salida.test");
+    const asociadoId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "asociado@salida.test", role: "member" })).json().user_id;
+    await call(owner, "POST", `/v1/organizations/${org}/workspaces/${ws}/members`, { user_id: asociadoId, role: "editor" });
+    expect((await call(asociado, "GET", `/v1/organizations/${org}`)).statusCode).toBe(200);
+
+    const sus = await call(owner, "PATCH", `/v1/organizations/${org}/members/${asociadoId}`, { status: "disabled" });
+    expect(sus.statusCode, sus.body).toBe(200);
+    expect(sus.json()).toEqual({ id: asociadoId, role: "member", status: "disabled" });
+    expect((await call(asociado, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+    expect((await call(asociado, "GET", `/v1/organizations/${org}/workspaces`)).statusCode).toBe(404);
+    expect((await call(asociado, "GET", "/v1/me")).json().organizations.map((o: { id: string }) => o.id)).not.toContain(org);
+    const listed = (await call(owner, "GET", `/v1/organizations/${org}/members`)).json().members;
+    expect(listed.find((m: { id: string }) => m.id === asociadoId)?.status).toBe("disabled");
+
+    expect((await call(owner, "PATCH", `/v1/organizations/${org}/members/${asociadoId}`, { status: "active" })).statusCode).toBe(200);
+    const back = (await call(asociado, "GET", `/v1/organizations/${org}/workspaces`)).json().workspaces;
+    expect(back.find((w: { id: string }) => w.id === ws)?.my_role).toBe("editor");
+    expect((await call(owner, "PATCH", `/v1/organizations/${org}/members/${asociadoId}`, { status: "removed" })).statusCode).toBe(400);
+
+    const audit = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events;
+    const suspended = audit.find((e: { action: string }) => e.action === "member.suspended");
+    expect(suspended).toMatchObject({ resource: `user:${asociadoId}`, decision: "allow" });
+    expect(suspended.metadata).toMatchObject({ email: "asociado@salida.test", role: "member", from: "active" });
+    expect(audit.map((e: { action: string }) => e.action)).toContain("member.reactivated");
+  });
+
+  it("quitar a alguien le quita la organización, espacios, grupos y roles; sus documentos se quedan", async () => {
+    const owner = await signedIn("rosa@salida.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Rosa" })).json().id;
+    const ws = (await call(owner, "GET", `/v1/organizations/${org}/workspaces`)).json().workspaces[0].id;
+    const ex = await signedIn("ex.asociado@salida.test");
+    const exId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "ex.asociado@salida.test", role: "member" })).json().user_id;
+    await call(owner, "POST", `/v1/organizations/${org}/workspaces/${ws}/members`, { user_id: exId, role: "editor" });
+    const group = (await call(owner, "POST", `/v1/organizations/${org}/groups`, { name: "Litigio" })).json().id;
+    await call(owner, "POST", `/v1/organizations/${org}/groups/${group}/members`, { user_id: exId });
+    const admin = new pg.Client({ connectionString: `postgres://ragsis_owner:${env.POSTGRES_PASSWORD}@127.0.0.1:${PORT}/${DB}` });
+    await admin.connect();
+    try {
+      await admin.query("INSERT INTO functional_roles (organization_id, user_id, role) VALUES ($1, $2, 'reviewer')", [org, exId]);
+      // A document they uploaded belongs to the firm and must survive the removal.
+      const up = await call(ex, "POST", `/v1/organizations/${org}/documents/uploads`, {
+        workspace_id: ws, filename: "demanda.md", content_type: "text/markdown", size_bytes: 100, title: "Demanda",
+      });
+      expect(up.statusCode, up.body).toBe(201);
+      const docId = up.json().document_id as string;
+      // A stale invitation to the same address must not bring them back.
+      await admin.query(
+        "INSERT INTO member_invitations (id, organization_id, email, role, invited_by) VALUES ($1, $2, 'ex.asociado@salida.test', 'member', $3)",
+        [randomUUID(), org, exId],
+      );
+
+      const del = await call(owner, "DELETE", `/v1/organizations/${org}/members/${exId}`);
+      expect(del.statusCode, del.body).toBe(204);
+      expect((await call(ex, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+      expect((await call(ex, "GET", `/v1/organizations/${org}/documents`)).statusCode).toBe(404);
+      expect((await call(owner, "GET", `/v1/organizations/${org}/members`)).json().members.map((m: { id: string }) => m.id)).not.toContain(exId);
+      expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${exId}`)).statusCode).toBe(404);
+
+      const left = async (table: string) => (await admin.query(`SELECT count(*)::int AS n FROM ${table} WHERE organization_id = $1 AND user_id = $2`, [org, exId])).rows[0].n;
+      expect(await left("memberships")).toBe(0);
+      expect(await left("workspace_members")).toBe(0);
+      expect(await left("group_members")).toBe(0);
+      expect(await left("functional_roles")).toBe(0);
+      expect((await admin.query("SELECT count(*)::int AS n FROM documents WHERE id = $1", [docId])).rows[0].n).toBe(1);
+      expect(
+        (await admin.query("SELECT count(*)::int AS n FROM member_invitations WHERE organization_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL", [org])).rows[0].n,
+      ).toBe(0);
+
+      const removed = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events.find((e: { action: string }) => e.action === "member.removed");
+      expect(removed).toMatchObject({ resource: `user:${exId}`, decision: "allow" });
+      expect(removed.metadata).toMatchObject({
+        email: "ex.asociado@salida.test", role: "member", workspaces: [ws], groups: [group], functional_roles: ["reviewer"], invitations_revoked: 1,
+      });
+      // Signing in again does not rejoin them.
+      const again = await signedIn("ex.asociado@salida.test");
+      expect((await call(again, "GET", "/v1/me")).json().organizations.map((o: { id: string }) => o.id)).not.toContain(org);
+    } finally {
+      await admin.end();
+    }
+  });
+
+  it("protege a los owners: un admin no los toca y el último owner no se quita, suspende ni degrada", async () => {
+    const owner = await signedIn("dueno@salida.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Dueño" })).json().id;
+    const ownerId = (await call(owner, "GET", "/v1/me")).json().user.id;
+    const adm = await signedIn("admin@salida.test");
+    const admId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "admin@salida.test", role: "admin" })).json().user_id;
+    const socio = await signedIn("socio@salida.test");
+    const socioId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "socio@salida.test", role: "member" })).json().user_id;
+    const miembro = await signedIn("miembro@salida.test");
+    const miembroId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "miembro@salida.test", role: "member" })).json().user_id;
+
+    // Only admins remove or suspend; a member gets 403.
+    expect((await call(miembro, "DELETE", `/v1/organizations/${org}/members/${socioId}`)).statusCode).toBe(403);
+    expect((await call(miembro, "PATCH", `/v1/organizations/${org}/members/${socioId}`, { status: "disabled" })).statusCode).toBe(403);
+    // Nobody removes or suspends themselves from here.
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${ownerId}`)).statusCode).toBe(400);
+    expect((await call(adm, "PATCH", `/v1/organizations/${org}/members/${admId}`, { status: "disabled" })).statusCode).toBe(400);
+    // Unknown member: 404.
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${randomUUID()}`)).statusCode).toBe(404);
+
+    // An admin can't remove, suspend or demote an owner.
+    expect((await call(adm, "DELETE", `/v1/organizations/${org}/members/${ownerId}`)).statusCode).toBe(403);
+    expect((await call(adm, "PATCH", `/v1/organizations/${org}/members/${ownerId}`, { status: "disabled" })).statusCode).toBe(403);
+    expect((await call(adm, "POST", `/v1/organizations/${org}/members`, { email: "dueno@salida.test", role: "viewer" })).statusCode).toBe(403);
+    // The last owner can't demote themselves either.
+    expect((await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "dueno@salida.test", role: "admin" })).statusCode).toBe(409);
+    // An admin can remove another member.
+    expect((await call(adm, "DELETE", `/v1/organizations/${org}/members/${miembroId}`)).statusCode).toBe(204);
+
+    // With a second owner, one owner can suspend or remove the other, but never the last active one.
+    const admin = new pg.Client({ connectionString: `postgres://ragsis_owner:${env.POSTGRES_PASSWORD}@127.0.0.1:${PORT}/${DB}` });
+    await admin.connect();
+    try {
+      await admin.query("UPDATE memberships SET role = 'owner' WHERE organization_id = $1 AND user_id = $2", [org, socioId]);
+    } finally {
+      await admin.end();
+    }
+    expect((await call(owner, "PATCH", `/v1/organizations/${org}/members/${socioId}`, { status: "disabled" })).statusCode).toBe(200);
+    // socio is a suspended owner now: removing them leaves `owner` as the active owner, so it is allowed.
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${socioId}`)).statusCode).toBe(204);
+    expect((await call(socio, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+    const members = (await call(owner, "GET", `/v1/organizations/${org}/members`)).json().members;
+    expect(members.filter((m: { role: string; status: string }) => m.role === "owner" && m.status === "active").map((m: { id: string }) => m.id)).toEqual([ownerId]);
+
+    const actions = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events.map((e: { action: string }) => e.action);
+    expect(actions.filter((a: string) => a === "member.removed")).toHaveLength(2);
+    expect(actions).toContain("member.suspended");
+  });
+});
+
 describe("documentos", () => {
   let token: string;
   let org: string;

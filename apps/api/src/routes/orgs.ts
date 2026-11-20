@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { withContext } from "../db/pool.js";
-import { badRequest, conflict, notFound } from "../lib/errors.js";
-import { assertUuid, audit, effectiveGraph, requireAdmin, tx } from "../lib/tenant.js";
+import { withContext, type Db } from "../db/pool.js";
+import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
+import { assertUuid, audit, effectiveGraph, requireAdmin, tx, type TenantContext } from "../lib/tenant.js";
 import type { Deps } from "../app.js";
 import { API_KEY_SCOPES, generateApiKey, hashSecret } from "../lib/apikeys.js";
 import { Qualification, scoreLead } from "../lib/lead-fit.js";
@@ -22,6 +22,8 @@ const UpdateSettings = z.object({ graph_mode: z.enum(["inherit", "on", "off"]) }
 const CreateWorkspace = z.object({ name: z.string().trim().min(1).max(120) });
 // locale: language of the invitation email (the admin's), "en" when absent.
 const AddMember = z.object({ email: z.string().trim().email(), role: z.enum(["admin", "member", "viewer"]).default("member"), locale: z.enum(["es", "en"]).optional() });
+// Suspend (status "disabled") keeps the membership and every grant, so reactivating restores the same access.
+const UpdateMember = z.object({ status: z.enum(["active", "disabled"]) }).strict();
 const AddWsMember = z.object({ user_id: z.string().uuid(), role: z.enum(["editor", "reader"]).default("reader") });
 const CreateGroup = z.object({ name: z.string().trim().min(1).max(120) });
 const AddGroupMember = z.object({ user_id: z.string().uuid() });
@@ -31,6 +33,38 @@ const CreateApiKey = z.object({
   workspace_ids: z.array(z.string().uuid()).min(1).max(50),
   expires_in_days: z.number().int().min(1).max(365).default(90),
 });
+
+interface MemberRow {
+  role: string;
+  status: string;
+  email: string;
+}
+
+/** Locks the membership row of the person being changed so concurrent changes to the same member queue up. */
+async function lockMember(db: Db, t: TenantContext, userId: string): Promise<MemberRow> {
+  const r = await db.query(
+    `SELECT m.role, m.status, lower(u.email) AS email FROM memberships m JOIN users u ON u.id = m.user_id
+      WHERE m.organization_id = $1 AND m.user_id = $2 FOR UPDATE OF m`,
+    [t.organizationId, userId],
+  );
+  if (!r.rowCount) throw notFound("member");
+  return r.rows[0] as MemberRow;
+}
+
+/**
+ * Anything that takes access or the owner role away from an owner: only another owner may do it, and the organization
+ * always keeps at least one active owner. The other owners' rows are locked, so two owners removing each other at the
+ * same moment cannot leave the firm with none.
+ */
+async function guardOwner(db: Db, t: TenantContext, userId: string, target: MemberRow): Promise<void> {
+  if (target.role !== "owner") return;
+  if (t.role !== "owner") throw forbidden("only an owner can change another owner");
+  const others = await db.query(
+    "SELECT user_id FROM memberships WHERE organization_id = $1 AND role = 'owner' AND status = 'active' AND user_id <> $2 FOR UPDATE",
+    [t.organizationId, userId],
+  );
+  if (!others.rowCount) throw conflict("the organization must keep at least one active owner");
+}
 
 export async function orgRoutes(app: FastifyInstance, deps: Deps) {
   const { pool, cfg } = deps;
@@ -223,6 +257,16 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
     const out = await tx(pool, t, async (db) => {
       const uid = (await db.query("SELECT app.user_id_for_invite($1) AS id", [email])).rows[0]?.id as string | null;
       if (uid) {
+        // Re-adding an existing member changes their role: the owner rules apply (an owner is never demoted by an
+        // admin, and the last owner is never demoted at all).
+        const current = (
+          await db.query("SELECT m.role, m.status, $3::text AS email FROM memberships m WHERE m.organization_id = $1 AND m.user_id = $2 FOR UPDATE", [
+            t.organizationId,
+            uid,
+            email,
+          ])
+        ).rows[0] as MemberRow | undefined;
+        if (current) await guardOwner(db, t, uid, current);
         await db.query(
           `INSERT INTO memberships (organization_id, user_id, role) VALUES ($1,$2,$3)
            ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = 'active'`,
@@ -266,6 +310,63 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
     }
     reply.code(202);
     return { status: "invited", invitation_id: out.invitation_id, email, role: body.role, expires_at: out.expires_at, email_sent: emailSent };
+  });
+
+  // Suspend or reactivate. A suspended person keeps the membership and all grants but gets 404 on the organization on
+  // the very next request (resolveTenant only accepts status 'active').
+  app.patch("/v1/organizations/:org/members/:userId", async (req) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const userId = assertUuid((req.params as { userId: string }).userId, "member");
+    const body = UpdateMember.parse(req.body);
+    if (userId === t.userId) throw badRequest("you cannot change your own access");
+    return tx(pool, t, async (db) => {
+      const target = await lockMember(db, t, userId);
+      if (body.status === "disabled") await guardOwner(db, t, userId, target);
+      else if (target.role === "owner" && t.role !== "owner") throw forbidden("only an owner can change another owner");
+      if (target.status !== body.status) {
+        await db.query("UPDATE memberships SET status = $3 WHERE organization_id = $1 AND user_id = $2", [t.organizationId, userId, body.status]);
+        await audit(db, t, body.status === "disabled" ? "member.suspended" : "member.reactivated", `user:${userId}`, "allow", {
+          email: target.email,
+          role: target.role,
+          from: target.status,
+        });
+      }
+      return { id: userId, role: target.role, status: body.status };
+    });
+  });
+
+  // Remove someone from the firm: membership, workspace and team memberships, groups and functional roles go; their
+  // documents, conversations and audit history stay with the organization. Open invitations to the same address are
+  // revoked so an old invitation cannot bring them back.
+  app.delete("/v1/organizations/:org/members/:userId", async (req, reply) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const userId = assertUuid((req.params as { userId: string }).userId, "member");
+    if (userId === t.userId) throw badRequest("you cannot remove yourself");
+    await tx(pool, t, async (db) => {
+      const target = await lockMember(db, t, userId);
+      await guardOwner(db, t, userId, target);
+      const args = [t.organizationId, userId];
+      const ws = await db.query("DELETE FROM workspace_members WHERE organization_id = $1 AND user_id = $2 RETURNING workspace_id", args);
+      const groups = await db.query("DELETE FROM group_members WHERE organization_id = $1 AND user_id = $2 RETURNING group_id", args);
+      const roles = await db.query("DELETE FROM functional_roles WHERE organization_id = $1 AND user_id = $2 RETURNING role", args);
+      const invites = await db.query(
+        "UPDATE member_invitations SET revoked_at = now() WHERE organization_id = $1 AND email = $2 AND accepted_at IS NULL AND revoked_at IS NULL",
+        [t.organizationId, target.email],
+      );
+      await db.query("DELETE FROM memberships WHERE organization_id = $1 AND user_id = $2", args);
+      await audit(db, t, "member.removed", `user:${userId}`, "allow", {
+        email: target.email,
+        role: target.role,
+        status: target.status,
+        workspaces: ws.rows.map((r) => r.workspace_id),
+        groups: groups.rows.map((r) => r.group_id),
+        functional_roles: roles.rows.map((r) => r.role),
+        invitations_revoked: invites.rowCount ?? 0,
+      });
+    });
+    reply.code(204);
   });
 
   app.get("/v1/organizations/:org/invitations", async (req) => {
