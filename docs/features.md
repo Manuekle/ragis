@@ -214,6 +214,20 @@ their requests.
 The **Inbox** has two parts: *From people* (requests, as a list or a drag-and-drop board, with *For me*, *My teams* and
 *Sent by me*) and *From agents* (workflow reviews and approvals). The sidebar counter adds both.
 
+## Procedural deadlines · Términos (ADR-038)
+
+When a court document is indexed (auto, notice, judgment), Ragis proposes the terms it finds — "córrase traslado por
+el término de diez (10) días", "a más tardar el 5 de diciembre" — with the literal sentence and the page it comes from.
+A lawyer confirms each one from **Términos** or the Inbox: the date it runs from (notification, ejecutoria…), how it is
+counted, the rule that sets it and who is responsible. Nothing becomes a deadline until a person confirms it, and the
+deadline records who did.
+
+Ragis computes the due date with the firm's country holidays (Colombia loaded) and its court vacancy, and shows every
+skipped day. **Términos** lists what is overdue, due in 7 days and in 30 days; each deadline can be marked done,
+reassigned or exported to a calendar (.ics). The responsible lawyer gets an email a week before, two working days
+before, on the day and if it is overdue (needs the same SES sender as signatures). Admins manage the firm's holidays
+country and vacancy periods from the same page.
+
 ## Ragsis Sign (ADR-023, ADR-024)
 
 `/app/{org}/signatures` lets you create envelopes with a PDF from the Library or generate them from a workflow. A second
