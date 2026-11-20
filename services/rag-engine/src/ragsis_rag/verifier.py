@@ -9,7 +9,9 @@
   suelen citar una sola fuente aunque la respuesta use dos.
 - Las oraciones no se parten en abreviaturas («el num. 4 del art. 93», «M.P. Carlos Camargo Assis») ni entre una
   etiqueta y su valor («Ponente: …»): partirlas dejaba un trozo sin cita que se descartaba y cambiaba lo afirmado.
-- Una negrita que abría o cerraba en una oración descartada no queda como «**» suelto.
+- Una negrita que abría o cerraba en una oración descartada no queda como «**» suelto (se revisa en cada línea).
+- Se verifica línea por línea y se conservan los saltos de línea y los marcadores Markdown (viñetas, listas
+  numeradas, títulos, citas en bloque): la web muestra la respuesta como Markdown.
 """
 
 from __future__ import annotations
@@ -25,6 +27,12 @@ from .prompting import is_abstention
 _CITE = re.compile(r"\[(\d{1,2})\]")
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _AFTER_CITE = re.compile(r"(?<=\])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])")
+# Sangría y marcador Markdown de la línea (título, viñeta, lista numerada, cita en bloque): se conserva tal cual y
+# solo se verifica el texto que sigue.
+_BLOCK = re.compile(r"^(\s*(?:#{1,6}\s+(?:\d{1,3}[.)]\s+)?|[-*+]\s+|\d{1,3}[.)]\s+|>\s*)?)(.*)$")
+# Una línea que no cierra la oración seguida de otra que empieza en minúscula es la misma oración partida en dos.
+_OPEN_END = re.compile(r"[^.!?;:\]*_]$")
+_LOWER_START = re.compile(r"^\s*[a-záéíóúñü]")
 MIN_OVERLAP = 0.2
 # Términos de la oración ausentes en sus fuentes citadas que otra fuente debe cubrir para agregarla como cita.
 MIN_COMPLETION_TERMS = 2
@@ -128,6 +136,18 @@ def _add_citations(sentence: str, extra: list[int]) -> str:
     return sentence[:last.end()] + marks + sentence[last.end():]
 
 
+def _lines(text: str) -> list[str]:
+    """Líneas de la respuesta, uniendo las que solo parten una oración en dos."""
+    out: list[str] = []
+    for raw in text.replace("\r\n", "\n").split("\n"):
+        line = raw.rstrip()
+        if out and out[-1].strip() and line.strip() and _OPEN_END.search(out[-1]) and _LOWER_START.match(line):
+            out[-1] += " " + line.strip()
+        else:
+            out.append(line)
+    return out
+
+
 def verify(answer: str, evidence: list[Evidence]) -> Verification:
     by_n = {e.n: e for e in evidence}
     terms = {e.n: set(content_terms(e.text)) for e in evidence}
@@ -135,33 +155,42 @@ def verify(answer: str, evidence: list[Evidence]) -> Verification:
     if not text or is_abstention(text):
         return Verification(text or "", [], True, "model_abstained")
 
-    kept: list[str] = []
+    lines: list[str] = []
     cited: list[int] = []
     invalid: list[int] = []
     dropped = 0
-    sentences = [s for part in _AFTER_CITE.split(text) for s in split_sentences(part)]
-    for sent in sentences:
-        refs = [int(n) for n in _CITE.findall(sent)]
-        valid = [n for n in refs if n in by_n]
-        invalid.extend(n for n in refs if n not in by_n)
-        clean = _CITE.sub(lambda m: m.group(0) if int(m.group(1)) in by_n else "", sent).strip()
-        if not valid:
-            # Conectores cortos sin contenido verificable se conservan; afirmaciones no.
-            if len(content_terms(clean)) <= 3 and not _NUMBER.search(clean):
-                kept.append(clean)
-            else:
+    for line in _lines(text):
+        if not line.strip():
+            if lines and lines[-1]:
+                lines.append("")
+            continue
+        prefix, body = _BLOCK.match(line).groups()
+        kept: list[str] = []
+        for sent in (s for part in _AFTER_CITE.split(body) for s in split_sentences(part)):
+            refs = [int(n) for n in _CITE.findall(sent)]
+            valid = [n for n in refs if n in by_n]
+            invalid.extend(n for n in refs if n not in by_n)
+            clean = _CITE.sub(lambda m: m.group(0) if int(m.group(1)) in by_n else "", sent).strip()
+            if not valid:
+                # Conectores cortos sin contenido verificable se conservan; afirmaciones no.
+                if len(content_terms(clean)) <= 3 and not _NUMBER.search(clean):
+                    kept.append(clean)
+                else:
+                    dropped += 1
+                continue
+            if not _supported(clean, [by_n[n] for n in valid]):
                 dropped += 1
-            continue
-        if not _supported(clean, [by_n[n] for n in valid]):
-            dropped += 1
-            continue
-        extra = _completion(clean, valid, terms)
-        if extra:
-            clean = _add_citations(clean, extra)
-            valid = valid + extra
-        kept.append(clean)
-        cited.extend(n for n in valid if n not in cited)
+                continue
+            extra = _completion(clean, valid, terms)
+            if extra:
+                clean = _add_citations(clean, extra)
+                valid = valid + extra
+            kept.append(clean)
+            cited.extend(n for n in valid if n not in cited)
+        body = balance_strong(" ".join(s for s in kept if s))
+        if body:
+            lines.append(f"{prefix}{body}")
 
     if not cited:
         return Verification("", [], True, "no_verified_citations", dropped, invalid)
-    return Verification(balance_strong(" ".join(s for s in kept if s)), cited, False, None, dropped, invalid)
+    return Verification("\n".join(lines).strip(), cited, False, None, dropped, invalid)

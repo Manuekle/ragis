@@ -5,13 +5,14 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, generatedFileUrl, type Citation, type ConversationDetail, type DocFormat, type GeneratedDocument, type PublicSourcesSettings, type QueryResult } from "@/lib/api";
 import { useOrg } from "../layout";
+import { WorkspaceMenuItems } from "../workspace-menu";
+import { WorkspaceNoAccess } from "../WorkspaceNoAccess";
 import {
   IconAlert,
   IconGlobalSearch,
   IconSend,
   IconArrowUpRight,
   IconCalendar,
-  IconCheck,
   IconChevronDown,
   IconExternal,
   IconEye,
@@ -22,7 +23,8 @@ import {
   IconThumbDown,
   IconThumbUp,
 } from "@/components/icons";
-import { StreamText, Swap, ThinkingStates, useDropdown } from "@/components/motion";
+import { Swap, ThinkingStates, useDropdown } from "@/components/motion";
+import { AnswerText } from "@/components/AnswerText";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { ClickUpLogo, FolderGlyph, GmailLogo, SlackLogo } from "@/components/brand-logos";
 import { DatePicker } from "@/components/ui";
@@ -264,7 +266,7 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: {
       {r &&
         (r.abstain_reason === "smalltalk" ? (
           // Saludos y cortesías: respuesta fija del asistente, no es una abstención por falta de evidencia.
-          <StreamText text={r.answer} animate={fresh} onCite={cite} />
+          <AnswerText text={r.answer} animate={fresh} onCite={cite} />
         ) : r.abstained ? (
           <div className="abstain">
             <IconAlert size={18} variant="duotone" />
@@ -292,7 +294,7 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: {
             </div>
           </div>
         ) : (
-          <StreamText text={r.answer} animate={fresh} onCite={cite} />
+          <AnswerText text={r.answer} animate={fresh} onCite={cite} />
         ))}
 
       {r && !r.abstained && r.document && <DocumentCard doc={r.document} orgId={orgId} onPreview={onPreview} />}
@@ -458,7 +460,10 @@ export default function AskPage() {
     }
   }
 
-  const canSend = !!question.trim() && !!workspaceId && !busy;
+  // An admin can pick a space they only manage: nothing in it can be read or asked until they join (ADR-035, ADR-037).
+  const activeWs = workspaces.find((w) => w.id === workspaceId);
+  const noAccess = !!activeWs && !activeWs.my_role;
+  const canSend = !!question.trim() && !!workspaceId && !busy && !noAccess;
   const empty = turns.length === 0;
 
   function suggest(s: string) {
@@ -637,6 +642,8 @@ export default function AskPage() {
               <Skel w="65%" h={12} />
             </div>
           </SkeletonStatus>
+        ) : empty && noAccess && activeWs ? (
+          <WorkspaceNoAccess orgId={orgId} workspace={activeWs} />
         ) : empty ? (
           <div className="chat-intro">
             <h1>{tr("What do you need to know?")}</h1>
@@ -646,6 +653,7 @@ export default function AskPage() {
         ) : (
           turns.map((t) => <TurnView key={t.id} t={t} fresh={t.id === freshId} orgId={orgId} onFeedback={(v) => feedback(t.id, v)} onOpen={openDoc} onPreview={previewGenerated} onWiden={busy ? undefined : () => widen(t.question)} />)
         )}
+        {!empty && noAccess && activeWs && <WorkspaceNoAccess orgId={orgId} workspace={activeWs} />}
         <div ref={endRef} />
       </div>
 
@@ -685,23 +693,14 @@ export default function AskPage() {
               <span className="foot-name">{wsName ? tr("Work in {wsName}", { wsName: wsName }) : tr("Work in a folder")}</span>
             </button>
             <div className={`menu ${wsMenu.cls}`} role="menu" data-origin="bottom-left" inert={!wsMenu.isOpen}>
-              <div className="menu-label">{tr("Workspaces")}</div>
-              {workspaces.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={w.id === workspaceId}
-                  className="menu-item"
-                  onClick={() => {
-                    setWorkspaceId(w.id);
-                    wsMenu.close();
-                  }}
-                >
-                  {w.name}
-                  {w.id === workspaceId && <IconCheck className="check" size={15} />}
-                </button>
-              ))}
+              <WorkspaceMenuItems
+                workspaces={workspaces}
+                workspaceId={workspaceId}
+                onPick={(id) => {
+                  setWorkspaceId(id);
+                  wsMenu.close();
+                }}
+              />
             </div>
           </div>
           <Link href={`/app/${orgId}/connections`} className="foot-btn foot-apps">
@@ -714,7 +713,7 @@ export default function AskPage() {
           </Link>
         </div>
         </div>
-        {empty && (
+        {empty && !noAccess && (
           <div className="suggestions" aria-label={tr("Example questions")}>
             {SUGGESTIONS(orgInfo?.sector).map((s) => (
               <button key={s} type="button" className="suggestion" onClick={() => suggest(s)}>

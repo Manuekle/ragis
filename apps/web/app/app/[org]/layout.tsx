@@ -5,7 +5,7 @@ import { usePathname, useParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type Workspace } from "@/lib/api";
 import { AppErrorState, requestErrorKind } from "@/components/AppState";
-import { IconActivity, IconAgent, IconBriefcase, IconSignature, IconAlert, IconInbox, IconWorkflow, IconArrowRight, IconChart, IconChat, IconCheck, IconRocket, IconChevronsUpDown, IconFiles, IconFolder, IconLogout, IconPlug, IconShield, IconSparkles, IconSwitch } from "@/components/icons";
+import { IconActivity, IconAgent, IconBriefcase, IconSignature, IconAlert, IconInbox, IconWorkflow, IconArrowRight, IconChart, IconChat, IconRocket, IconChevronsUpDown, IconFiles, IconFolder, IconLogout, IconPlug, IconShield, IconSparkles, IconSwitch } from "@/components/icons";
 import { SoftText, useDropdown } from "@/components/motion";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { ConfirmProvider, Avatar } from "@/components/ui";
@@ -16,6 +16,7 @@ import "./workflows.css";
 import "./teams.css";
 import { useT } from "@/lib/use-t";
 import { roleWord } from "@/lib/plain";
+import { WorkspaceMenuItems } from "./workspace-menu";
 
 interface OrgInfo {
   id: string;
@@ -50,8 +51,14 @@ export interface TeamSuggestion {
 interface Ctx {
   org: OrgInfo | null;
   loading: boolean;
+  /**
+   * Every space the person can pick. Owners and admins also get the ones they are not members of (`my_role` null), to
+   * manage who has access; their documents and questions stay closed to them until they join.
+   */
   workspaces: Workspace[];
   workspaceId: string;
+  /** Re-reads the spaces (after joining one, creating one…). */
+  reloadWorkspaces: () => Promise<void>;
   setWorkspaceId: (id: string) => void;
   setWorkspaceHasDocuments: (id: string, hasDocuments: boolean) => void;
   /** null while loading. Screens that change teams fire `ragsis:teams` and everything re-reads it. */
@@ -69,6 +76,7 @@ const OrgContext = createContext<Ctx>({
   loading: true,
   workspaces: [],
   workspaceId: "",
+  reloadWorkspaces: async () => undefined,
   setWorkspaceId: () => undefined,
   setWorkspaceHasDocuments: () => undefined,
   teams: null,
@@ -108,7 +116,10 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
         try {
           saved = localStorage.getItem(`ragsis:ws:${orgId}`) ?? "";
         } catch {}
-        setWorkspaceIdState(w.workspaces.find((x) => x.id === saved)?.id ?? w.workspaces[0]?.id ?? "");
+        // The last space picked, else the first one the person can work in (not one an admin only manages).
+        setWorkspaceIdState(
+          w.workspaces.find((x) => x.id === saved)?.id ?? w.workspaces.find((x) => x.my_role)?.id ?? w.workspaces[0]?.id ?? "",
+        );
       })
       .catch((e: Error) => { if (active) setError(e); });
     return () => { active = false; };
@@ -166,6 +177,11 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
       .then((r) => setInboxCount(r.counts.total ?? r.counts.actionable))
       .catch(() => setInboxCount(0));
   }, [orgId, path]);
+
+  const reloadWorkspaces = useCallback(async () => {
+    const w = await api<{ workspaces: Workspace[] }>(`organizations/${orgId}/workspaces`);
+    setWorkspaces(w.workspaces);
+  }, [orgId]);
 
   const setWorkspaceId = (id: string) => {
     setWorkspaceIdState(id);
@@ -238,7 +254,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   }, [path, isAdmin]);
 
   return (
-    <OrgContext.Provider value={{ org, loading, workspaces, workspaceId, setWorkspaceId, setWorkspaceHasDocuments, teams, teamSuggestions, showTeamTags, teamsOf }}>
+    <OrgContext.Provider value={{ org, loading, workspaces, workspaceId, reloadWorkspaces, setWorkspaceId, setWorkspaceHasDocuments, teams, teamSuggestions, showTeamTags, teamsOf }}>
       <ConfirmProvider>
       <div className="shell">
         <aside className="side">
@@ -305,24 +321,15 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
               <IconChevronsUpDown size={15} />
             </button>
             <div className={`menu ${wsMenu.cls}`} role="menu" data-origin="top-left" inert={!wsMenu.isOpen}>
-              <div className="menu-label">{tr("Workspaces")}</div>
-              {workspaces.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={w.id === workspaceId}
-                  className="menu-item"
-                  onClick={() => {
-                    setWorkspaceId(w.id);
-                    wsMenu.close();
-                  }}
-                >
-                  {showTeamTags && w.team_color && <span className="team-dot" data-team-color={w.team_color} aria-hidden="true" />}
-                  {w.name}
-                  {w.id === workspaceId && <IconCheck className="check" size={15} />}
-                </button>
-              ))}
+              <WorkspaceMenuItems
+                workspaces={workspaces}
+                workspaceId={workspaceId}
+                showTeamTags={showTeamTags}
+                onPick={(id) => {
+                  setWorkspaceId(id);
+                  wsMenu.close();
+                }}
+              />
             </div>
           </div>
 

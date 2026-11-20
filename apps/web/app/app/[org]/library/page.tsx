@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, formatBytes } from "@/lib/api";
 import { useOrg } from "../layout";
+import { WorkspaceNoAccess } from "../WorkspaceNoAccess";
 import { AppErrorState, StateIllustration, requestErrorKind } from "@/components/AppState";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 import Link from "next/link";
@@ -631,6 +632,18 @@ export default function LibraryPage() {
       if (!errorKind && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
     },
   };
+
+  // A space an admin only manages: its documents are only for its members (ADR-035), so no listing or upload here.
+  if (workspace && !workspace.my_role) {
+    return (
+      <div className="page">
+        <header className="page-bar">
+          <PageBreadcrumbs section={tr("Library")} context={wsName} icon={IconFolder} />
+        </header>
+        <WorkspaceNoAccess orgId={orgId} workspace={workspace} />
+      </div>
+    );
+  }
 
   return (
     <div className="page" {...dragProps}>
