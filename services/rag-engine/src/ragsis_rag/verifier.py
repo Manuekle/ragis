@@ -103,6 +103,25 @@ def balance_strong(text: str) -> str:
     return text.strip()
 
 
+def renumber_citations(text: str, cited: list[int]) -> tuple[str, dict[int, int]]:
+    """Numera las citas 1, 2, 3… por orden de primera aparición en `text` y devuelve el texto y {n anterior: nuevo}.
+
+    El modelo cita con el número del fragmento dentro de la evidencia que recibió; mostrado tal cual, una respuesta con
+    siete fuentes salía como [8], [4], [3]… Las citas válidas que no aparecen en el texto van al final, en su orden.
+    Un corchete que no es una cita válida no se toca."""
+    valid = set(cited)
+    order: list[int] = []
+    for m in _CITE.finditer(text):
+        n = int(m.group(1))
+        if n in valid and n not in order:
+            order.append(n)
+    order += [n for n in cited if n not in order]
+    mapping = {old: i + 1 for i, old in enumerate(order)}
+    renumbered = _CITE.sub(lambda m: f"[{mapping[int(m.group(1))]}]" if int(m.group(1)) in mapping else m.group(0),
+                           text)
+    return renumbered, mapping
+
+
 def _add_citations(sentence: str, extra: list[int]) -> str:
     last = list(_CITE.finditer(sentence))[-1]
     marks = "".join(f"[{n}]" for n in extra)

@@ -81,7 +81,7 @@ from .retrieval import (
 )
 from .smalltalk import SmallTalk
 from .smalltalk import detect as detect_smalltalk
-from .verifier import verify
+from .verifier import renumber_citations, verify
 
 logger = logging.getLogger("ragsis.rag")
 
@@ -198,8 +198,17 @@ class QueryOrchestrator:
         by_n = {i + 1: c for i, c in enumerate(selected)}
         external: list[ExternalItem] = info.get("external", [])
         ext_by_n = {len(selected) + j + 1: item for j, item in enumerate(external)}
-        citations = [self._citation(n, by_n[n]) if n in by_n else self._external_citation(n, ext_by_n[n])
-                     for n in (sorted(cited_ns) if doc_request else cited_ns) if n in by_n or n in ext_by_n]
+        cited_ns = [n for n in cited_ns if n in by_n or n in ext_by_n]
+        # Quien lee ve 1, 2, 3… por orden de aparición, no el número del fragmento en la evidencia ([8], [4], [3]…).
+        # Texto, citas y lo que se guarda en la base usan la misma numeración.
+        renum = {n: n for n in cited_ns}
+        if doc_request and not abstained:
+            info["document_markdown"], renum = renumber_citations(info["document_markdown"], cited_ns)
+        elif not abstained:
+            answer, renum = renumber_citations(answer, cited_ns)
+        citations = sorted((self._citation(renum[n], by_n[n]) if n in by_n
+                            else self._external_citation(renum[n], ext_by_n[n]) for n in cited_ns),
+                           key=lambda c: c["n"])
         document = None
         if doc_request and not abstained:
             document = self._document(doc_request, info["document_markdown"], citations)
