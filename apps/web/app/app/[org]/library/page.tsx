@@ -6,7 +6,10 @@ import { api, formatBytes } from "@/lib/api";
 import { useOrg } from "../layout";
 import { AppErrorState, StateIllustration, requestErrorKind } from "@/components/AppState";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
-import { IconAlert, IconChevronRight, IconEdit, IconEye, IconFolder, IconPlus, IconSearch, IconSparkles, IconTrash, IconUpload, IconX } from "@/components/icons";
+import Link from "next/link";
+import { IconAlert, IconBriefcase, IconChat, IconChevronRight, IconEdit, IconEye, IconFolder, IconLayers, IconPlus, IconSearch, IconSparkles, IconTrash, IconUpload, IconX } from "@/components/icons";
+import { LinkMatterDialog, MatterDialog, matterSubtitle, useMatters, type Matter } from "../matters/shared";
+import "../matters/matters.css";
 import { FolderDrop, stageOf, UploadTracker, type UploadItem } from "@/components/UploadDrop";
 import { Skel, SkeletonStatus, SkeletonTable } from "@/components/skeletons";
 import { Select, TextField, useConfirm } from "@/components/ui";
@@ -36,6 +39,11 @@ interface Doc {
   folder_id: string | null;
   /** Recordings: length in seconds. */
   duration_seconds?: number | null;
+  /** Expediente (ADR-037) the document is linked to, if any. */
+  matter_id?: string | null;
+  matter_title?: string | null;
+  matter_client?: string | null;
+  matter_case_number?: string | null;
 }
 
 interface Folder {
@@ -152,7 +160,12 @@ function trackIndexing(list: UploadItem[], docs: Doc[]): UploadItem[] {
 }
 
 type View = "all" | "indexed" | "pending" | "failed";
-type Listing = { orgId: string; workspaceId: string; filter: string; folder: FolderView; docs: Doc[] | null; error?: Error };
+/** Which expediente the list shows: everything, the documents without one, or one expediente (ADR-037). */
+type MatterView = "all" | "none" | string;
+type Listing = { orgId: string; workspaceId: string; filter: string; folder: FolderView; matter: MatterView; docs: Doc[] | null; error?: Error };
+
+/** "Cliente — Juan Felipe Parra Rosas" → "Juan Felipe Parra Rosas": a client folder names the client. */
+const clientFromFolder = (name: string) => name.match(/^cliente\s*[—–:-]\s*(.+)$/i)?.[1]?.trim() ?? "";
 
 /** "Legal / Contracts": the folder's full path, for menus and the document's subtitle. */
 function folderPath(folders: Folder[], id: string | null): Folder[] {
@@ -275,11 +288,17 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [over, setOver] = useState(false);
-  const [filters, setFilters] = useState({ orgId, workspaceId, title: "", view: "all" as View, folder: "all" as FolderView });
+  const [filters, setFilters] = useState({ orgId, workspaceId, title: "", view: "all" as View, folder: "all" as FolderView, matter: "all" as MatterView });
   if (filters.orgId !== orgId || filters.workspaceId !== workspaceId) {
-    setFilters({ orgId, workspaceId, title: "", view: "all", folder: "all" });
+    setFilters({ orgId, workspaceId, title: "", view: "all", folder: "all", matter: "all" });
   }
-  const { title: filter, view, folder: folderView } = filters;
+  const { title: filter, view, folder: folderView, matter: matterView } = filters;
+  // Expedientes (ADR-037): filter, group, link documents and turn a folder into one. Never changes who sees a document.
+  const { data: matterData, reload: reloadMatters } = useMatters(orgId);
+  const matters = useMemo(() => matterData?.matters ?? [], [matterData]);
+  const [groupByMatter, setGroupByMatter] = useState(false);
+  const [linking, setLinking] = useState<Doc | null>(null);
+  const [creatingMatter, setCreatingMatter] = useState<{ folder?: Folder; forDoc?: Doc } | null>(null);
   const [tree, setTree] = useState<{ workspaceId: string; folders: Folder[]; unfiled: number }>();
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>({});
   const [naming, setNaming] = useState<{ mode: "create" | "rename"; value: string; error?: string } | null>(null);
@@ -288,7 +307,7 @@ export default function LibraryPage() {
   const folders = useMemo(() => (tree?.workspaceId === workspaceId ? tree.folders : []), [tree, workspaceId]);
   const currentFolder = folders.find((f) => f.id === folderView);
   const workspaceListing = listing?.orgId === orgId && listing.workspaceId === workspaceId ? listing : undefined;
-  const filteredListing = workspaceListing?.filter === filter && workspaceListing.folder === folderView ? workspaceListing : undefined;
+  const filteredListing = workspaceListing?.filter === filter && workspaceListing.folder === folderView && workspaceListing.matter === matterView ? workspaceListing : undefined;
   const docs = filteredListing?.docs;
   const listError = filteredListing?.error;
   const errorKind = docs === null ? requestErrorKind(listError) : null;
@@ -304,12 +323,12 @@ export default function LibraryPage() {
     async function load() {
       try {
         const r = await api<{ documents: Doc[] }>(
-          `organizations/${orgId}/documents?workspace_id=${workspaceId}${filter ? `&q=${encodeURIComponent(filter)}` : ""}${folderView !== "all" ? `&folder_id=${folderView}` : ""}`,
+          `organizations/${orgId}/documents?workspace_id=${workspaceId}&limit=200${filter ? `&q=${encodeURIComponent(filter)}` : ""}${folderView !== "all" ? `&folder_id=${folderView}` : ""}${matterView !== "all" ? `&matter_id=${matterView}` : ""}`,
         );
         if (!active) return;
-        setListing({ orgId, workspaceId, filter, folder: folderView, docs: r.documents });
+        setListing({ orgId, workspaceId, filter, folder: folderView, matter: matterView, docs: r.documents });
         setUploads((list) => trackIndexing(list, r.documents));
-        if (folderView === "all" && (!filter || r.documents.length > 0)) {
+        if (folderView === "all" && matterView === "all" && (!filter || r.documents.length > 0)) {
           setWorkspaceHasDocuments(workspaceId, r.documents.length > 0);
         }
         pending = r.documents.some((d) => PENDING.has(d.latest_status));
@@ -320,7 +339,11 @@ export default function LibraryPage() {
           workspaceId,
           filter,
           folder: folderView,
-          docs: current?.orgId === orgId && current.workspaceId === workspaceId && current.filter === filter && current.folder === folderView ? current.docs : null,
+          matter: matterView,
+          docs:
+            current?.orgId === orgId && current.workspaceId === workspaceId && current.filter === filter && current.folder === folderView && current.matter === matterView
+              ? current.docs
+              : null,
           error: e as Error,
         }));
       }
@@ -331,7 +354,7 @@ export default function LibraryPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [orgId, workspaceId, filter, folderView, revision, setWorkspaceHasDocuments]);
+  }, [orgId, workspaceId, filter, folderView, matterView, revision, setWorkspaceHasDocuments]);
 
   // Folders and, for documents without one, the folder suggested from their content. Neither blocks the list.
   useEffect(() => {
@@ -551,10 +574,28 @@ export default function LibraryPage() {
           ? PENDING.has(d.latest_status)
           : d.latest_status === "rejected" || d.latest_status === "failed",
   );
+  // Grouped by expediente: one block per expediente (by title), the documents without one last.
+  const groups: { key: string; title: string; sub: string; docs: Doc[] }[] = [];
+  if (groupByMatter) {
+    const byKey = new Map<string, { key: string; title: string; sub: string; docs: Doc[] }>();
+    for (const d of shown) {
+      const key = d.matter_id ?? "none";
+      if (!byKey.has(key)) byKey.set(key, { key, title: d.matter_title ?? tr("No expediente"), sub: d.matter_id ? matterSubtitle({ client_name: d.matter_client ?? "", case_number: d.matter_case_number ?? null }) : "", docs: [] });
+      byKey.get(key)!.docs.push(d);
+    }
+    groups.push(...[...byKey.values()].sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : a.title.localeCompare(b.title))));
+  } else {
+    groups.push({ key: "all", title: "", sub: "", docs: shown });
+  }
+  const matterOptions = [
+    { value: "all", label: tr("All expedientes") },
+    { value: "none", label: tr("No expediente") },
+    ...matters.map((m) => ({ value: m.id, label: m.title, hint: matterSubtitle(m) })),
+  ];
   const loadingDocs = loadingOrg || (!!workspaceId && docs === undefined);
-  const blank = docs?.length === 0 && !filter && folderView === "all" && folders.length === 0;
+  const blank = docs?.length === 0 && !filter && folderView === "all" && matterView === "all" && folders.length === 0;
   const hasListing = workspaceListing?.docs != null;
-  const showToolbar = !blank && (hasListing || (!!workspaceId && (!!filter || folderView !== "all")));
+  const showToolbar = !blank && (hasListing || (!!workspaceId && (!!filter || folderView !== "all" || matterView !== "all")));
   const loadingLayout = loadingDocs && !showToolbar;
   const loadingHasDocuments = loadingOrg ? undefined : workspace?.has_documents ?? true;
   const alert = error ?? (errorKind ? null : listError?.message);
@@ -685,6 +726,15 @@ export default function LibraryPage() {
                 <span className="folder-tools">
                   {currentFolder && (
                     <>
+                      <Link href={`/app/${orgId}/ask?scope=folder:${currentFolder.id}`} className="btn quiet small icon" aria-label={tr("Ask about {name}", { name: currentFolder.name })} data-tip={tr("Ask about this folder")}>
+                        <IconChat size={15} />
+                      </Link>
+                      {matterData?.can_edit && (
+                        <button type="button" className="ghost small" onClick={() => setCreatingMatter({ folder: currentFolder })}>
+                          <IconBriefcase size={14} />
+                          {tr("Turn into expediente")}
+                        </button>
+                      )}
                       <button type="button" className="quiet icon small" onClick={() => setNaming({ mode: "rename", value: currentFolder.name })} aria-label={tr("Rename {name}", { name: currentFolder.name })} data-tip={tr("Rename folder")}>
                         <IconEdit size={15} />
                       </button>
@@ -737,6 +787,15 @@ export default function LibraryPage() {
                     </button>
                   ))}
                 </Seg>
+                {matters.length > 0 && (
+                  <div className="row library-matter-tools">
+                    <Select size="sm" ariaLabel={tr("Filter by expediente")} value={matterView} onChange={(m) => setFilters({ ...filters, matter: m })} options={matterOptions} />
+                    <button type="button" className={`ghost small${groupByMatter ? " is-on" : ""}`} aria-pressed={groupByMatter} onClick={() => setGroupByMatter((g) => !g)}>
+                      <IconLayers size={14} />
+                      {tr("Group by expediente")}
+                    </button>
+                  </div>
+                )}
                 <div className={`search${filter ? " has-value" : ""}`}>
                   <IconSearch size={15} />
                   <input placeholder={tr("Filter by title")} value={filter} onChange={(e) => setFilters({ ...filters, title: e.target.value })} aria-label={tr("Filter by title")} />
@@ -758,10 +817,12 @@ export default function LibraryPage() {
                 {shown.length === 0 ? (
                   <div className="empty">
                     <StateIllustration kind="empty" />
-                    <strong>{filter ? tr("No titles match") : all.length === 0 && folderView !== "all" ? tr("No documents here yet") : tr("Nothing in this status")}</strong>
+                    <strong>{filter ? tr("No titles match") : all.length === 0 && matterView !== "all" ? tr("No documents of this expediente in {name}", { name: wsName ?? tr("this space") }) : all.length === 0 && folderView !== "all" ? tr("No documents here yet") : tr("Nothing in this status")}</strong>
                     <span>
                       {filter
                         ? tr("Try a different word from the title.")
+                        : all.length === 0 && matterView !== "all"
+                          ? tr("Its documents may be in another space. Open the expediente in Matters to see all of them.")
                         : all.length === 0 && folderView !== "all"
                           ? tr("Drop files on this page to upload them here, or move documents in from All files.")
                           : tr("Change the filter to see the rest of the documents.")}
@@ -773,6 +834,8 @@ export default function LibraryPage() {
                       <thead>
                         <tr>
                           <th>{tr("Title")}</th>
+                          <th className="hide-md">{tr("Client")}</th>
+                          <th className="hide-sm">{tr("Expediente")}</th>
                           <th>{tr("Status")}</th>
                           <th className="hide-sm">{tr("Version")}</th>
                           <th className="num hide-sm">{tr("Size")}</th>
@@ -783,8 +846,18 @@ export default function LibraryPage() {
                           </th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {shown.map((d) => (
+                      {groups.map((g) => (
+                      <tbody key={g.key}>
+                        {groupByMatter && (
+                          <tr className="library-group-row">
+                            <th colSpan={10} scope="rowgroup">
+                              {g.key === "none" ? <span>{g.title}</span> : <Link href={`/app/${orgId}/matters?open=${g.key}`}>{g.title}</Link>}
+                              {g.sub && <span className="muted">{g.sub}</span>}
+                              <span className="muted">· {g.docs.length}</span>
+                            </th>
+                          </tr>
+                        )}
+                        {g.docs.map((d) => (
                           <tr key={d.id}>
                             <td>
                               <div className="cell-title">
@@ -820,6 +893,17 @@ export default function LibraryPage() {
                                 </div>
                               </div>
                             </td>
+                            <td className="muted hide-md">{d.matter_client ?? "—"}</td>
+                            <td className="hide-sm">
+                              {d.matter_id ? (
+                                <Link href={`/app/${orgId}/matters?open=${d.matter_id}`} className="matter-tag" data-tip={d.matter_case_number ? tr("Filing number {n}", { n: d.matter_case_number }) : undefined}>
+                                  <IconBriefcase size={13} />
+                                  <span className="ellipsis">{d.matter_title}</span>
+                                </Link>
+                              ) : (
+                                <span className="faint">—</span>
+                              )}
+                            </td>
                             <td>{statusBadge(d.latest_status)}</td>
                             <td className="muted hide-sm">v{d.version_no}</td>
                             <td className="num hide-sm">{formatBytes(d.size_bytes)}</td>
@@ -834,6 +918,9 @@ export default function LibraryPage() {
                               <button type="button" className="quiet icon" onClick={() => setMoving({ doc: d, target: d.folder_id ?? "none" })} aria-label={tr("Move {title} to a folder", { title: d.title })} data-tip={tr("Move to folder")} data-tip-side="end">
                                 <IconFolder size={16} />
                               </button>
+                              <button type="button" className="quiet icon" onClick={() => setLinking(d)} aria-label={tr("Link {title} to an expediente", { title: d.title })} data-tip={d.matter_id ? tr("Change expediente") : tr("Link to an expediente")} data-tip-side="end">
+                                <IconBriefcase size={16} />
+                              </button>
                               <button type="button" className="danger icon" onClick={() => remove(d)} aria-label={tr("Delete {title}", { title: d.title })} data-tip={tr("Delete")} data-tip-side="end">
                                 <IconTrash size={16} />
                               </button>
@@ -841,6 +928,7 @@ export default function LibraryPage() {
                           </tr>
                         ))}
                       </tbody>
+                      ))}
                     </table>
                   </div>
                 )}
@@ -854,6 +942,35 @@ export default function LibraryPage() {
         <FormDialog title={naming.mode === "create" ? (currentFolder ? tr("New folder in {name}", { name: currentFolder.name }) : tr("New folder")) : tr("Rename folder")} description={naming.mode === "create" ? tr("Group related documents so they're easier to find.") : tr("Give this folder a name people will recognize.")} submitLabel={naming.mode === "create" ? tr("Create folder") : tr("Save")} busy={busy} onSubmit={saveFolderName} onClose={() => setNaming(null)}>
           <TextField label={tr("Name")} value={naming.value} maxLength={120} autoFocus error={naming.error} onChange={(e) => setNaming({ mode: naming.mode, value: e.target.value })} />
         </FormDialog>
+      )}
+      {linking && (
+        <LinkMatterDialog
+          orgId={orgId}
+          title={tr("Expediente for \"{title}\"", { title: linking.title })}
+          documentIds={[linking.id]}
+          current={linking.matter_id ?? null}
+          matters={matters}
+          onClose={() => setLinking(null)}
+          onLinked={() => (setLinking(null), refresh(), void reloadMatters())}
+          onCreate={matterData?.can_edit ? () => (setCreatingMatter({ forDoc: linking }), setLinking(null)) : undefined}
+        />
+      )}
+      {creatingMatter && matterData && (
+        <MatterDialog
+          orgId={orgId}
+          people={matterData.people}
+          folder={creatingMatter.folder ? { id: creatingMatter.folder.id, name: creatingMatter.folder.name } : null}
+          initial={creatingMatter.folder ? { client_name: clientFromFolder(creatingMatter.folder.name) } : undefined}
+          onClose={() => setCreatingMatter(null)}
+          onSaved={async (m: Matter, info) => {
+            const forDoc = creatingMatter.forDoc;
+            setCreatingMatter(null);
+            if (forDoc) await api(`organizations/${orgId}/documents/matter`, { method: "POST", body: { document_ids: [forDoc.id], matter_id: m.id } }).catch((e: Error) => setError(e.message));
+            if (info?.skipped) setError(tr("{count} documents were already in another expediente and stayed there.", { count: info.skipped }));
+            refresh();
+            void reloadMatters();
+          }}
+        />
       )}
       {moving && (
         <FormDialog title={tr("Move \"{title}\"", { title: moving.doc.title })} submitLabel={tr("Move")} busy={busy} onSubmit={() => moveTo([moving.doc.id], moving.target === "none" ? null : moving.target)} onClose={() => setMoving(null)}>

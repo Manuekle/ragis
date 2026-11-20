@@ -57,10 +57,15 @@
 .scope-search { margin: 4px 6px 6px; }
 .scope-search input { width: 100%; height: 34px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 13.5px; color: var(--text); }
 .scope-empty { padding: 6px 12px 10px; font-size: 13px; color: var(--muted); }
-.answer-scope { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12.5px; color: var(--muted); }
 .answer-scope .svg-icon { color: var(--accent); }
 .scope-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .doc-pick { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; margin: 6px 0 0; padding: 0; list-style: none; }
 .doc-pick label { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 8px; border-radius: var(--r-md); cursor: pointer; }
 @media (hover: hover) { .doc-pick label:hover { background: var(--surface-2); } }
 .doc-pick .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Library toolbar: expediente filter and grouping. */
+.library-matter-tools { gap: 8px; flex-wrap: wrap; }
+.library-matter-tools .select-trigger { max-width: 260px; }
+button.ghost.is-on { background: var(--accent-soft); color: var(--accent-text); }
+.library-group-row a { color: inherit; }

@@ -33,6 +33,7 @@ import { HistoryMenu } from "./HistoryMenu";
 import { DocumentCard, FORMAT, FormatPicker, downloadGenerated } from "./DocumentCard";
 import { ExternalBody, ExternalIcon, externalMeta, loadChoice, publicNotice, PublicRecordsPicker, requestFields, saveChoice, usable, type PublicChoice } from "./PublicRecords";
 import { useT, tNow } from "@/lib/use-t";
+import { AnswerScope, SPACE_SCOPE, ScopePicker, parseScopeParam, scopeBody, scopeFromInfo, scopeLabel, type AskScope } from "./ScopePicker";
 
 interface Turn {
   id: number;
@@ -46,6 +47,8 @@ interface Turn {
   making?: DocFormat | "file";
   /** Public records were asked for (ADR-036): only changes the loading messages. */
   publicOn?: boolean;
+  /** Where the question searched (ADR-037), to ask it again somewhere wider when it abstains. */
+  scope?: AskScope;
 }
 
 /** UUID v4 for a new conversation; `randomUUID` only exists in secure contexts (https / localhost). */
@@ -167,7 +170,7 @@ function Sources({ citations, openN, setOpenN, flashN, onOpen }: { citations: Ci
   );
 }
 
-function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview }: { t: Turn; fresh: boolean; orgId: string; onFeedback: (v: 1 | -1) => void; onOpen: (c: Citation) => void; onPreview: (d: GeneratedDocument) => void }) {
+function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: { t: Turn; fresh: boolean; orgId: string; onFeedback: (v: 1 | -1) => void; onOpen: (c: Citation) => void; onPreview: (d: GeneratedDocument) => void; onWiden?: () => void }) {
   const tr = useT();
   const [openN, setOpenN] = useState<number | null>(null);
   const [flashN, setFlashN] = useState<number | null>(null);
@@ -189,6 +192,7 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview }: { t: Turn;
       <div className="q-bubble">{t.question}</div>
 
       <div className="steps">
+        {r && <AnswerScope scope={r.scope} />}
         {!r && !t.error && !t.redacted && (
           <div className="step">
             <ThinkingStates states={t.making ? DOC_STATES() : t.publicOn ? PUBLIC_STATES() : STATES()} />
@@ -266,7 +270,23 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview }: { t: Turn;
             <IconAlert size={18} variant="duotone" />
             <div>
               {tr(r.answer)}
-              <div className="hint">{tr("Check that the document is uploaded to this workspace and that you have access, or ask using the terms the document uses.")}</div>
+              <div className="hint">
+                {r.abstain_reason === "empty_scope"
+                  ? tr("Link documents to it from the library, or search somewhere wider.")
+                  : r.scope?.type === "matter"
+                    ? tr("This expediente's documents don't answer it. Ask using the terms the documents use, or search all your spaces.")
+                    : r.scope?.type === "all"
+                      ? tr("None of your spaces has a document that answers it, or you don't have access to it. Ask using the terms the document uses.")
+                      : tr("Check that the document is uploaded to this workspace and that you have access, or ask using the terms the document uses.")}
+              </div>
+              {onWiden && r.scope?.type !== "all" && r.abstain_reason !== "smalltalk" && (
+                <div className="scope-hint">
+                  <button type="button" className="ghost small" onClick={onWiden}>
+                    <IconGlobalSearch size={14} />
+                    {tr("Search all my spaces")}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -311,6 +331,14 @@ export default function AskPage() {
     setPubChoiceState(v);
     saveChoice(orgId, v);
   };
+  // ADR-037: where the next question searches. Folders and picked documents belong to the active space; expedientes
+  // and "all my spaces" don't, so only the first two go back to the space when it changes.
+  const [scope, setScope] = useState<AskScope>(SPACE_SCOPE);
+  const scopeWs = useRef<string | null>(null);
+  useEffect(() => {
+    if (scopeWs.current && scopeWs.current !== workspaceId) setScope((s) => (s.type === "folder" || s.type === "documents" ? SPACE_SCOPE : s));
+    scopeWs.current = workspaceId || null;
+  }, [workspaceId]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [freshId, setFreshId] = useState<number | null>(null);
@@ -362,17 +390,34 @@ export default function AskPage() {
   async function ask(e?: React.FormEvent) {
     e?.preventDefault();
     if (!question.trim() || !workspaceId || busy) return;
-    const q = question.trim();
+    await send(question.trim(), scope);
+  }
+
+  /** "Search all my spaces" after a narrower question abstained: same question, wider scope (ADR-037). */
+  async function widen(q: string) {
+    if (busy || !workspaceId) return;
+    setScope({ type: "all" });
+    await send(q, { type: "all" });
+  }
+
+  async function send(q: string, where: AskScope) {
     const id = nextId.current++;
     setBusy(true);
     setQuestion("");
     const making = format ?? (ASKS_FOR_FILE.test(q) ? "file" : undefined);
     const pub = requestFields(pubSettings, pubChoice);
-    setTurns((t) => [...t, { id, question: q, ...(making ? { making } : {}), ...(pub.public_sources ? { publicOn: true } : {}) }]);
+    setTurns((t) => [...t, { id, question: q, scope: where, ...(making ? { making } : {}), ...(pub.public_sources ? { publicOn: true } : {}) }]);
     try {
       const result = await api<QueryResult>(`organizations/${orgId}/workspaces/${workspaceId}/query`, {
         method: "POST",
-        body: { question: q, output: format ?? "auto", conversation_id: (conversationId.current ??= newConversationId()), ...(asOf ? { as_of: asOf } : {}), ...pub },
+        body: {
+          question: q,
+          output: format ?? "auto",
+          conversation_id: (conversationId.current ??= newConversationId()),
+          ...(asOf ? { as_of: asOf } : {}),
+          ...pub,
+          ...(where.type !== "space" ? { scope: scopeBody(where) } : {}),
+        },
       });
       if (result.conversation_id && result.conversation_id === conversationId.current) {
         setActiveId(result.conversation_id);
@@ -460,6 +505,8 @@ export default function AskPage() {
           })),
         );
         const last = c.turns[c.turns.length - 1];
+        // A follow-up searches where the conversation was searching (ADR-037).
+        setScope(scopeFromInfo(last?.result?.scope));
         if (last) {
           const { workspaces: known, setWorkspaceId: pick } = orgRef.current;
           if (known.some((w) => w.id === last.workspace_id)) pick(last.workspace_id);
@@ -485,6 +532,52 @@ export default function AskPage() {
     const id = new URLSearchParams(window.location.search).get("c");
     if (id) void openConversation(id);
   }, [openConversation]);
+
+  // ADR-037: /ask?scope=matter:<id> (from Expedientes), folder:<id> or documents:<id>,… (from the library).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const want = parseScopeParam(url.searchParams.get("scope"));
+    if (!want) return;
+    url.searchParams.delete("scope");
+    window.history.replaceState(window.history.state, "", url);
+    let alive = true;
+    const [first] = want.ids;
+    (async () => {
+      if (want.type === "all") return setScope({ type: "all" });
+      if (want.type === "matter") {
+        const m = await api<{ id: string; title: string; client_name: string; case_number: string | null }>(`organizations/${orgId}/matters/${first}`);
+        if (alive) setScope({ type: "matter", id: m.id, label: m.title, sub: [m.client_name, m.case_number].filter(Boolean).join(" · ") });
+        return;
+      }
+      if (want.type === "documents") {
+        const d = await api<{ document: { title: string; workspace_id: string } }>(`organizations/${orgId}/documents/${first}/status`);
+        if (!alive) return;
+        const { workspaces: known, setWorkspaceId: pick } = orgRef.current;
+        if (known.some((w) => w.id === d.document.workspace_id)) pick(d.document.workspace_id);
+        scopeWs.current = d.document.workspace_id;
+        setScope({ type: "documents", ids: want.ids, label: d.document.title });
+        return;
+      }
+      setScope({ type: "folder", id: first, label: tNow("Folder") });
+    })().catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [orgId]);
+  // A folder link names the folder once the space's folders are known.
+  useEffect(() => {
+    if (scope.type !== "folder" || scope.label !== tNow("Folder") || !workspaceId) return;
+    let alive = true;
+    api<{ folders: { id: string; name: string }[] }>(`organizations/${orgId}/folders?workspace_id=${workspaceId}`)
+      .then((r) => {
+        const f = r.folders.find((x) => x.id === scope.id);
+        if (alive && f) setScope({ type: "folder", id: f.id, label: f.name });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [scope, orgId, workspaceId]);
 
   function conversationDeleted(id: string) {
     if (id === conversationId.current) reset();
@@ -533,11 +626,11 @@ export default function AskPage() {
         ) : empty ? (
           <div className="chat-intro">
             <h1>{tr("What do you need to know?")}</h1>
-            <p>{tr("I answer with citations from the documents you can see")}{wsName ? tr(" in {wsName}", { wsName }) : ""}{tr(", and I can turn the answer into a PDF report, Word document, PowerPoint or Excel workbook. If I can't find support, I'll say so instead of guessing.")}</p>
+            <p>{tr("I answer with citations from the documents you can see")}{scope.type !== "space" ? tr(" in {wsName}", { wsName: scopeLabel(scope, wsName) }) : wsName ? tr(" in {wsName}", { wsName }) : ""}{tr(", and I can turn the answer into a PDF report, Word document, PowerPoint or Excel workbook. If I can't find support, I'll say so instead of guessing.")}</p>
             {usable(pubSettings) && <p className="faint">{tr("Need outside facts? Turn on Public records to also check official government data and the web.")}</p>}
           </div>
         ) : (
-          turns.map((t) => <TurnView key={t.id} t={t} fresh={t.id === freshId} orgId={orgId} onFeedback={(v) => feedback(t.id, v)} onOpen={openDoc} onPreview={previewGenerated} />)
+          turns.map((t) => <TurnView key={t.id} t={t} fresh={t.id === freshId} orgId={orgId} onFeedback={(v) => feedback(t.id, v)} onOpen={openDoc} onPreview={previewGenerated} onWiden={busy ? undefined : () => widen(t.question)} />)
         )}
         <div ref={endRef} />
       </div>
@@ -562,6 +655,7 @@ export default function AskPage() {
             }}
           />
           <div className="composer-bar">
+            {workspaceId && <ScopePicker orgId={orgId} workspaceId={workspaceId} wsName={wsName} value={scope} onChange={setScope} disabled={busy} />}
             <FormatPicker value={format} onChange={setFormat} disabled={busy} />
             {usable(pubSettings) && <PublicRecordsPicker settings={pubSettings} value={pubChoice} onChange={setPubChoice} disabled={busy} />}
             <DatePicker value={asOf} onChange={setAsOf} label={tr("As of a date")} ariaLabel={tr("Answer as of a date")} Icon={IconCalendar} tip={tr("Answer using the documents that were valid on this date")} />

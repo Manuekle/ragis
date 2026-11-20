@@ -274,8 +274,8 @@ export function AnswerScope({ scope }: { scope: QueryScopeInfo | null | undefine
   if (!scope || scope.type === "space") return null;
   const s = scopeFromInfo(scope);
   return (
-    <div className="answer-scope">
-      <ScopeIcon type={s.type} size={14} />
+    <div className="step answer-scope">
+      <ScopeIcon type={s.type} size={17} />
       <span>{t("Searched in {where}", { where: scopeLabel(s) })}{scope.type !== "documents" && scope.workspaces > 1 ? ` · ${t("{count} spaces", { count: scope.workspaces })}` : ""}</span>
     </div>
   );
