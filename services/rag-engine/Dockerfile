@@ -14,6 +14,12 @@ COPY eval/src eval/src
 RUN uv sync --frozen --no-dev --no-editable --package ragsis-rag
 
 FROM python:3.12-slim
+# The python:*-slim tags lag behind Debian security updates (zlib1g
+# CVE-2026-85091 was fixed in deb13u1 before the image picked it up), so apply
+# whatever the security archive already ships.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
