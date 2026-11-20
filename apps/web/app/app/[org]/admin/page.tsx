@@ -112,8 +112,9 @@ function Resource({ value }: { value: string }) {
 export default function AdminPage() {
   const tr = useT();
   const { org } = useParams<{ org: string }>();
-  const { workspaceId, workspaces, teams } = useOrg();
+  const { workspaceId, workspaces, teams, org: orgInfo } = useOrg();
   const [members, setMembers] = useState<Member[]>([]);
+  const [meId, setMeId] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -171,14 +172,16 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      const [m, g, a, k, fr, inv] = await Promise.all([
+      const [m, g, a, k, fr, inv, me] = await Promise.all([
         api<{ members: Member[] }>(`organizations/${org}/members`),
         api<{ groups: Group[] }>(`organizations/${org}/groups`),
         api<{ events: AuditEvent[] }>(`organizations/${org}/audit`),
         api<{ api_keys: ApiKey[] }>(`organizations/${org}/api-keys`),
         api<{ members: RoleMember[] }>(`organizations/${org}/functional-roles`),
         api<{ invitations: Invitation[] }>(`organizations/${org}/invitations`),
+        api<{ user: { id: string } }>("me"),
       ]);
+      setMeId(me.user.id);
       setInvitations(inv.invitations);
       setRoleMembers(fr.members);
       setKeys(k.api_keys);
@@ -225,6 +228,31 @@ export default function AdminPage() {
       setError(e as Error);
       return false;
     }
+  };
+
+  // Suspend keeps every grant (reactivating restores the same access); remove drops the membership, workspaces, teams,
+  // groups and roles. Either way the person loses access on their next request. Documents and history stay.
+  const memberName = (m: Member) => m.display_name ?? m.email;
+  const orgLabel = orgInfo?.name ?? tr("this organization");
+  const suspendMember = async (m: Member) => {
+    const ok = await confirm({
+      title: tr("Suspend {name}?", { name: memberName(m) }),
+      body: tr("{email} can't open {org} until you reactivate them. Their workspaces, teams, groups and roles are kept, so reactivating gives back the same access.", { email: m.email, org: orgLabel }),
+      confirmLabel: tr("Suspend"),
+      tone: "danger",
+    });
+    if (ok) run(() => api(`organizations/${org}/members/${m.id}`, { method: "PATCH", body: { status: "disabled" } }), tr("{name} is suspended", { name: memberName(m) }));
+  };
+  const reactivateMember = (m: Member) =>
+    run(() => api(`organizations/${org}/members/${m.id}`, { method: "PATCH", body: { status: "active" } }), tr("{name} has access again", { name: memberName(m) }));
+  const removeMember = async (m: Member) => {
+    const ok = await confirm({
+      title: tr("Remove {name} from {org}?", { name: memberName(m), org: orgLabel }),
+      body: tr("{email} loses access right away and leaves every workspace, team, group and role here. Documents they uploaded, their conversations and the activity log stay with the organization. To bring them back, invite them again.", { email: m.email }),
+      confirmLabel: tr("Remove member"),
+      tone: "danger",
+    });
+    if (ok) run(() => api(`organizations/${org}/members/${m.id}`, { method: "DELETE" }), tr("{name} was removed", { name: memberName(m) }));
   };
 
   const wsName = workspaces.find((w) => w.id === workspaceId)?.name ?? "workspace";
@@ -380,7 +408,7 @@ export default function AdminPage() {
               </div>
               </div>
             )}
-            <GovernanceTable status={dataStatus} label={tr("Loading members…")} columns={["", "hide-sm", "", "hide-sm"]} leading="avatar">
+            <GovernanceTable status={dataStatus} label={tr("Loading members…")} columns={["", "hide-sm", "", "hide-sm", ""]} leading="avatar">
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -389,6 +417,7 @@ export default function AdminPage() {
                       <th className="hide-sm">{tr("Role")}</th>
                       <th>{tr("Access to")}{" "}{wsName}</th>
                       <th className="hide-sm">{tr("Groups")}</th>
+                      <th><span className="sr-only">{tr("Actions")}</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -401,6 +430,7 @@ export default function AdminPage() {
                               <strong className="name-with-teams">
                                 {m.display_name ?? m.email.split("@")[0]}
                                 <PersonTeams userId={m.id} />
+                                {m.status === "disabled" && <span className="badge warn">{tr("Suspended")}</span>}
                               </strong>
                               <div className="muted ellipsis" style={{ fontSize: 13 }}>
                                 {m.email}
@@ -426,6 +456,20 @@ export default function AdminPage() {
                             options={groups.map((g) => ({ value: g.id, label: g.name, hint: `${g.members} ${g.members === 1 ? "member" : "members"}` }))}
                             onChange={(g) => run(() => api(`organizations/${org}/groups/${g}/members`, { method: "POST", body: { user_id: m.id } }), tr("Added to group"))}
                           />
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          {m.id === meId ? (
+                            <span className="muted" style={{ fontSize: 13 }}>{tr("You")}</span>
+                          ) : (m.role !== "owner" || orgInfo?.role === "owner") && (
+                            <>
+                              {m.status === "disabled" ? (
+                                <button type="button" className="ghost small" onClick={() => reactivateMember(m)} aria-label={tr("Reactivate {name}", { name: memberName(m) })}>{tr("Reactivate")}</button>
+                              ) : (
+                                <button type="button" className="ghost small" onClick={() => suspendMember(m)} aria-label={tr("Suspend {name}", { name: memberName(m) })}>{tr("Suspend")}</button>
+                              )}
+                              <button type="button" className="danger small" onClick={() => removeMember(m)} aria-label={tr("Remove {name}", { name: memberName(m) })}>{tr("Remove")}</button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
