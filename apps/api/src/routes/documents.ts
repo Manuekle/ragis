@@ -218,6 +218,8 @@ export async function documentRoutes(app: FastifyInstance, deps: Deps) {
         q: z.string().max(200).optional(),
         // Carpeta (ADR-031): un id, o "none" para los documentos sin carpeta. Sin el parámetro: todos.
         folder_id: z.union([z.string().uuid(), z.literal("none")]).optional(),
+        // Expediente (ADR-037): un id, o "none" para los documentos sin expediente. Sin el parámetro: todos.
+        matter_id: z.union([z.string().uuid(), z.literal("none")]).optional(),
       })
       .parse(req.query);
     requireWorkspaceRead(t, q.workspace_id);
@@ -227,16 +229,19 @@ export async function documentRoutes(app: FastifyInstance, deps: Deps) {
           `SELECT d.id, d.title, d.classification, d.status, d.created_at, d.updated_at,
                   lv.id AS latest_version_id, lv.version_no, lv.status AS latest_status, lv.filename, lv.size_bytes,
                   lv.page_count, lv.chunk_count, lv.error_code, lv.indexed_at, d.current_version_id, src.provider AS source_provider,
-                  d.folder_id, lv.content_type, lv.duration_seconds
+                  d.folder_id, lv.content_type, lv.duration_seconds,
+                  d.matter_id, m.title AS matter_title, m.client_name AS matter_client, m.case_number AS matter_case_number
              FROM documents d
+             LEFT JOIN matters m ON m.id = d.matter_id
              LEFT JOIN LATERAL (SELECT * FROM document_versions v WHERE v.document_id = d.id ORDER BY version_no DESC LIMIT 1) lv ON true
              LEFT JOIN LATERAL (SELECT c.provider FROM connector_items ci JOIN connectors c ON c.id = ci.connector_id
                                  WHERE ci.document_id = d.id LIMIT 1) src ON true
             WHERE d.workspace_id = $1 AND d.status = 'active'
               AND ($3::text IS NULL OR d.title ILIKE '%' || $3 || '%')
               AND ($4::text IS NULL OR ($4 = 'none' AND d.folder_id IS NULL) OR d.folder_id::text = $4)
+              AND ($5::text IS NULL OR ($5 = 'none' AND d.matter_id IS NULL) OR d.matter_id::text = $5)
             ORDER BY d.updated_at DESC LIMIT $2`,
-          [q.workspace_id, q.limit, q.q ?? null, q.folder_id ?? null],
+          [q.workspace_id, q.limit, q.q ?? null, q.folder_id ?? null, q.matter_id ?? null],
         )
       ).rows,
     );

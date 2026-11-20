@@ -13,6 +13,7 @@ import { resolveTenant, type TenantContext } from "./lib/tenant.js";
 import { registerTracing } from "./lib/telemetry.js";
 import { documentRoutes } from "./routes/documents.js";
 import { folderRoutes } from "./routes/folders.js";
+import { matterRoutes } from "./routes/matters.js";
 import { orgRoutes } from "./routes/orgs.js";
 import { queryRoutes, type RagClient } from "./routes/query.js";
 import { conversationRoutes } from "./routes/conversations.js";
@@ -139,6 +140,7 @@ export async function buildApp(
 
   await orgRoutes(app, full);
   await folderRoutes(app, full);
+  await matterRoutes(app, full);
   await documentRoutes(app, full);
   await queryRoutes(app, full);
   await conversationRoutes(app, full);

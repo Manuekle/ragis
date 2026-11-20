@@ -1,12 +1,81 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Deps } from "../app.js";
-import { issueInternalToken } from "../lib/auth.js";
+import { issueInternalToken, type InternalScope } from "../lib/auth.js";
+import type { Db } from "../db/pool.js";
 import { ApiError, badRequest, notFound, quotaExceeded } from "../lib/errors.js";
 import { audit, requireWorkspaceRead, tx, type TenantContext } from "../lib/tenant.js";
 import { childSpan } from "../lib/telemetry.js";
 import { saveConversationTurn } from "./conversations.js";
 import { COUNTRY_CHOICES, MAX_LOOKUPS_PER_QUESTION, effectiveCountry, loadPublicSettings } from "../lib/public-sources.js";
+
+/**
+ * ADR-037: dónde busca una pregunta. `space` (por defecto) es el espacio activo, como siempre; `matter` un expediente en
+ * todos los espacios de la persona; `folder` una carpeta del espacio activo con sus subcarpetas; `documents` unos
+ * documentos concretos; `all` todos los espacios de la persona. La ACL de cada documento se aplica igual en todos.
+ */
+export const QueryScope = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("space") }),
+  z.object({ type: z.literal("matter"), id: z.string().uuid() }),
+  z.object({ type: z.literal("folder"), id: z.string().uuid() }),
+  z.object({ type: z.literal("documents"), ids: z.array(z.string().uuid()).min(1).max(50) }),
+  z.object({ type: z.literal("all") }),
+]);
+export type QueryScope = z.infer<typeof QueryScope>;
+
+/** Lo que se devuelve con la respuesta para mostrar dónde buscó. */
+export interface ScopeInfo {
+  type: QueryScope["type"];
+  id?: string;
+  ids?: string[];
+  label: string | null;
+  client?: string | null;
+  case_number?: string | null;
+  workspaces: number;
+}
+
+/**
+ * Valida el alcance pedido y lo traduce a lo que se firma en el token interno. Lee bajo RLS: un expediente, una carpeta
+ * o un documento que la persona no puede ver responde 404. Los espacios son siempre un subconjunto de sus membresías.
+ */
+export async function resolveScope(
+  db: Db,
+  t: TenantContext,
+  ws: string,
+  scope: QueryScope | undefined,
+): Promise<{ wss: string[]; sc: InternalScope; info: ScopeInfo }> {
+  const mine = [...t.workspaces.keys()];
+  switch (scope?.type ?? "space") {
+    case "matter": {
+      const id = (scope as { id: string }).id;
+      const r = await db.query("SELECT title, client_name, case_number FROM matters WHERE id = $1", [id]);
+      if (!r.rows[0]) throw notFound("expediente");
+      const m = r.rows[0];
+      return { wss: mine, sc: { k: "matter", m: id }, info: { type: "matter", id, label: m.title, client: m.client_name, case_number: m.case_number, workspaces: mine.length } };
+    }
+    case "folder": {
+      const id = (scope as { id: string }).id;
+      const r = await db.query("SELECT name, workspace_id FROM folders WHERE id = $1", [id]);
+      if (!r.rows[0] || r.rows[0].workspace_id !== ws) throw notFound("folder");
+      return { wss: [ws], sc: { k: "folder", f: id }, info: { type: "folder", id, label: r.rows[0].name, workspaces: 1 } };
+    }
+    case "documents": {
+      const ids = [...new Set((scope as { ids: string[] }).ids)];
+      const r = await db.query("SELECT id, workspace_id, title FROM documents WHERE id = ANY($1::uuid[]) AND status = 'active' ORDER BY title", [ids]);
+      const docs = r.rows.filter((d) => t.workspaces.has(d.workspace_id));
+      if (!docs.length) throw notFound("documents");
+      const wss = [...new Set(docs.map((d) => d.workspace_id as string))];
+      const visible = docs.map((d) => d.id as string);
+      return { wss, sc: { k: "documents", d: visible }, info: { type: "documents", ids: visible, label: docs[0].title, workspaces: wss.length } };
+    }
+    case "all":
+      return { wss: mine, sc: { k: "all" }, info: { type: "all", label: null, workspaces: mine.length } };
+    default: {
+      const r = await db.query("SELECT name FROM workspaces WHERE id = $1", [ws]);
+      return { wss: [ws], sc: { k: "space" }, info: { type: "space", id: ws, label: r.rows[0]?.name ?? null, workspaces: 1 } };
+    }
+  }
+}
 
 const QueryBody = z.object({
   question: z.string().trim().min(2).max(2000),
@@ -21,6 +90,7 @@ const QueryBody = z.object({
   // ADR-036: también consultar registros públicos (Croma) para esta pregunta; `country` fija el país ("global" = mundo).
   public_sources: z.boolean().optional(),
   country: z.enum(COUNTRY_CHOICES).optional(),
+  scope: QueryScope.optional(),
 });
 
 export interface RenderedFile {
@@ -100,7 +170,7 @@ export async function runRagQuery(
   deps: Deps,
   t: TenantContext,
   ws: string,
-  body: { question: string; as_of?: string; top_k?: number; mode?: string; output?: string; public_sources?: boolean; country?: string },
+  body: { question: string; as_of?: string; top_k?: number; mode?: string; output?: string; public_sources?: boolean; country?: string; scope?: QueryScope },
   req?: FastifyRequest,
 ): Promise<unknown> {
   const { pool, rag, limiter, cfg } = deps;
@@ -111,7 +181,9 @@ export async function runRagQuery(
   // pregunta se responde igual con los documentos y el resultado dice por qué no se consultaron.
   let pub: { c: string | null; w: boolean; n: number; o: string | null } | undefined;
   let pubDenied: "off" | "limit" | "restricted" | undefined;
+  let scope!: Awaited<ReturnType<typeof resolveScope>>;
   await tx(pool, t, async (db) => {
+    scope = await resolveScope(db, t, ws, body.scope);
     const r = await db.query(
       "SELECT coalesce(sum(quantity), 0)::int AS n FROM usage_events WHERE kind='query' AND created_at >= date_trunc('month', now())",
     );
@@ -143,6 +215,8 @@ export async function runRagQuery(
     rerank: t.plan.rerank_enabled,
     graph: t.graphEnabled,
     ...(pub ? { pub } : {}),
+    wss: scope.wss,
+    sc: scope.sc,
   });
   const send = (carrier?: Record<string, string>) =>
     rag.query(token, { question: body.question, as_of: body.as_of, top_k: body.top_k, graph_mode: body.mode, output: body.output }, carrier);
@@ -154,6 +228,7 @@ export async function runRagQuery(
     throw new ApiError(503, "rag_unavailable", "servicio de consulta no disponible");
   }
   const result = res.body as Record<string, unknown>;
+  result.scope = scope.info;
   if (pubDenied) {
     result.public_sources = { requested: true, lookups: 0, countries: [], sources: [], unavailable: pubDenied, demo: false };
   }

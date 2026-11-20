@@ -88,6 +88,14 @@ export class Authenticator {
 }
 
 /** Token interno de vida corta para rag-engine (HS256, aud ragsis-rag). */
+/** ADR-037: scope filter signed into the internal token (`k` = kind; `m` expediente, `f` folder, `d` documents). */
+export interface InternalScope {
+  k: "space" | "matter" | "folder" | "documents" | "all";
+  m?: string;
+  f?: string;
+  d?: string[];
+}
+
 export async function issueInternalToken(
   secret: string,
   claims: {
@@ -103,6 +111,12 @@ export async function issueInternalToken(
     graph: boolean;
     /** ADR-036: public records allowed for this question (country, web, lookups left, country picked in Ask). */
     pub?: { c: string | null; w: boolean; n: number; o: string | null };
+    /**
+     * ADR-037: where this question may search. `wss`: workspaces (default: only `workspaceId`); `sc`: filter inside them
+     * (an expediente, a folder with its subfolders, or a list of documents). Always a subset of the person's spaces.
+     */
+    wss?: string[];
+    sc?: InternalScope;
   },
 ): Promise<string> {
   return new SignJWT({
@@ -116,6 +130,8 @@ export async function issueInternalToken(
     rerank: claims.rerank,
     graph: claims.graph,
     ...(claims.pub ? { pub: claims.pub } : {}),
+    ...(claims.wss ? { wss: claims.wss } : {}),
+    ...(claims.sc ? { sc: claims.sc } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.userId)
