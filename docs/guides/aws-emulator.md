@@ -67,6 +67,28 @@ rejected.
 The Dockerfile installs the latest **LTS** package (the only public channel). If a new release breaks the rehearsal,
 pin it: `docker build --build-arg EMULATOR_CHANNEL=LTS/1.0.322 -t ragsis-aws-emulator infra/docker/aws-emulator`.
 
+## Running the app with the emulator's Cognito (prod-like login)
+
+`make up` signs in with any email (`AUTH_MODE=dev`). To sign in the way production does (own form, Cognito
+`USER_PASSWORD_AUTH`, RS256 `id_token` verified against the JWKS), use the emulator's Cognito:
+
+```bash
+make up                           # Postgres, S3, SQS, rag-engine, worker (once)
+scripts/dev-emulator.sh setup     # emulator + the pilot's user pool and client (Terraform) + Cognito accounts + .env.emulator
+scripts/dev-emulator.sh start     # api and web on the host, at http://localhost:3000/login
+scripts/dev-emulator.sh stop      # back to api and web in Docker with the development login
+```
+
+- **Why api and web run on the host:** the emulator signs tokens with issuer `https://127.0.0.1:9297/<pool>`; inside a
+  container `127.0.0.1` is the container itself. `NODE_EXTRA_CA_CERTS` trusts the emulator's certificate.
+- **`COGNITO_PASSWORD_LOGIN=true`** makes the web show the own form even though the issuer host is not `cognito-idp.*`.
+- **Accounts:** one per email in the local `users` table, all with the same generated password (kept in `.env.emulator`,
+  ignored by Git). The first sign-in creates a *new* identity (issuer + `sub`), so it has no memberships until it is
+  added to an organization, exactly as in production.
+- **State is in memory:** after `make emulator-down` or a restart, run `setup` again (pool and client ids change).
+- **Still local:** S3 (SeaweedFS) and SQS (ElasticMQ). Pointing them at the emulator needs the browser to trust its
+  self-signed certificate for presigned uploads, and the Docker workers to reach it over TLS.
+
 ## Rehearsing the pilot
 
 ```bash

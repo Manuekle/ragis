@@ -33,3 +33,4 @@ eval/reports/
 infra/terraform/.emulator/
 infra/terraform/.floci/
 .vercel
+.emulator-run/
