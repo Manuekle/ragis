@@ -20,6 +20,7 @@ import {
 } from "../lib/workflow-dsl.js";
 import { emit, WorkflowRunner } from "../lib/workflow-runner.js";
 import { blockedRecipients, loadPolicy, normalizeEmails } from "../lib/external-actions.js";
+import { deadlineAttention } from "./deadlines.js";
 import { peopleAttentionCount } from "./teams.js";
 
 // name/description: the web sends the template's in the reader's language, so the workflow is saved in it.
@@ -450,7 +451,12 @@ export async function workflowRoutes(app: FastifyInstance, deps: Deps, runner: W
       const agents = items.filter((i) => !i.blocked_by_sod).length;
       // Two inboxes (ADR-035): what agents/workflows need from you, and what colleagues ask you (team requests).
       const people = await peopleAttentionCount(db, t.userId);
-      return { roles: t.functionalRoles, approvals: items, my_runs: mine, counts: { actionable: agents, agents, people, total: agents + people } };
+      // Deadlines (ADR-037): mine due within two working days or overdue, and candidates waiting for confirmation.
+      const due = await deadlineAttention(db, t);
+      return {
+        roles: t.functionalRoles, approvals: items, my_runs: mine,
+        counts: { actionable: agents, agents, people, deadlines: due.deadlines, candidates: due.candidates, total: agents + people + due.deadlines + due.candidates },
+      };
     });
   });
 

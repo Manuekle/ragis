@@ -32,6 +32,9 @@ import { createMemberMailer, type MemberMailer } from "./lib/member-email.js";
 import { deliverSignatureInvites } from "./lib/signature-native.js";
 import { ConnectorService, type ServiceOptions } from "./lib/connectors/service.js";
 import { connectorRoutes } from "./routes/connectors.js";
+import { deadlineRoutes } from "./routes/deadlines.js";
+import { createDeadlineMailer, type DeadlineMailer } from "./lib/deadline-email.js";
+import { sendDeadlineReminders } from "./lib/deadline-reminders.js";
 import { z } from "zod";
 
 declare module "fastify" {
@@ -63,12 +66,14 @@ export interface Deps {
   signatureMailer?: SignatureMailer;
   /** Invitation emails to new members (same SES sender as signatures); absent = invitations send nothing. */
   memberMailer?: MemberMailer;
+  /** Deadline reminder emails (ADR-037); same SES sender as signatures. */
+  deadlineMailer?: DeadlineMailer;
 }
 
 export async function buildApp(
-  deps: Omit<Deps, "limiter" | "esign"> & { limiter?: RateLimiter; esign?: ESignProvider; connectorOptions?: ServiceOptions },
+  deps: Omit<Deps, "limiter" | "esign"> & { limiter?: RateLimiter; esign?: ESignProvider; connectorOptions?: ServiceOptions; disableBackgroundJobs?: boolean },
 ): Promise<FastifyInstance> {
-  const full: Deps = { ...deps, limiter: deps.limiter ?? new RateLimiter(), esign: deps.esign ?? createESignProvider(deps.cfg), signatureMailer: deps.signatureMailer ?? createSignatureMailer(deps.cfg), memberMailer: deps.memberMailer ?? createMemberMailer(deps.cfg) };
+  const full: Deps = { ...deps, limiter: deps.limiter ?? new RateLimiter(), esign: deps.esign ?? createESignProvider(deps.cfg), signatureMailer: deps.signatureMailer ?? createSignatureMailer(deps.cfg), memberMailer: deps.memberMailer ?? createMemberMailer(deps.cfg), deadlineMailer: deps.deadlineMailer ?? createDeadlineMailer(deps.cfg) };
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? "info",
@@ -147,6 +152,7 @@ export async function buildApp(
   await generatedDocumentRoutes(app, full);
   await publicSourceRoutes(app, full);
   await teamRoutes(app, full);
+  await deadlineRoutes(app, full);
   await onboardingRoutes(app, full);
   await agentRoutes(app, full);
   const runner = new WorkflowRunner(full);
@@ -171,6 +177,20 @@ export async function buildApp(
     app.addHook("onClose", async () => {
       clearInterval(interval);
       await delivery;
+    });
+  }
+  if (full.deadlineMailer && !deps.disableBackgroundJobs) {
+    let sweep: Promise<unknown> | undefined;
+    const tick = () => {
+      sweep ??= sendDeadlineReminders(full)
+        .catch(() => app.log.error("deadline reminder sweep failed"))
+        .finally(() => { sweep = undefined; });
+    };
+    const interval = setInterval(tick, 5 * 60_000);
+    interval.unref();
+    app.addHook("onClose", async () => {
+      clearInterval(interval);
+      await sweep;
     });
   }
   return app;

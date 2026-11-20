@@ -15,6 +15,11 @@ Jobs soportados:
              mode=full        re-parsea/re-chunkea y reemplaza los chunks en una sola transacción.
              mode=graph       (RAG-05) extrae entidades/relaciones de los chunks activos sin tocarlos
                               (backfill al habilitar el grafo en un tenant).
+             mode=deadlines   (ADR-037) vuelve a buscar términos candidatos en la versión vigente (documentos
+                              indexados antes de que existiera la detección, o a pedido desde la web).
+
+Términos (ADR-037): al indexar un documento judicial se proponen términos candidatos (frase literal + página). Son
+solo sugerencias: una persona confirma cada uno en la web antes de que exista un término.
 
 Grafo (RAG-05): si el tenant tiene el grafo habilitado (plan u organización), tras el chunking se extraen
 entidades/relaciones por chunk con AI_GRAPH_MODEL y se guardan con procedencia por chunk (ADR-019). Figuras, tablas
@@ -44,6 +49,7 @@ from ragsis_core.settings import get_settings
 from ragsis_core.telemetry import remote_parent, stage
 
 from .chunker import Chunk, Chunker
+from .deadlines import Candidate, find_candidates
 from .enrich import detect_pii
 from .graph import BELONGS_KEYWORDS, ChunkGraph, GraphExtractor, GraphStats
 from .multimodal import MultimodalEnricher, MultimodalStats
@@ -557,6 +563,8 @@ class IngestPipeline:
             execute(conn, "DELETE FROM chunks WHERE version_id=%s", (msg.version_id,))
             chunk_ids = self._insert_chunks(conn, ctx, ver, ex, vectors, model, "building")
             self._insert_graph(conn, ctx, ver, chunk_ids, ex.graph, model)
+            deadline_candidates = self._save_deadline_candidates(conn, ctx, ver, self._blocks_candidates(ex.parsed),
+                                                                 self._chunk_spans(ex.chunks, chunk_ids))
             # Swap atómico: la nueva versión pasa a activa y la anterior queda superseded.
             execute(conn, "UPDATE chunks SET index_state='superseded' WHERE document_id=%s AND version_id<>%s "
                           "AND index_state='active'", (msg.document_id, msg.version_id))
@@ -589,6 +597,7 @@ class IngestPipeline:
                         "mean_confidence": ex.ocr.mean_confidence, "dropped_lines": ex.ocr.dropped_lines} if ex.ocr else None,
                 "multimodal": ex.mm.as_audit() or None,
                 "graph": ex.graph_stats.as_audit() if ex.graph_stats else None,
+                "deadline_candidates": deadline_candidates,
                 "audio": {"provider": ex.audio.provider, "seconds": ex.audio.duration, "language": ex.audio.language,
                           "segments": len(ex.audio.segments), "mean_confidence": ex.audio.mean_confidence,
                           "dropped_words": ex.audio.dropped_words} if ex.audio else None,
@@ -616,6 +625,8 @@ class IngestPipeline:
         mode = params.get("mode", "embeddings")
         if mode == "graph":
             return self._reindex_graph(ctx, msg, ver, self._policy(ver))
+        if mode == "deadlines":
+            return self._reindex_deadlines(ctx, msg, ver)
         model = self.gateway.registry.get(params.get("model") or self.settings.ai_embedding_model)
         if model.dimensions != 1024:
             raise PermanentError("bad_model", "el modelo de embeddings debe producir 1024 dimensiones")
@@ -739,6 +750,8 @@ class IngestPipeline:
             removed = execute(conn, "DELETE FROM chunks WHERE version_id=%s", (msg.version_id,))
             chunk_ids = self._insert_chunks(conn, ctx, ver, ex, vectors, model, "active")
             self._insert_graph(conn, ctx, ver, chunk_ids, ex.graph, model)
+            self._save_deadline_candidates(conn, ctx, ver, self._blocks_candidates(ex.parsed),
+                                           self._chunk_spans(ex.chunks, chunk_ids))
             self._gc_graph(conn, ver["workspace_id"])
             self._refresh_centroid(conn, msg.document_id)
             self._version_meta(conn, msg.version_id, ex, model)
@@ -756,6 +769,82 @@ class IngestPipeline:
                 "parser": f"{ex.parsed.parser}@{ex.parsed.parser_version}",
                 "pipeline_version": self.settings.pipeline_version})
         return f"reindexed:full:{len(ex.chunks)}"
+
+    # ------------------------------------------------------------------ términos (ADR-037)
+    @staticmethod
+    def _blocks_candidates(parsed: ParsedDocument) -> list[Candidate]:
+        """Candidates from the parsed blocks (exact page per block). Never fails an ingestion."""
+        try:
+            return find_candidates([(b.text, b.page) for b in parsed.blocks if b.kind not in ("figure", "audio")])
+        except Exception as exc:  # noqa: BLE001 - a detector bug must not block indexing
+            logger.warning("deadline detection failed", extra={"error": type(exc).__name__})
+            return []
+
+    @staticmethod
+    def _chunk_spans(chunks: list[Chunk], ids: list[uuid.UUID]) -> list[tuple[uuid.UUID, str, int | None, int | None]]:
+        return [(cid, c.text, c.page_start, c.page_end) for c, cid in zip(chunks, ids, strict=True)]
+
+    @staticmethod
+    def _save_deadline_candidates(conn, ctx: SecurityContext, ver: dict, found: list[Candidate],
+                                  spans: list[tuple[uuid.UUID, str, int | None, int | None]]) -> int:
+        """Stores the candidates of a version (idempotent per fingerprint; a decided candidate keeps its decision) and
+        retires the open candidates of the document's older versions. Each candidate points at the chunk that holds
+        its sentence, so the web can open the document at that passage."""
+        squash = " ".join
+        texts = [(cid, squash(text.split()), p0, p1) for cid, text, p0, p1 in spans]
+
+        def chunk_of(c: Candidate) -> uuid.UUID | None:
+            quote = squash(c.quote.split())
+            for cid, text, p0, p1 in texts:
+                on_page = c.page is None or p0 is None or (p0 <= c.page <= (p1 or p0))
+                if on_page and quote in text:
+                    return cid
+            return None
+
+        rows = [(ctx.organization_id, ver["workspace_id"], ver["document_id"], ver["id"], chunk_of(c), c.page, c.quote,
+                 c.amount, c.unit, c.unit_assumed, c.trigger_hint, c.trigger_date, c.legal_basis, c.title, c.fingerprint)
+                for c in found]
+        with conn.cursor() as cur:
+            if rows:
+                cur.executemany(
+                    "INSERT INTO deadline_candidates (organization_id, workspace_id, document_id, version_id, chunk_id,"
+                    " page, quote, amount, unit, unit_assumed, trigger_hint, trigger_date, legal_basis, title, fingerprint)"
+                    " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                    " ON CONFLICT (version_id, fingerprint) DO UPDATE SET chunk_id = EXCLUDED.chunk_id", rows)
+            cur.execute("UPDATE deadline_candidates SET status='superseded' WHERE document_id=%s AND version_id<>%s "
+                        "AND status='proposed'", (ver["document_id"], ver["id"]))
+        return len(rows)
+
+    def _reindex_deadlines(self, ctx, msg, ver) -> str:
+        """Looks for candidates again in the current version: re-parses the original without OCR or vision (cheap, exact
+        pages) and falls back to the stored chunks when the parse yields no text (scanned documents)."""
+        with tenant_tx(ctx, self.pool) as conn:
+            rows = fetch_all(conn, "SELECT id, text, page_start, page_end FROM chunks WHERE version_id=%s "
+                                   "AND index_state='active' ORDER BY ordinal", (msg.version_id,))
+        spans = [(r["id"], r["text"], r["page_start"], r["page_end"]) for r in rows]
+        found: list[Candidate] = []
+        source = "blocks"
+        try:
+            if not ver["s3_key"].startswith(f"tenants/{ctx.organization_id}/"):
+                raise PermanentError("storage_key_outside_tenant", ver["s3_key"])
+            data = self._download(ver["s3_key"], int(ver["max_upload_bytes"]))
+            info = validate(data, ver["filename"], ver["content_type"], int(ver["declared_size"]),
+                            int(ver["max_upload_bytes"]))
+            if info.kind != "audio":
+                found = self._blocks_candidates(parse(data, info.kind, int(ver["max_pages_per_doc"]), extract_images=False))
+        except (ValidationError, PageLimitExceeded, ValueError) as exc:
+            logger.info("deadline rescan falls back to chunks", extra={"error": type(exc).__name__})
+        if not found:
+            source = "chunks"
+            found = find_candidates([(r["text"], r["page_start"] if r["page_start"] == r["page_end"] else None)
+                                     for r in rows])
+        with tenant_tx(ctx, self.pool) as conn:
+            n = self._save_deadline_candidates(conn, ctx, ver, found, spans)
+            execute(conn, "UPDATE ingestion_jobs SET state='succeeded', last_error=NULL, updated_at=now() WHERE id=%s",
+                    (msg.job_id,))
+            _audit(conn, ctx.organization_id, "document.reindexed", f"document_version:{msg.version_id}", "allow",
+                   {"mode": "deadlines", "deadline_candidates": n, "source": source})
+        return f"reindexed:deadlines:{n}"
 
     # ------------------------------------------------------------------ borrado
     def _delete(self, ctx: SecurityContext, msg: JobMessage) -> str:

@@ -10,6 +10,9 @@
   # Backfill del grafo (RAG-05) tras habilitarlo en el tenant (plan u organizations.graph_mode='on').
   python -m ragsis_ingest.reindex --org <uuid> --mode graph
 
+  # Términos candidatos (ADR-037) en documentos indexados antes de la detección.
+  python -m ragsis_ingest.reindex --org <uuid> --mode deadlines
+
   # Purga de un espacio vectorial retirado tras la ventana de observación.
   python -m ragsis_ingest.reindex --org <uuid> --purge-model local-hash-1024@v1
 
@@ -98,7 +101,7 @@ def purge_model(org: uuid.UUID, model: str, pool=None) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ragsis-reindex", description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--org", action="append", required=True, type=uuid.UUID)
-    ap.add_argument("--mode", choices=["embeddings", "full", "graph"], default="embeddings")
+    ap.add_argument("--mode", choices=["embeddings", "full", "graph", "deadlines"], default="embeddings")
     ap.add_argument("--model", default=None, help="model_id del registry (por defecto AI_EMBEDDING_MODEL)")
     ap.add_argument("--only-stale", action="store_true", help="full: solo versiones con pipeline/modelo distinto")
     ap.add_argument("--purge-model", default=None)

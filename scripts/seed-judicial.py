@@ -12,6 +12,9 @@ Besides the documents, it leaves every page of the app with something to show:
   - Workflows: three published workflows (answer with sign-off, review of filings, audit when there is evidence).
   - Inbox / Activity: runs started by the associate waiting for the partner's decision, some approved, one rejected,
     and one started by the partner that waits for the associate (and shows separation of duties).
+  - Términos (ADR-037): a fictional court order of the new labour claim, dated a few days ago, whose terms the ingest
+    worker proposes as candidates; the partner confirms the transfer term (responsible: the associate) so the page
+    has a live deadline, and the other candidates wait for a person. Older documents are scanned for candidates too.
 
 Idempotent: the organization, agents and workflows are only created once, and runs use fixed Idempotency-Keys. Human
 steps expire after 7 days; run with --fresh-runs to start a new batch of runs (new keys) when the inbox has emptied.
@@ -30,7 +33,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import httpx
@@ -348,6 +351,90 @@ def seed_runs(sessions: dict[str, Session], org: str, workflows: dict[str, str],
         print(f"    [{r['state']:13}] {r['workflow_name']}: {task[:70]}{' (existing)' if replay else ''}")
 
 
+MONTHS_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+             "noviembre", "diciembre"]
+AUTO_TITLE = "Auto admisorio · demanda laboral Parra Rosas (Juzgado 15 Laboral)"
+
+
+def _es(d: date) -> str:
+    return f"{d.day} de {MONTHS_ES[d.month - 1]} de {d.year}"
+
+
+def court_order(issued: date) -> str:
+    """Fictional order of the new labour claim (the firm's strategy after C-217 de 2026), dated `issued`."""
+    hearing = issued + timedelta(days=45)
+    paragraphs = [
+        "REPÚBLICA DE COLOMBIA\nRAMA JUDICIAL DEL PODER PÚBLICO\nJUZGADO QUINCE LABORAL DEL CIRCUITO DE BOGOTÁ",
+        f"Bogotá, D.C., {_es(issued)}",
+        "Radicado: 11001310501520260078300\nProceso: ordinario laboral de primera instancia\n"
+        "Demandante: Juan Felipe Parra Rosas\nDemandada: Agencia Distrital de Contratación\n"
+        "Apoderada de la parte demandante: Mariana Ortiz Lozano, de Ortiz Lozano Abogados S.A.S.",
+        "AUTO ADMISORIO",
+        "Revisada la demanda presentada por la apoderada de la parte demandante, el Despacho encuentra que reúne los "
+        "requisitos de los artículos 25 y 26 del Código Procesal del Trabajo y de la Seguridad Social.",
+        "En mérito de lo expuesto, el Juzgado RESUELVE:",
+        "PRIMERO. Admitir la demanda ordinaria laboral de primera instancia promovida por Juan Felipe Parra Rosas "
+        "contra la Agencia Distrital de Contratación.",
+        "SEGUNDO. Notificar personalmente esta providencia a la demandada y correrle traslado de la demanda por el "
+        "término de diez (10) días hábiles para que la conteste, conforme al art. 74 del Código Procesal del Trabajo "
+        "y de la Seguridad Social.",
+        "TERCERO. Requerir a la parte demandante para que, dentro de los cinco (5) días siguientes a la notificación "
+        "por estado de este auto, aporte la certificación de los contratos de prestación de servicios suscritos entre "
+        "2023 y 2025, so pena de que se tenga por no aportada.",
+        "CUARTO. Fijar como fecha límite para que las partes presenten la propuesta de acuerdo conciliatorio a más "
+        f"tardar el {_es(hearing)}.",
+        "QUINTO. Reconocer personería a la abogada Mariana Ortiz Lozano, con tarjeta profesional 287.415 del "
+        "C. S. de la J., como apoderada de la parte demandante.",
+        "NOTIFÍQUESE Y CÚMPLASE.",
+        "La Jueza,\nClaudia Marcela Rincón Vargas",
+    ]
+    return "\n\n".join(paragraphs) + "\n"
+
+
+def ensure_deadlines(owner: Session, org: str, ws: str) -> None:
+    """Uploads the court order (once), rescans the older documents and confirms one candidate as the partner."""
+    docs = owner.req("GET", f"organizations/{org}/documents", params={"workspace_id": ws, "limit": 200}).json()["documents"]
+    order = next((d for d in docs if d["title"] == AUTO_TITLE), None)
+    if not order:
+        issued = date.today() - timedelta(days=3)
+        data = court_order(issued).encode()
+        body = {"workspace_id": ws, "filename": "auto-admisorio-juzgado-15-laboral.txt", "content_type": "text/plain",
+                "size_bytes": len(data), "title": AUTO_TITLE}
+        up = owner.req("POST", f"organizations/{org}/documents/uploads", json=body).json()
+        httpx.put(up["upload"]["url"], content=data, headers=up["upload"]["headers"], timeout=60).raise_for_status()
+        owner.req("POST", f"organizations/{org}/documents/{up['document_id']}/versions/{up['version_id']}/complete")
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            v = owner.req("GET", f"organizations/{org}/documents/{up['document_id']}/status").json()["versions"][0]
+            if v["status"] == "indexed":
+                break
+            if v["status"] in ("failed", "rejected"):
+                raise RuntimeError(f"court order failed to index: {v['error_code']}")
+            time.sleep(1)
+        order = {"id": up["document_id"], "title": AUTO_TITLE}
+        print(f"  ✓ court order uploaded ({_es(issued)})")
+    for d in docs:
+        if d["id"] != order["id"] and d.get("latest_status") == "indexed":
+            owner.req("POST", f"organizations/{org}/documents/{d['id']}/deadline-scan")
+    candidates = owner.req("GET", f"organizations/{org}/deadline-candidates",
+                           params={"document_id": order["id"]}).json()["candidates"]
+    transfer = next((c for c in candidates if c["amount"] == 10 and c["unit"] == "business_days"), None)
+    if transfer:  # still proposed (the list only returns open candidates)
+        people = owner.req("GET", f"organizations/{org}/deadline-people").json()["people"]
+        associate = next(p["id"] for p in people if p["email"] == READER)
+        # The order is notified the day after it is issued (fictional): the partner confirms the transfer term.
+        issued = date.today() - timedelta(days=3)
+        owner.req("POST", f"organizations/{org}/deadlines", json={
+            "candidate_id": transfer["id"], "title": "Contestación de la demandada: preparar réplica y pruebas",
+            "trigger_kind": "notification", "trigger_date": (issued + timedelta(days=1)).isoformat(),
+            "unit": "business_days", "amount": 10, "legal_basis": transfer["legal_basis"] or "art. 74 CPTSS",
+            "responsible_id": associate,
+            "notes": "Revisar la contestación en cuanto llegue y preparar la réplica con la línea de la C-217 de 2026."})
+        print("  ✓ partner confirmed the transfer term (responsible: associate)")
+    pending = owner.req("GET", f"organizations/{org}/deadline-candidates").json()["candidates"]
+    print(f"  ✓ {len(pending)} candidate deadline(s) waiting for a person")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--api", default="http://localhost:4000")
@@ -381,6 +468,7 @@ def main() -> int:
     ensure_agents(owner, org, ws)
     workflows = ensure_workflows(owner, org)
     seed_runs(sessions, org, workflows, date.today().isoformat() if args.fresh_runs else "v1")
+    ensure_deadlines(owner, org, ws)
 
     print("\nQuick Ask check:")
     for who, question in QUESTIONS:
