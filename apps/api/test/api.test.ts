@@ -561,7 +561,8 @@ describe("claves de servicio (API-01)", () => {
     const { token, id } = created.json();
     expect(token).toMatch(/^rsk_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/);
     const listed = (await call(admin, "GET", `/v1/organizations/${o.id}/api-keys`)).json().api_keys;
-    expect(JSON.stringify(listed)).not.toContain(token.split("_")[2]);
+    // The secret is the 43 chars after "rsk_<prefix>_"; it can itself contain "_", so don't split on it.
+    expect(JSON.stringify(listed)).not.toContain(token.slice("rsk_".length + 12 + 1));
 
     // Consulta permitida en su workspace, con principals del usuario de servicio.
     const q = await call(token, "POST", `/v1/organizations/${o.id}/workspaces/${o.default_workspace_id}/query`, { question: "hola mundo" });
