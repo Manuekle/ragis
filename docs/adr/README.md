@@ -937,3 +937,59 @@ affiliations, bank accounts, personal tax invoices, vehicles by owner).
 permission, not this switch), organizations want their own Croma key, Croma adds countries or endpoints worth
 allowlisting (`scripts/croma-catalog.py --check` flags removed ones), or public lookups should be offered to agents
 as a tool under the policy engine.
+
+## ADR-037 · Expedientes (matters): work by client and case across spaces
+
+**Context.** Law firms work by client and case, not by space. In the judicial demo the D-16.857 case (Parra Rosas) is
+split: the Sentencia C-217 sits in *General*, the risk matrix and the checklist in *Litigio constitucional*. Ask only
+searched the active space, so asking about the ruling from *Litigio constitucional* abstained. Inside *General* the firm
+emulated client and case with folders ("Cliente — Juan Felipe Parra Rosas", "Expediente D-16.857"), but folders never
+scoped Ask (ADR-031), so an answer could mix documents of different clients.
+
+**Decision.**
+- **An expediente is a record of the firm**, not a folder and not a space (migration `0022_matters.sql`): `matters` with
+  title, client (required), counterparty, filing number (*radicado*, unique per organization, case-insensitive), court
+  (*despacho*), stage (free text with suggestions), owner (*responsable*) and status (`active`, `on_hold`, `closed`,
+  `archived`). `documents.matter_id` links a document to **one** expediente or none (`ON DELETE SET NULL`); a trigger
+  keeps both in the same organization.
+- **An expediente never widens access.** Linking does not touch `document_acl`. The record itself (client, counterparty,
+  filing number) is visible to every member of the organization, like the client list a firm uses for conflict
+  checks; document counts and listings are computed under the RLS of `documents`, so each person only counts and opens
+  what their ACL allows. Linking a document requires editor rights on that document's space. Viewers cannot write;
+  deleting an expediente (admins or its creator) unlinks its documents and never deletes them.
+- **API** (`apps/api/src/routes/matters.ts`): list, create, read (with the visible documents of every space the person
+  belongs to), update, delete; `POST …/documents/matter` (up to 200 documents, audited as `document.matter_linked`);
+  `POST …/matters/from-folder` creates an expediente from a folder and links the visible documents of the folder and its
+  subfolders (the folder stays). `GET …/documents` filters by `matter_id` (uuid or `none`) and returns the expediente.
+  Existing folders are converted only when someone asks ("Convertir en expediente"); the migration converts nothing.
+- **Ask with a scope.** `POST …/query` takes `scope`: `space` (default, as before), `matter`, `folder` (with subfolders,
+  inside the active space), `documents` (up to 50) or `all` ("buscar en todos mis espacios"). The API validates it and
+  signs it into the internal token: `wss` (the spaces the person is a member of; only the active one for `space` and
+  `folder`) and `sc` (the filter). The rag-engine never reads the scope from the request body. Hybrid, graph, facts and
+  bridge queries filter `workspace_id = ANY(wss)` and, when a filter is present, `document_id = ANY(docs)`, on top of the
+  same ACL check. A scoped answer is therefore always a subset of what the person could already ask space by space. A
+  scope with no readable documents abstains with `empty_scope`. `query_runs.scope` records where the question searched.
+  Agents keep the space scope.
+- **Interface** (Spanish first): an *Expedientes* page (grouped by client, with filing number, court, stage, owner,
+  status and document count, and a side panel to edit it, see its documents across spaces and ask inside it); in the
+  library, an *Expediente* filter, grouping, client and expediente columns, an "Expediente…" action per document and
+  "Convertir en expediente" on a folder; in Ask, a scope picker with the active scope shown as a chip, the scope of
+  each answer, `?scope=matter:<id>` deep links, and "Buscar en todos mis espacios" offered when a space-only question
+  abstains.
+
+**Consequences.**
+- A question about one case only reads that case's documents, wherever they are filed, and never another client's.
+- Client and counterparty names are visible to the whole firm even to people who cannot open the case's documents;
+  that is stated in the expediente form.
+- Folders keep organizing inside a space and can now also scope Ask.
+
+**Not adopted.**
+- *Expediente = folder with fields.* Folders are per space and would not fix the split case.
+- *Expediente = space.* Moving documents between spaces changes their ACL (`workspace:` principal) and forces managing
+  members case by case.
+- *Several expedientes per document.* Columns, grouping and "move" become ambiguous; general jurisprudence stays without
+  an expediente and is found with "buscar en todos mis espacios".
+- *Per-expediente permissions.* A second access system next to the ACL (same reason as ADR-031).
+
+**Revisit when** firms need confidential expedientes whose client name only some people may see, conflict-of-interest
+checks against counterparties, or court calendars and deadlines tied to an expediente.
