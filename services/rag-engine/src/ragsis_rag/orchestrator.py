@@ -70,7 +70,15 @@ from .documents.model import build_document, outline, slug, word_count
 from .prompting import ABSTAIN_TEXT, SYSTEM_PROMPT, classify, modality_preference, render_prompt
 from .public_sources import COUNTRY_NAMES, ExternalItem, PublicClaim, PublicOutcome, build_client, run_lookup
 from .public_sources.client import LookupClient
-from .retrieval import Candidate, expand_parents, graph_bridges, graph_facts, graph_search, hybrid_search
+from .retrieval import (
+    Candidate,
+    expand_parents,
+    graph_bridges,
+    graph_facts,
+    graph_search,
+    hybrid_search,
+    scope_documents,
+)
 from .smalltalk import SmallTalk
 from .smalltalk import detect as detect_smalltalk
 from .verifier import verify
@@ -123,6 +131,8 @@ class QueryResult:
     public_sources: dict | None = None
 
 
+# ADR-037: la pregunta se limitó a un expediente, carpeta o documentos sin nada que la persona pueda leer.
+EMPTY_SCOPE_TEXT = "There are no documents you can read in this scope yet, so there is nothing to answer from."
 DOCUMENT_ABSTAIN_TEXT = ("I couldn't find enough evidence in the authorized documents to create that file. "
                          "Try naming the topic with the words your documents use.")
 
@@ -162,6 +172,7 @@ class QueryOrchestrator:
 
         with stage("rag.query", None, **{"ragsis.org_id": str(claims.organization_id),
                                          "ragsis.workspace_id": str(claims.workspace_id),
+                                         "ragsis.scope": (claims.scope or {}).get("kind", "space"),
                                          "ragsis.user_id": str(claims.user_id), "ragsis.query_trace_id": trace_id,
                                          "ragsis.question_class": qclass}) as root:
             abstain_reason, answer, cited_ns, gen_model, selected, cands, strategy, emb = self._pipeline(
@@ -174,7 +185,8 @@ class QueryOrchestrator:
                                  "ragsis.embedding_model": emb.model_id})
         abstained = abstain_reason is not None
         if abstained:
-            answer = DOCUMENT_ABSTAIN_TEXT if doc_request else ABSTAIN_TEXT
+            answer = (EMPTY_SCOPE_TEXT if abstain_reason == "empty_scope"
+                      else DOCUMENT_ABSTAIN_TEXT if doc_request else ABSTAIN_TEXT)
         by_n = {i + 1: c for i, c in enumerate(selected)}
         external: list[ExternalItem] = info.get("external", [])
         ext_by_n = {len(selected) + j + 1: item for j, item in enumerate(external)}
@@ -203,7 +215,8 @@ class QueryOrchestrator:
                              emb.model_id, latency, timings, usage, document,
                              public.summary() if public else None)
         with stage("rag.persist"):
-            self._persist(claims, question, result, cands, cost, public_refs=public.refs if public else ())
+            self._persist(claims, question, result, cands, cost, public_refs=public.refs if public else (),
+                          scope=info.get("scope_record"))
         log(logger, logging.INFO, "query.completed", trace_id=trace_id, org=str(claims.organization_id),
             abstained=abstained, latency_ms=latency, candidates=len(cands), cited=len(citations), strategy=strategy)
         return result
@@ -237,12 +250,21 @@ class QueryOrchestrator:
         ctx = claims.security_context()
         graph_mode = self._graph_mode(claims, opts)
         prefer = modality_preference(question)
+        wss = claims.search_workspaces
         scope = {"organization_id": claims.organization_id, "workspace_id": claims.workspace_id,
-                 "principals": list(claims.principals)}
+                 "principals": list(claims.principals), "workspace_ids": wss}
         with tenant_tx(ctx, self.pool) as conn:
+            # 2·) alcance (ADR-037): expediente, carpeta o documentos firmados por la API; solo restringe.
+            docs = scope_documents(conn, scope=claims.scope, workspace_ids=wss)
+            scope["document_ids"] = docs
+            empty_scope = docs is not None and not docs
+            info["scope_record"] = {"type": (claims.scope or {}).get("kind", "space"), "workspaces": len(wss),
+                                    **({"documents": len(docs)} if docs is not None else {}),
+                                    **{k: str(v) for k, v in (claims.scope or {}).items()
+                                       if k in ("matter_id", "folder_id")}}
             # 2a) grafo (RAG-05): solo procedencia visible para el usuario
             graph = {}
-            if graph_mode != "off":
+            if graph_mode != "off" and not empty_scope:
                 with stage("rag.graph", timings, **{"ragsis.graph_mode": graph_mode}) as span:
                     graph = graph_search(conn, **scope, question=question, mode=graph_mode, k=CANDIDATE_K,
                                          query_vector=emb.vectors[0], model_version=emb.model_id,
@@ -250,9 +272,9 @@ class QueryOrchestrator:
                     span.set_attribute("ragsis.graph_chunks", len(graph))
             # 2b) retrieval híbrido con filtros de seguridad que el texto del usuario no puede alterar
             with stage("rag.retrieve", timings, **{"ragsis.candidate_k": CANDIDATE_K}):
-                cands = hybrid_search(conn, **scope, question=question, query_vector=emb.vectors[0],
-                                      model_version=emb.model_id, k=CANDIDATE_K, as_of=opts.as_of, graph=graph,
-                                      prefer_kinds=prefer)
+                cands = [] if empty_scope else hybrid_search(
+                    conn, **scope, question=question, query_vector=emb.vectors[0], model_version=emb.model_id,
+                    k=CANDIDATE_K, as_of=opts.as_of, graph=graph, prefer_kinds=prefer)
 
             # 3) umbral de evidencia: coincidencia de un solo término no basta; se exige cobertura lexical
             # mínima de la pregunta o similitud semántica sobre el umbral calibrado del modelo.
@@ -292,7 +314,7 @@ class QueryOrchestrator:
         cited_ns: list[int] = []
         gen_model = None
         if not selected and not external:
-            abstain_reason = "insufficient_evidence"
+            abstain_reason = "empty_scope" if empty_scope else "insufficient_evidence"
         elif doc_request:
             abstain_reason, cited_ns, gen_model = self._compose(prompt_question, question, doc_request, selected,
                                                                 external, facts, hints, policy, timings, info)
@@ -609,7 +631,7 @@ class QueryOrchestrator:
         }
 
     def _persist(self, claims: InternalClaims, question: str, r: QueryResult, cands: list[Candidate],
-                 cost: float, billable: bool = True, public_refs=()) -> None:
+                 cost: float, billable: bool = True, public_refs=(), scope: dict | None = None) -> None:
         refs = [{"chunk_id": str(c.chunk_id), "rrf": round(c.rrf, 6), "sim": round(c.similarity or 0, 4),
                  "lex_rank": c.lex_rank, "rerank": c.rerank, "graph_local_rank": c.graph_local_rank,
                  "graph_global_rank": c.graph_global_rank, "hop": bool(c.extra.get("hop")),
@@ -621,13 +643,13 @@ class QueryOrchestrator:
             execute(conn, """
                 INSERT INTO query_runs (id, organization_id, workspace_id, user_id, question_sha256, question_class,
                   strategy, generation_model, embedding_model, abstained, abstain_reason, latency_ms, timings,
-                  prompt_tokens, completion_tokens, cost_estimate_usd, retrieved_refs)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb)""",
+                  prompt_tokens, completion_tokens, cost_estimate_usd, retrieved_refs, scope)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb,%s::jsonb)""",
                     (r.trace_id, claims.organization_id, claims.workspace_id, claims.user_id,
                      hashlib.sha256(question.encode("utf-8")).hexdigest(), r.question_class, r.retrieval_strategy,
                      r.generation_model, r.embedding_model, r.abstained, r.abstain_reason, r.latency_ms,
                      json.dumps(r.timings), r.usage["llm_input_tokens"], r.usage["llm_output_tokens"], cost,
-                     json.dumps(refs)))
+                     json.dumps(refs), json.dumps(scope) if scope else None))
             if r.document:
                 d = r.document
                 execute(conn, """

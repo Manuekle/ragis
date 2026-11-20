@@ -88,7 +88,8 @@ WITH sem AS (
     JOIN chunks c ON c.id = e.chunk_id
    WHERE e.organization_id = %(org)s
      AND e.model_version = %(mv)s
-     AND c.workspace_id = %(ws)s
+     AND c.workspace_id = ANY(%(wss)s::uuid[])
+     AND (%(docs)s::uuid[] IS NULL OR c.document_id = ANY(%(docs)s::uuid[]))
      AND c.index_state = 'active'
    ORDER BY e.embedding <=> %(qvec)s
    LIMIT %(k)s
@@ -99,7 +100,8 @@ WITH sem AS (
     FROM chunks c, to_tsquery('spanish', %(tsq)s) q
    WHERE %(tsq)s IS NOT NULL
      AND c.organization_id = %(org)s
-     AND c.workspace_id = %(ws)s
+     AND c.workspace_id = ANY(%(wss)s::uuid[])
+     AND (%(docs)s::uuid[] IS NULL OR c.document_id = ANY(%(docs)s::uuid[]))
      AND c.index_state = 'active'
      AND c.tsv @@ q
    ORDER BY score DESC
@@ -120,7 +122,8 @@ SELECT c.id AS chunk_id, c.document_id, c.version_id, c.section_path, c.page_sta
   LEFT JOIN graph ON graph.chunk_id = c.id
  WHERE (sem.chunk_id IS NOT NULL OR lex.chunk_id IS NOT NULL OR graph.chunk_id IS NOT NULL)
    AND c.organization_id = %(org)s
-   AND c.workspace_id = %(ws)s
+   AND c.workspace_id = ANY(%(wss)s::uuid[])
+   AND (%(docs)s::uuid[] IS NULL OR c.document_id = ANY(%(docs)s::uuid[]))
    AND c.index_state = 'active'
    AND d.status = 'active'
    AND v.is_current
@@ -132,6 +135,48 @@ SELECT c.id AS chunk_id, c.document_id, c.version_id, c.section_path, c.page_sta
 """
 
 
+def scope_params(workspace_id: uuid.UUID, workspace_ids: list[uuid.UUID] | None,
+                 document_ids: list[uuid.UUID] | None) -> dict:
+    """Parámetros de alcance (ADR-037): espacios donde se busca (por defecto, solo `workspace_id`) y, si hay filtro,
+    los documentos permitidos. Solo restringen: la ACL y el tenant se aplican igual en cada consulta."""
+    return {"ws": workspace_id, "wss": list(workspace_ids or [workspace_id]),
+            "docs": list(document_ids) if document_ids is not None else None}
+
+
+def scope_documents(conn: psycopg.Connection, *, scope: dict | None,
+                    workspace_ids: list[uuid.UUID]) -> list[uuid.UUID] | None:
+    """Documentos a los que se limita la pregunta (ADR-037), leídos bajo RLS y solo en `workspace_ids`.
+
+    None = sin filtro (todo el espacio o todos los espacios del alcance). Una lista, aunque esté vacía, limita la
+    búsqueda a esos documentos: un expediente sin documentos legibles no busca en ningún otro sitio."""
+    kind = (scope or {}).get("kind", "space")
+    if kind in ("space", "all"):
+        return None
+    if kind == "matter":
+        rows = fetch_all(conn, """
+            SELECT id FROM documents
+             WHERE matter_id = %s AND workspace_id = ANY(%s::uuid[]) AND status = 'active'""",
+                         (scope["matter_id"], workspace_ids))
+    elif kind == "folder":
+        rows = fetch_all(conn, """
+            WITH RECURSIVE tree AS (
+              SELECT id FROM folders WHERE id = %s AND workspace_id = ANY(%s::uuid[])
+              UNION ALL
+              SELECT f.id FROM folders f JOIN tree ON f.parent_id = tree.id
+            )
+            SELECT d.id FROM documents d
+             WHERE d.folder_id IN (SELECT id FROM tree) AND d.workspace_id = ANY(%s::uuid[]) AND d.status = 'active'""",
+                         (scope["folder_id"], workspace_ids, workspace_ids))
+    elif kind == "documents":
+        rows = fetch_all(conn, """
+            SELECT id FROM documents
+             WHERE id = ANY(%s::uuid[]) AND workspace_id = ANY(%s::uuid[]) AND status = 'active'""",
+                         (list(scope["document_ids"]), workspace_ids))
+    else:                                    # tipo desconocido: falla cerrado
+        return []
+    return [r["id"] for r in rows]
+
+
 def _rrf(rank: int | None) -> float:
     return 1.0 / (RRF_K + rank) if rank else 0.0
 
@@ -140,9 +185,11 @@ def hybrid_search(conn: psycopg.Connection, *, organization_id: uuid.UUID, works
                   principals: list[str], question: str, query_vector: list[float], model_version: str,
                   k: int = 30, as_of: date | None = None,
                   graph: dict[uuid.UUID, tuple[int | None, int | None]] | None = None,
-                  prefer_kinds: tuple[str, ...] = ()) -> list[Candidate]:
+                  prefer_kinds: tuple[str, ...] = (), workspace_ids: list[uuid.UUID] | None = None,
+                  document_ids: list[uuid.UUID] | None = None) -> list[Candidate]:
     """`graph`: {chunk_id: (rank_local, rank_global)} de `graph_search`; se fusiona por RRF con sem/lex y
-    pasa por exactamente los mismos filtros (tenant, workspace, activo, vigente, ACL, as_of).
+    pasa por exactamente los mismos filtros (tenant, espacios, activo, vigente, ACL, as_of).
+    `workspace_ids` / `document_ids` (ADR-037): el alcance de la pregunta; por defecto, solo `workspace_id`.
     `prefer_kinds`: tipos de chunk que la pregunta pide (figure/table/equation); solo reordena candidatos que ya
     pasaron esos filtros, nunca añade ninguno."""
     import numpy as np
@@ -155,7 +202,8 @@ def hybrid_search(conn: psycopg.Connection, *, organization_id: uuid.UUID, works
         cur.execute("SET LOCAL hnsw.iterative_scan = 'relaxed_order'")
     rows = fetch_all(conn, _SQL, {
         "qvec": np.array(query_vector, dtype=np.float32), "org": organization_id, "mv": model_version,
-        "ws": workspace_id, "k": k, "tsq": tsquery_terms(question), "principals": principals, "as_of": as_of,
+        **scope_params(workspace_id, workspace_ids, document_ids),
+        "k": k, "tsq": tsquery_terms(question), "principals": principals, "as_of": as_of,
         "g_ids": list(graph), "g_local": [v[0] for v in graph.values()], "g_global": [v[1] for v in graph.values()],
     })
     cands = [Candidate(**r) for r in rows]
@@ -206,11 +254,13 @@ def expand_parents(conn: psycopg.Connection, cands: list[Candidate], max_tokens_
 
 
 # ---------------------------------------------------------------------------- GraphRAG (RAG-05)
-# Toda fila del grafo se lee a través de su procedencia (`*_sources`) con chunk activo del workspace y ACL del
-# documento explícita (además de la RLS de la BD). Nada global: puntajes y vecinos se calculan solo con fuentes
-# visibles para este usuario.
+# Toda fila del grafo se lee a través de su procedencia (`*_sources`) con chunk activo de los espacios del alcance
+# (ADR-037: también del expediente, carpeta o documentos pedidos) y ACL del documento explícita (además de la RLS).
+# Nada global: puntajes y vecinos se calculan solo con fuentes visibles para este usuario.
 _VISIBLE = """EXISTS (SELECT 1 FROM chunks c{n}
-                WHERE c{n}.id = {alias}.chunk_id AND c{n}.workspace_id = %(ws)s AND c{n}.index_state = 'active')
+                WHERE c{n}.id = {alias}.chunk_id AND c{n}.workspace_id = ANY(%(wss)s::uuid[])
+                  AND c{n}.index_state = 'active'
+                  AND (%(docs)s::uuid[] IS NULL OR c{n}.document_id = ANY(%(docs)s::uuid[])))
    AND EXISTS (SELECT 1 FROM document_acl a{n}
                 WHERE a{n}.document_id = {alias}.document_id AND a{n}.principal = ANY(%(principals)s))"""
 
@@ -305,7 +355,8 @@ SELECT chunk_id, max(score) AS score FROM hits GROUP BY chunk_id ORDER BY score 
 def graph_search(conn: psycopg.Connection, *, organization_id: uuid.UUID, workspace_id: uuid.UUID,
                  principals: list[str], question: str, mode: str, k: int = 30,
                  query_vector: list[float] | None = None, model_version: str | None = None,
-                 min_similarity: float = 0.0) -> dict[uuid.UUID, tuple[int | None, int | None]]:
+                 min_similarity: float = 0.0, workspace_ids: list[uuid.UUID] | None = None,
+                 document_ids: list[uuid.UUID] | None = None) -> dict[uuid.UUID, tuple[int | None, int | None]]:
     """Chunks recuperados vía grafo: {chunk_id: (rank_local, rank_global)}. Vacío si mode='off' o sin señal.
 
     Con `query_vector` (mismo modelo que el índice) las semillas combinan coincidencia léxica y similitud densa
@@ -316,8 +367,8 @@ def graph_search(conn: psycopg.Connection, *, organization_id: uuid.UUID, worksp
     use_vec = query_vector is not None and bool(model_version)
     if mode == "off" or not (tsq or use_vec):
         return {}
-    params = {"org": organization_id, "ws": workspace_id, "principals": principals, "tsq": tsq, "k": k,
-              "seeds": GRAPH_SEEDS}
+    params = {"org": organization_id, **scope_params(workspace_id, workspace_ids, document_ids),
+              "principals": principals, "tsq": tsq, "k": k, "seeds": GRAPH_SEEDS}
     if use_vec:
         import numpy as np
 
@@ -341,15 +392,16 @@ GRAPH_FACTS_PER_CHUNK = 60
 
 
 def graph_facts(conn: psycopg.Connection, *, organization_id: uuid.UUID, workspace_id: uuid.UUID,
-                principals: list[str], chunk_ids: list[uuid.UUID]) -> list[dict]:
+                principals: list[str], chunk_ids: list[uuid.UUID], workspace_ids: list[uuid.UUID] | None = None,
+                document_ids: list[uuid.UUID] | None = None) -> list[dict]:
     """Entidades y relaciones cuya procedencia es uno de `chunk_ids` (la evidencia ya seleccionada).
 
     Devuelve [{chunk_id, kind: 'entity'|'relation', text}]. Solo menciones de ESOS chunks: lo que se muestre al
     modelo es citable con el [n] de su chunk y no añade nada que el usuario no pueda leer (ADR-019)."""
     if not chunk_ids:
         return []
-    params = {"org": organization_id, "ws": workspace_id, "principals": principals, "ids": chunk_ids,
-              "cap": GRAPH_FACTS_PER_CHUNK}
+    params = {"org": organization_id, **scope_params(workspace_id, workspace_ids, document_ids),
+              "principals": principals, "ids": chunk_ids, "cap": GRAPH_FACTS_PER_CHUNK}
     ents = fetch_all(conn, f"""
         SELECT chunk_id, name, type, description FROM (
           SELECT s.chunk_id, s.name, s.type, s.description,
@@ -383,7 +435,8 @@ BRIDGE_REL_RANK = 0.5
 
 def graph_bridges(conn: psycopg.Connection, *, organization_id: uuid.UUID, workspace_id: uuid.UUID,
                   principals: list[str], question: str, strong_ids: list[uuid.UUID],
-                  hop_ids: list[uuid.UUID]) -> tuple[list[str], dict[uuid.UUID, list[str]]]:
+                  hop_ids: list[uuid.UUID], workspace_ids: list[uuid.UUID] | None = None,
+                  document_ids: list[uuid.UUID] | None = None) -> tuple[list[str], dict[uuid.UUID, list[str]]]:
     """Entidades puente y chunks de salto.
 
     Puente = entidad mencionada en la evidencia fuerte cuya descripción (de ESA mención visible) coincide mejor con
@@ -393,8 +446,8 @@ def graph_bridges(conn: psycopg.Connection, *, organization_id: uuid.UUID, works
     tsq = tsquery_terms(question)
     if not strong_ids or not tsq:
         return [], {}
-    params = {"org": organization_id, "ws": workspace_id, "principals": principals, "tsq": tsq,
-              "strong": strong_ids, "hop": hop_ids}
+    params = {"org": organization_id, **scope_params(workspace_id, workspace_ids, document_ids),
+              "principals": principals, "tsq": tsq, "strong": strong_ids, "hop": hop_ids}
     rows = fetch_all(conn, f"""
         SELECT s.entity_id, s.name, ts_rank(to_tsvector('spanish', s.description), q) AS rank
           FROM entity_sources s, to_tsquery('spanish', %(tsq)s) q
