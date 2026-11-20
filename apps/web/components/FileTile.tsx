@@ -12,6 +12,15 @@ const TYPE: Record<string, string> = {
   csv: "csv",
   html: "html",
   htm: "html",
+  // Photos use the generic solid image icon, not a per-extension label.
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
+  mp3: "mp3",
+  wav: "wav",
+  m4a: "audio",
+  ogg: "audio",
+  flac: "audio",
 };
 
 export function FileTile({ ext, size = 40 }: { ext: string; size?: number }) {

@@ -32,9 +32,37 @@ Source: [svgl.app](https://svgl.app), an open catalog of SVG logos. Each logo is
 | `ollama` | Local models |
 | `gmail`, `slack`, `clickup` | Connectors |
 
+## `ragis/`: content and pipeline glyphs
+
+Drawn for this repository (24 px grid, stroke icons). Each one has a light and a `-dark` variant with the same hue,
+matching the modality palette in [`../../diagrams/lib.py`](../../diagrams/lib.py) (`MODALITIES`).
+
+| File | Meaning | Hue |
+|---|---|---|
+| `text` | Text chunk | orange |
+| `figure` | Figure or image | blue |
+| `equation` | Equation | violet |
+| `table` | Table | green |
+| `audio` | Recording transcript | pink |
+| `graph` | Knowledge graph | sky |
+| `vector` | Vector index | indigo |
+| `llm` | Language model | amber |
+| `search` | Retrieval | neutral |
+| `verify` | Permission check or citation verifier | green |
+
+## Brand: `../brand/`
+
+`ragis-logo.svg` (for light backgrounds) and `ragis-logo-dark.svg` (for dark backgrounds) are the app mark from
+`apps/web/app/icon.svg` with a fixed fill. The README shows them with `<picture>`.
+
+## Root attributes
+
+Some logos set `fill` or `stroke` on their root `<svg>` (Docker's blue, `fill="none"` in Python and Ollama).
+`lib.py` keeps those attributes on a wrapper `<g>` when it embeds an icon; without that, the shapes turn black.
+
 ## How to add an icon
 
-1. Copy the SVG to `aws/` or `tech/` with a lowercase, hyphenated name. For svgl, download it from
+1. Copy the SVG to `aws/`, `tech/` or `ragis/` with a lowercase, hyphenated name. For svgl, download it from
    `https://svgl.app/library/<name>.svg` (the API `https://api.svgl.app?search=<text>` lists the names).
 2. Check that it contains no `<script>`, `on*` attributes or external references.
 3. Use it in `docs/diagrams/build.py` (`"tech/name.svg"`) and run `make diagrams`.

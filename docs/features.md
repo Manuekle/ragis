@@ -1,6 +1,6 @@
 # Features
 
-What Ragsis does today and how each capability is turned on. For how it is built, see
+What Ragis does today and how each capability is turned on. For how it is built, see
 [architecture.md](architecture.md); for the variables, [configuration.md](configuration.md).
 
 ## AI models
@@ -10,6 +10,10 @@ By default everything runs **with no network or credentials** using the local de
 - **Bedrock:** `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
   `bedrock-claude-sonnet-5-5@v1`) and AWS credentials in the containers' environment.
 - **On-premises or offline:** `ollama-*` models with `OLLAMA_BASE_URL`.
+- **Meta Muse:** `meta-muse-spark-1.3@v1` with `META_MODEL_API_KEY` (cloud, outside AWS); see
+  [configuration.md](configuration.md#models).
+- **OCR and speech to text:** `OCR_PROVIDER=textract` and `TRANSCRIPTION_PROVIDER=transcribe` (both cloud, so not for
+  `restricted` tenants). The full list of models by kind is in [architecture.md](architecture.md#model-providers).
 
 ## API integrations
 
@@ -23,6 +27,21 @@ Gmail (personal, visible only to its owner), Slack and ClickUp (company-level, i
 encrypted tokens, delta sync with a cursor, tombstones and deletion on disconnect (ADR-025). Validation with real OAuth
 apps is still pending. How to create each provider's apps: [connectors-setup.md](connectors-setup.md).
 
+## Public records (ADR-036)
+
+When someone needs outside facts, they turn on **Public records** under the question box in Ask and pick a country
+(their organization's by default) or *Worldwide*. Ragis then also looks up official government data through
+[Croma](https://docs.usecroma.com) — company registries, court cases, laws and gazettes, regulation and tax doctrine,
+sanctions lists, public procurement and statistics in 11 countries — and, if allowed, the web. Each record is cited
+like a document, with its register, country, dates and a link to the official page; the answer says when a fact comes
+from public records. Lookups of a private person's data by ID number are not available.
+
+Administrators turn it on in **Connected apps → Outside your documents**, choose the default country, whether web
+results are allowed and the monthly lookup limit. Only names and keywords from the question are sent to Croma, never
+documents; every answer that used public records appears in the Activity log. Without `CROMA_API_KEY` the card shows
+"Not set up"; `CROMA_DEMO=1` uses labelled sample records. The endpoint allowlist is regenerated with
+`python3 scripts/croma-catalog.py`.
+
 ## Conversation history
 
 Ask saves every question and answer in a conversation that is **private to the person who asks** (not even admins see
@@ -31,6 +50,36 @@ same place), renames them and deletes them permanently. If someone loses access 
 deleted, that turn appears hidden when the history is reopened. Continuing to ask in a reopened conversation does not
 send the previous context to the model. Details and limits: ADR-028.
 
+## Documents from the chat (ADR-034)
+
+Ask can answer with a file instead of a chat message: a **PDF report**, a **Word document**, a **PowerPoint
+presentation** or an **Excel workbook** (CSV and Markdown are also offered as downloads). Two ways to ask for one:
+
+- In your own words: "Make a PowerPoint about the remote work policy", "Crea un informe en PDF de los plazos de
+  reembolso", "Exporta la tabla de tarifas a Excel" (Excel, spreadsheet or table give a workbook; say CSV for CSV).
+  Questions such as "What does the policy PDF say?" or "dame el PDF del contrato" stay normal questions.
+- With the **Answer as** chip in the composer, which forces the format.
+
+Underneath, every file is **Markdown**. The model writes it from the same authorized evidence as an answer, with a
+citation `[n]` on every fact, and the verifier checks it block by block (sentences, bullets, table rows; headings are
+kept, empty sections removed). Only that verified Markdown is stored, private to its author. Each format is produced
+**when it is downloaded**, so the same document can be taken as PDF, Word, PowerPoint, Excel, CSV or Markdown from the card in
+the chat, and the API re-checks that every cited document is still visible before handing over a file.
+
+What each format looks like:
+
+| Format | Layout |
+|---|---|
+| PDF | A4 or Letter, embedded Noto Sans, title block, blue section headings, zebra tables, page header and "Page x of y" footer, sources list with document, version, page and effective date. |
+| Word | Real Word styles (Title, Heading 1–3, List Bullet/Number), so the navigation pane and table of contents work; native tables; citations link to the sources list; page numbers in the footer. |
+| PowerPoint | 16:9. Dark cover, one slide per section (long sections continue on "(cont.)" slides), native editable tables, cited sources in each slide's footer, speaker notes, closing sources slide. |
+| Excel | One sheet per table, titled with its section, as a native Excel table (filters, sorting, frozen and printed header row) in the app's colours; a readable source column; unambiguous numbers (`$120.000`, `12,5 %`) stored as numbers in the document's language, codes such as `007` kept as text; a Content sheet for the text and a Sources sheet. No formulas: text such as `=HYPERLINK(…)` stays text. |
+| CSV | UTF-8 with BOM (opens correctly in Excel), one row per table row and a readable source column (added when the table has none, so cells carry no `[n]` marks); a document without tables becomes one row per point. Text cells that start with `=`, `+`, `-` or `@` are escaped so spreadsheets don't run them as formulas. |
+
+With the local extractive provider (no generative model) the document is built from literal sentences of the evidence
+and goes through the same verifier. Limits: `RAG_DOCUMENT_MAX_OUTPUT_TOKENS` and `DOCS_PAGE_SIZE`
+([configuration.md](configuration.md)).
+
 ## OCR
 
 `OCR_PROVIDER=textract` enables OCR for scanned PDFs and images on AWS and respects the tenant's data policy.
@@ -38,7 +87,7 @@ send the previous context to the model. Details and limits: ADR-028.
 
 ## Multimodal (RAG-04, ADR-018)
 
-Formats: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT and CSV.
+Formats: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT, CSV and audio (MP3, WAV, M4A, OGG, FLAC).
 
 - **Tables** (including native Office charts converted to a table with their figures) and **equations** are chunks of
   their own with page, bbox and caption. They work without any extra model.
@@ -49,6 +98,30 @@ Formats: PDF, DOCX, PPTX, XLSX, PNG/JPEG, HTML, Markdown, TXT and CSV.
   `DOCLING_OCR=true` gives local OCR with no network.
 - **Query:** with a vision-capable generator, the images of cited figures are attached to the model
   (`RAG_VLM_ENHANCED`). The citation verifier still requires every figure to be in the evidence text.
+
+## Audio recordings (ADR-030)
+
+Meetings, calls and voice notes are transcribed during ingestion and indexed like any other document.
+
+- `TRANSCRIPTION_PROVIDER=transcribe` uses Amazon Transcribe on the stored file and respects the tenant's data policy.
+  With `none` (the default, also in local development and the pilot), recordings show "turning speech into text isn't
+  switched on".
+- Each chunk keeps its time range and speakers ("Speaker 1", "Speaker 2"; never names). Words with low confidence are
+  dropped, and the transcript is saved so a reindex does not pay for it again.
+- Answers cite the moment: the source says "Listen from 04:12" and opens the viewer there. The viewer plays the
+  recording next to its transcript; clicking a line plays from that point.
+- Questions that mention a recording, a call or a voice note prefer audio sources.
+
+## Library folders (ADR-031)
+
+Folders organize the library; they do not change who can see a document (the document's access list still decides).
+
+- Nested up to 6 levels, renamed and deleted in place. Deleting a folder never deletes documents: they go back to
+  "No folder". Files dropped while inside a folder are uploaded into it.
+- For documents without a folder, the library suggests one: by content (the document compared with the documents
+  already in each folder) or by name (the folder name appears in the document). People accept or dismiss it; nothing is
+  filed automatically.
+- Answers search every readable document regardless of folder.
 
 ## GraphRAG (RAG-05, ADR-019)
 
@@ -62,7 +135,22 @@ Ingestion extracts entities and relations per chunk with `AI_GRAPH_MODEL` (defau
 or an LLM allowed by the tenant's policy). Every entity or relation is visible only if the person can read at least one
 source chunk, and its descriptions are built only from visible sources.
 
-At query time, `mode` can be `auto`, `off`, `local`, `global` or `hybrid`; citations are still chunks.
+Figures, tables and equations are nodes of the same graph (ADR-029): each one gets an anchor entity named after its
+caption and document, and every entity found in it is linked to that anchor. An entity named both in a figure and in a
+paragraph is a single node, so a question about the text can reach the figure and the other way round.
+
+- **Tables:** row headers, column headers, units and cells are part of the graph (`row / column = value`), so a question
+  about one row and one column finds that cell and not the similar row next to it.
+- **Equations:** `INGEST_EQUATION_ANALYSIS=true` adds an explanation written by the generation model from the nearby
+  text (what it computes, what each variable means). Numbers that are not in the equation or its context are removed.
+- **Search by meaning:** entities and relations are embedded with the same model as the chunks, so the graph is also
+  reached by questions that share no words with it.
+- **Prompt:** the entities, relations and table cells of the evidence already selected are added to the prompt, each
+  tied to its source `[n]` (`RAG_GRAPH_CONTEXT_TOKENS`).
+
+At query time, `mode` can be `auto`, `off`, `local`, `global` or `hybrid`; citations are still chunks. When the question
+names a kind of content ("according to the figure…", "in the table…", "which formula…"), chunks of that kind are
+preferred among the candidates that already pass the evidence threshold; this works with the graph on or off.
 To populate the graph after enabling it: `make reindex ARGS="--org <uuid> --mode graph"`.
 
 ## Reindex
@@ -82,7 +170,9 @@ deterministic presets per sector; activating does not publish agents or enable e
 Commercial qualification (sector, size, buyer, initial users, document sources, pain signals and origin channel) is asked
 on the sign-up screen, before entering the app, and produces an internal score that the API does not expose.
 
-**Agent Studio** (`/app/{org}/agents`) creates agents from templates or from scratch, validates the definition against
+**Agent Studio** (`/app/{org}/agents`) lists the templates Setup suggests for the organization's sector first (a law
+firm sees *Case file summary*, *Chronology of facts*, *Case law analyst* and *Due diligence reviewer* before the rest)
+and creates agents from templates or from scratch, validates the definition against
 the tenant's policy, tests it in a sandbox (real search with your ACL, simulated writes) and publishes immutable
 semantic versions.
 
@@ -93,6 +183,50 @@ version of its agents. Runs are started with `Idempotency-Key`, execute with the
 wait in the **Inbox** of whoever holds the functional role (assigned in *Governance → Roles*). An approval is tied to the
 hash of what was reviewed and to the cited document versions; a rejection stops the run. **Activity** shows the
 timeline, decisions and events of each run.
+
+## Inviting people
+
+In **Governance → Members** an admin types an email and a role and presses *Invite*. Someone who has signed in to Ragis
+before joins at once. Anyone else gets an invitation: it waits under *Pending invitation* (it can be sent again or
+cancelled) and turns into a membership the first time that person signs in with that address, as long as the identity
+provider verified the email. Invitations expire after 14 days, never change an existing membership, and both the
+invitation and its acceptance go to the audit log. With `SIGNATURE_EMAIL_FROM` set, the person also gets an email (in
+the admin's language) with the sign-in link.
+
+The invitation does not create the sign-in account. With the pilot's Cognito user pool (admin-created users only), an
+operator still creates the account; the membership then appears on the first sign-in, with no second step.
+
+## Teams and requests between teams (ADR-035)
+
+Admins set up the company's departments in **Governance → Teams**: one click for common ones (Legal, Finance &
+Treasury, People…; a space with the same name becomes the team's space) or *New team*. In the same table they put each
+person in their team and choose who leads it. Each team has its own private space, so Legal's documents, answers and
+agents stay in Legal and Treasury's stay in Treasury. When the company has two or more teams, everyone carries a team
+label next to their name; with a single team the label is hidden.
+
+Anyone can **ask another team** for something with *Ask a team* in the Inbox. The request gets a number, a priority and
+an optional due date, and opens in a side panel over the Inbox. The receiving team moves it through *New → In progress →
+Waiting on requester → Done* (or declines it with a reason), assigns it to one of its people and replies in its
+timeline. When the team asks the requester for information, the requester's reply puts it back in the team's hands.
+Only the requester, the assignee and the two teams involved can see a request; admins manage teams but don't read
+their requests.
+
+The **Inbox** has two parts: *From people* (requests, as a list or a drag-and-drop board, with *For me*, *My teams* and
+*Sent by me*) and *From agents* (workflow reviews and approvals). The sidebar counter adds both.
+
+## Procedural deadlines · Términos (ADR-038)
+
+When a court document is indexed (auto, notice, judgment), Ragis proposes the terms it finds — "córrase traslado por
+el término de diez (10) días", "a más tardar el 5 de diciembre" — with the literal sentence and the page it comes from.
+A lawyer confirms each one from **Términos** or the Inbox: the date it runs from (notification, ejecutoria…), how it is
+counted, the rule that sets it and who is responsible. Nothing becomes a deadline until a person confirms it, and the
+deadline records who did.
+
+Ragis computes the due date with the firm's country holidays (Colombia loaded) and its court vacancy, and shows every
+skipped day. **Términos** lists what is overdue, due in 7 days and in 30 days; each deadline can be marked done,
+reassigned or exported to a calendar (.ics). The responsible lawyer gets an email a week before, two working days
+before, on the day and if it is overdue (needs the same SES sender as signatures). Admins manage the firm's holidays
+country and vacancy periods from the same page.
 
 ## Ragsis Sign (ADR-023, ADR-024)
 

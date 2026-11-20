@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { BadgeShowcase } from "@/components/badge/BadgeShowcase";
 import { DitherField } from "@/components/DitherField";
 import { IconArrowRight } from "@/components/icons";
 import { badgeLines, badgeNumber, shareText } from "@/lib/badge";
+import { localePath } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale";
 import { findBadge, publicBadge } from "@/lib/waitlist-db";
 import { siteUrl } from "../../../site";
+import { PayNotice } from "../../PayNotice";
 import "../../waitlist.css";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -23,11 +26,13 @@ const base = siteUrl();
  */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
+  const es = (await getLocale()) === "es";
+  const locale = es ? "es" : "en";
   const badge = await load(slug);
-  if (!badge) return { title: "Badge not found", robots: { index: false } };
+  if (!badge) return { title: es ? "Insignia no encontrada" : "Badge not found", robots: { index: false } };
   const { title } = badgeLines(badge);
-  const heading = title === "Early member" ? "Joined the Ragis waitlist" : `${title} joined the Ragis waitlist`;
-  const description = shareText(badge);
+  const heading = title === "Early member" ? (es ? "Se unió a la lista de espera de Ragis" : "Joined the Ragis waitlist") : es ? `${title} se unió a la lista de espera de Ragis` : `${title} joined the Ragis waitlist`;
+  const description = shareText(badge, locale);
   // The version in the URL makes LinkedIn and X fetch a fresh image after the badge changes.
   const image = { url: `/api/waitlist/badge/${slug}/image?v=${encodeURIComponent(badge.updatedAt)}`, width: 1200, height: 630, alt: `Ragis waitlist badge Nº ${badgeNumber(badge.number)}` };
   return {
@@ -35,8 +40,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title: { absolute: `${heading} · Nº ${badgeNumber(badge.number)}` },
     description,
     robots: { index: false, follow: true },
-    alternates: { canonical: `/waitlist/badge/${slug}` },
-    openGraph: { type: "website", siteName: "Ragis", title: heading, description, url: `/waitlist/badge/${slug}`, images: [image] },
+    alternates: { canonical: localePath(locale, `/waitlist/badge/${slug}`) },
+    openGraph: { type: "website", siteName: "Ragis", title: heading, description, url: localePath(locale, `/waitlist/badge/${slug}`), images: [image] },
     twitter: { card: "summary_large_image", title: heading, description, images: [image] },
   };
 }
@@ -47,6 +52,7 @@ export default async function BadgePage({ params }: Params) {
   if (!found) notFound();
   const badge = publicBadge(found);
   const { title } = badgeLines(badge);
+  const es = (await getLocale()) === "es";
 
   return (
     <div className="gate-col pub-col pub-col-wide wl">
@@ -59,15 +65,21 @@ export default async function BadgePage({ params }: Params) {
           badge={badge}
           header={
             <div className="wl-done-head">
-              <span className="badge-eyebrow">Ragis waitlist · Nº {badgeNumber(badge.number)}</span>
-              <h1>{title === "Early member" ? "An early member of Ragis." : `${title} is on the Ragis waitlist.`}</h1>
+              <span className="badge-eyebrow">{es ? "Lista de espera de Ragis" : "Ragis waitlist"} · Nº {badgeNumber(badge.number)}</span>
+              <h1>{title === "Early member" ? (es ? "Un miembro temprano de Ragis." : "An early member of Ragis.") : es ? `${title} está en la lista de espera de Ragis.` : `${title} is on the Ragis waitlist.`}</h1>
+              {/* Only the badge's owner sees this, and only while a sponsor slot waits for its payment. */}
+              <PayNotice slug={slug} />
             </div>
           }
           guest={
             <div className="badge-guest">
-              <p>Ragis reads a company&apos;s documents and answers questions with the exact page each answer came from. Join the waitlist and get a badge of your own.</p>
+              <p>
+                {es
+                  ? "Ragis lee los documentos de una empresa y responde preguntas con la página exacta de la que sale cada respuesta. Únete a la lista de espera y consigue tu propia insignia."
+                  : "Ragis reads a company's documents and answers questions with the exact page each answer came from. Join the waitlist and get a badge of your own."}
+              </p>
               <Link href="/waitlist" className="gate-cta halftone">
-                Get your own badge
+                {es ? "Consigue tu propia insignia" : "Get your own badge"}
                 <IconArrowRight size={16} />
               </Link>
             </div>

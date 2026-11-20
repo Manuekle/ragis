@@ -1,6 +1,6 @@
 DC = docker compose -f infra/docker/compose.yml --env-file .env
 
-.PHONY: env up up-obs down logs test test-py test-api eval build-web tf-validate mock-oidc reindex rehearse-plan rehearse rehearse-destroy diagrams seed
+.PHONY: env up up-obs down logs test test-py test-api eval build-web tf-validate mock-oidc reindex emulator-up emulator-down rehearse-plan rehearse rehearse-destroy diagrams seed seed-judicial seed-judicial-week
 
 env:            ## Generate .env with random secrets (does not overwrite)
 	@test -f .env || ./scripts/dev-env.sh
@@ -44,13 +44,19 @@ tf-validate:
 	docker run --rm -v $(PWD)/infra/terraform:/tf -w /tf/envs/dev hashicorp/terraform:1.9.8 init -backend=false -input=false
 	docker run --rm -v $(PWD)/infra/terraform:/tf -w /tf/envs/dev hashicorp/terraform:1.9.8 validate
 
-rehearse-plan:  ## Floci rehearsal: what Terraform would create (docs/guides/floci.md)
+emulator-up:    ## Start AWS Emulator in Docker (https://127.0.0.1:9297; docs/guides/aws-emulator.md)
+	./scripts/aws-emulator.sh up
+
+emulator-down:  ## Stop AWS Emulator (its resources are in memory and are lost)
+	./scripts/aws-emulator.sh down
+
+rehearse-plan:  ## AWS Emulator rehearsal: what Terraform would create (docs/guides/aws-emulator.md)
 	./scripts/aws-rehearsal.sh plan
 
-rehearse:       ## Floci rehearsal: create the pilot infrastructure in the emulator, before real AWS
+rehearse:       ## AWS Emulator rehearsal: create the pilot infrastructure in the emulator, before real AWS
 	./scripts/aws-rehearsal.sh apply
 
-rehearse-destroy: ## Floci rehearsal: delete what was created in the emulator
+rehearse-destroy: ## AWS Emulator rehearsal: delete what was created in the emulator
 	./scripts/aws-rehearsal.sh destroy
 
 diagrams:       ## Regenerate the SVGs in docs/diagrams
@@ -58,3 +64,9 @@ diagrams:       ## Regenerate the SVGs in docs/diagrams
 
 seed:           ## Local test user and data (ACME Demo org + 9 documents); idempotent
 	uv run python scripts/seed-dev.py
+
+seed-judicial:  ## Judicial demo org (Sentencia C-217 de 2026 + firm files); socia@ / asociado@ortizlozano.test
+	uv run python scripts/seed-judicial.py
+
+seed-judicial-week: ## After seed-judicial: ten days of use (7 people, teams, requests, Ask history, signatures), dated back
+	uv run python scripts/seed-judicial-week.py

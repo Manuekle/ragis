@@ -10,6 +10,7 @@ import type {
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/vui/badge"
 import { Card } from "@/components/vui/card"
+import { tNow } from "@/lib/use-t";
 
 type AnnotationBadgeVariant =
   | "outline"
@@ -38,13 +39,13 @@ function trackedChangeBadgeLabel({
 }: Pick<DocxTrackedChangeCardRenderProps, "change" | "kindLabel">) {
   switch (change.kind) {
     case "insertion":
-      return "Inserted"
+      return tNow("Inserted")
     case "deletion":
-      return "Removed"
+      return tNow("Removed")
     case "move-from":
-      return "Moved from"
+      return tNow("Moved from")
     case "move-to":
-      return "Moved to"
+      return tNow("Moved to")
     default:
       return kindLabel
   }
@@ -160,10 +161,10 @@ export function createDocxCommentCardRenderer(
     style,
   }: DocxCommentCardRenderProps) {
     const badge = comment.resolved
-      ? "Resolved"
+      ? tNow("Resolved")
       : comment.parentId !== undefined
-        ? "Reply"
-        : "Comment"
+        ? tNow("Reply")
+        : tNow("Comment")
     return (
       <DocxAnnotationCard
         anchorText={comment.anchorText}

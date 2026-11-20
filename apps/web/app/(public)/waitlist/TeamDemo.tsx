@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { FileTile } from "@/components/FileTile";
+import { useLocale } from "@/components/LocaleProvider";
 import { LogoMark } from "@/components/Logo";
 import { typewriter } from "@/components/paperFont";
 import "./team-demo.css";
@@ -146,7 +147,7 @@ function Row({ cells, kind, mark, delay = 0 }: { cells: ReactNode[]; kind?: "hea
 
 // ───────────── teams ─────────────
 
-const TEAMS: Team[] = [
+const TEAMS_EN: Team[] = [
   {
     id: "legal",
     name: "Legal",
@@ -307,9 +308,207 @@ const TEAMS: Team[] = [
   },
 ];
 
+
+// The same four stories in Spanish: same teams, same order, same timing, same shape of page.
+const TEAMS_ES: Team[] = [
+  {
+    id: "legal",
+    name: "Legal",
+    word: "legal",
+    files: [
+      { ext: "pdf", name: "Contrato de servicios Acme" },
+      { ext: "docx", name: "Plantilla de NDA" },
+      { ext: "pdf", name: "Política de privacidad" },
+    ],
+    question: "¿Con cuánta antelación hay que avisar para terminar el contrato con Acme?",
+    answer: "90 días por escrito, dirigidos al contacto legal indicado en el contrato",
+    source: { ext: "pdf", name: "Contrato de servicios Acme", where: "p. 12" },
+    doc: {
+      kicker: "ACME CORP.",
+      title: "CONTRATO DE SERVICIOS",
+      no: "12",
+      body: (
+        <>
+          <p className="td-d-h">12. Duración y terminación</p>
+          <p className="td-d-p">
+            <b>12.1</b> Este Contrato dura dos años y se renueva por periodos de un año, salvo que se termine según se establece a continuación.
+          </p>
+          <p className="td-d-p">
+            <b>12.2</b>{" "}
+            <Mark>
+              Cualquiera de las partes puede terminar este Contrato con un preaviso por escrito de <Circle>noventa (90) días</Circle> dirigido al contacto legal indicado en el Anexo A.
+            </Mark>
+          </p>
+          <Greek widths={[100, 96, 88, 100, 62]} />
+        </>
+      ),
+      foot: (
+        <>
+          <span>MSA-2024-118</span>
+          <span>Página 12 de 18</span>
+        </>
+      ),
+    },
+  },
+  {
+    id: "hr",
+    name: "RR. HH.",
+    word: "RR. HH.",
+    files: [
+      { ext: "pdf", name: "Manual del empleado" },
+      { ext: "xlsx", name: "Beneficios 2026" },
+      { ext: "docx", name: "Lista de incorporación" },
+    ],
+    question: "¿Cuántos días de vacaciones tiene una persona recién contratada?",
+    answer: "15 días el primer año, que suben a 20 tras dos años de antigüedad",
+    source: { ext: "pdf", name: "Manual del empleado", where: "p. 8" },
+    doc: {
+      kicker: "EQUIPO DE PERSONAS",
+      title: "MANUAL DEL EMPLEADO",
+      no: "8",
+      body: (
+        <>
+          <p className="td-d-h">4. Tiempo libre</p>
+          <p className="td-d-p">Las vacaciones pagadas aumentan con la antigüedad. Los días sin usar se acumulan hasta marzo.</p>
+          <div className="td-table" data-cols="2">
+            <Row kind="head" cells={["Años de antigüedad", "Días de vacaciones"]} />
+            <Row mark cells={["Primer año", <Circle key="c">15 días</Circle>]} />
+            <Row mark delay={160} cells={["Tras 2 años", "20 días"]} />
+            <Row cells={["Tras 5 años", "25 días"]} />
+          </div>
+          <Greek widths={[100, 92, 70]} />
+        </>
+      ),
+      foot: (
+        <>
+          <span>HB-2026</span>
+          <span>Página 8 de 40</span>
+        </>
+      ),
+    },
+  },
+  {
+    id: "finance",
+    name: "Finanzas",
+    word: "finanzas",
+    files: [
+      { ext: "xlsx", name: "Informe de gasto T3" },
+      { ext: "pdf", name: "Presupuesto anual" },
+      { ext: "pptx", name: "Informe al consejo" },
+    ],
+    question: "¿Marketing se mantuvo dentro del presupuesto en el T3?",
+    answer: "Sí: $412k gastados frente a un presupuesto de $450k, un 8 % por debajo",
+    source: { ext: "xlsx", name: "Informe de gasto T3", where: "hoja Gasto" },
+    doc: {
+      kicker: "FINANZAS · AF2026",
+      title: "INFORME DE GASTO T3",
+      no: "T3",
+      body: (
+        <>
+          <p className="td-d-h">Gasto por equipo, de julio a septiembre</p>
+          <div className="td-table" data-cols="4">
+            <Row kind="head" cells={["Equipo", "Presup.", "Gasto", "Var."]} />
+            <Row cells={["Ventas", "$620k", "$648k", "+4,5 %"]} />
+            <Row mark cells={["Marketing", "$450k", <Circle key="c">$412k</Circle>, "−8,4 %"]} />
+            <Row cells={["Producto", "$380k", "$371k", "−2,4 %"]} />
+            <Row cells={["Soporte", "$210k", "$226k", "+7,6 %"]} />
+            <Row kind="total" cells={["Total", "$1,66M", "$1,66M", "−0,2 %"]} />
+          </div>
+        </>
+      ),
+      foot: (
+        <span className="td-p-tabs">
+          <span>Resumen</span>
+          <span data-on="">Gasto</span>
+          <span>Notas</span>
+        </span>
+      ),
+    },
+  },
+  {
+    id: "ops",
+    name: "Operaciones",
+    word: "operaciones",
+    files: [
+      { ext: "docx", name: "Procedimiento de devoluciones" },
+      { ext: "pdf", name: "Manual de almacén" },
+      { ext: "pdf", name: "Contrato con el transportista" },
+    ],
+    question: "¿Qué hacemos cuando un pedido llega dañado?",
+    answer: "Enviar un reemplazo en 48 horas y registrar el caso como reclamación al transportista",
+    source: { ext: "docx", name: "Procedimiento de devoluciones", where: "§3.2" },
+    doc: {
+      kicker: "OPERACIONES",
+      title: "PROCEDIMIENTO DE DEVOLUCIONES",
+      no: "3.2",
+      body: (
+        <>
+          <p className="td-d-h">3.2 Dañado a la llegada</p>
+          <ol className="td-d-list">
+            <li>Pide al cliente una foto de la caja y del artículo.</li>
+            <li>
+              <Mark>
+                Envía un reemplazo en <Circle>48 horas</Circle> desde la foto.
+              </Mark>
+            </li>
+            <li>
+              <Mark delay={220}>Registra el caso como reclamación al transportista en la hoja de devoluciones.</Mark>
+            </li>
+            <li>
+              <Greek widths={[100, 74]} />
+            </li>
+          </ol>
+          <Greek widths={[96, 100, 58]} />
+        </>
+      ),
+      foot: (
+        <>
+          <span>Rev. 4 · Operaciones</span>
+          <span>Página 3 de 9</span>
+        </>
+      ),
+    },
+  },
+];
+
+const TEAMS = { en: TEAMS_EN, es: TEAMS_ES };
+
+// The words around the stories.
+const TEXT = {
+  en: {
+    srTitle: "Your files answer your team, with the source.",
+    titleA: "Your files answer your",
+    titleB: " team, with the ",
+    titleC: "source",
+    workspace: (name: string) => `${name} workspace`,
+    searching: (n: number) => `Searching ${n} files`,
+    reading: (where: string) => `Reading ${where}`,
+    writing: "Writing the answer",
+    checked: (where: string) => `Checked against ${where}`,
+    figure: (team: Team) => `${team.name}: ${team.question} ${team.answer}. Source: ${team.source.name}, ${team.source.where}.`,
+    verified: "Verified",
+  },
+  es: {
+    srTitle: "Tus archivos responden a tu equipo, con la fuente.",
+    titleA: "Tus archivos responden a tu",
+    titleB: "equipo de ",
+    titleC: "fuente",
+    workspace: (name: string) => `Espacio de ${name}`,
+    searching: (n: number) => `Buscando en ${n} archivos`,
+    reading: (where: string) => `Leyendo ${where}`,
+    writing: "Redactando la respuesta",
+    checked: (where: string) => `Comprobado con ${where}`,
+    figure: (team: Team) => `${team.name}: ${team.question} ${team.answer}. Fuente: ${team.source.name}, ${team.source.where}.`,
+    verified: "Verificado",
+  },
+};
+
 // ───────────── shell ─────────────
 
 export function TeamDemo() {
+  const locale = useLocale();
+  const teams = TEAMS[locale];
+  const t = TEXT[locale];
   const [index, setIndex] = useState(0);
   const [lap, setLap] = useState(0); // bumps on every new team, so its story mounts clean
   const [still, setStill] = useState(false);
@@ -367,7 +566,7 @@ export function TeamDemo() {
         const next = Math.min(c.t + dt, h.hover ? T.leave - 1 : Infinity);
         if (next >= T.end) {
           c.t = 0;
-          setIndex((i) => (i + 1) % TEAMS.length);
+          setIndex((i) => (i + 1) % TEAMS_EN.length);
           setLap((n) => n + 1);
         } else if (next !== c.t) {
           c.t = next;
@@ -385,20 +584,33 @@ export function TeamDemo() {
     clock.current.emit();
   }, [lap]);
 
-  const team = TEAMS[index]!;
+  const team = teams[index]!;
 
   return (
     <ClockContext.Provider value={clock.current}>
       <h2 className="td-title">
-        <span className="sr-only">Your files answer your team, with the source.</span>
-        <span aria-hidden="true">
-          Your files answer your
-          <br />
-          <em>
-            <TeamWord index={index} />
-          </em>{" "}
-          team, with the <em>source</em>.
-        </span>
+        <span className="sr-only">{t.srTitle}</span>
+        {locale === "es" ? (
+          <span aria-hidden="true">
+            {t.titleA}
+            <br />
+            {t.titleB}
+            <em>
+              <TeamWord index={index} />
+            </em>
+            , con la <em>{t.titleC}</em>.
+          </span>
+        ) : (
+          <span aria-hidden="true">
+            {t.titleA}
+            <br />
+            <em>
+              <TeamWord index={index} />
+            </em>
+            {t.titleB}
+            <em>{t.titleC}</em>.
+          </span>
+        )}
       </h2>
 
       <div ref={root} className="gate-title td" data-still={still ? "" : undefined}>
@@ -411,7 +623,7 @@ export function TeamDemo() {
 
         <figure
           className="td-stage"
-          aria-label={`${team.name}: ${team.question} ${team.answer}. Source: ${team.source.name}, ${team.source.where}.`}
+          aria-label={t.figure(team)}
           onPointerEnter={(e) => {
             if (e.pointerType === "mouse") hold.current.hover = true;
           }}
@@ -432,8 +644,9 @@ export function TeamDemo() {
  * width so the rest of the line glides instead of jumping.
  */
 function TeamWord({ index }: { index: number }) {
+  const teams = TEAMS[useLocale()];
   const upcoming = useAfter(T.leave);
-  const word = TEAMS[upcoming ? (index + 1) % TEAMS.length : index]!.word;
+  const word = teams[upcoming ? (index + 1) % teams.length : index]!.word;
   const [prev, setPrev] = useState<string | null>(null);
   const [width, setWidth] = useState<number | null>(null);
   const last = useRef(word);
@@ -531,14 +744,15 @@ function Paper({ doc }: { doc: Team["doc"] }) {
 // ───────────── what Ragis is doing ─────────────
 
 function Narration({ team }: { team: Team }) {
+  const t = TEXT[useLocale()];
   const lines: { at: number; text: string; state: "idle" | "busy" | "done" }[] = [
-    { at: 0, text: `${team.name} workspace`, state: "idle" },
-    { at: T.search, text: `Searching ${team.files.length} files`, state: "busy" },
-    { at: T.found, text: `Reading ${team.source.where}`, state: "busy" },
-    { at: T.answer, text: "Writing the answer", state: "busy" },
-    { at: T.verified, text: `Checked against ${team.source.where}`, state: "done" },
+    { at: 0, text: t.workspace(team.name), state: "idle" },
+    { at: T.search, text: t.searching(team.files.length), state: "busy" },
+    { at: T.found, text: t.reading(team.source.where), state: "busy" },
+    { at: T.answer, text: t.writing, state: "busy" },
+    { at: T.verified, text: t.checked(team.source.where), state: "done" },
   ];
-  const i = useClockValue((t) => lines.reduce((acc, l, k) => (t >= l.at ? k : acc), 0));
+  const i = useClockValue((time) => lines.reduce((acc, l, k) => (time >= l.at ? k : acc), 0));
   const line = lines[i]!;
   return (
     <div className="td-narr">
@@ -611,6 +825,7 @@ function Search({ team }: { team: Team }) {
 }
 
 function Answer({ team }: { team: Team }) {
+  const t = TEXT[useLocale()];
   const on = useAfter(T.answer + 100);
   const words = team.answer.split(" ");
   const last = words.length - 1;
@@ -648,7 +863,7 @@ function Answer({ team }: { team: Team }) {
         </In>
         <In at={T.verified} as="span" className="td-rise td-verified">
           <i className="td-dot" aria-hidden="true" />
-          Verified
+          {t.verified}
         </In>
       </div>
     </div>

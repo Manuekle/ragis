@@ -20,11 +20,21 @@ x-app-env: &app-env
   AI_GENERATION_MODEL: ${AI_GENERATION_MODEL:-local-extractive@v1}
   AI_RERANK_MODEL: ${AI_RERANK_MODEL:-local-lexical-rerank@v1}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-8192}
+  # Meta Model API (Muse): AI_GENERATION_MODEL=meta-muse-spark-1.3@v1 y la clave en .env (nunca en Git).
+  META_MODEL_API_KEY: ${META_MODEL_API_KEY:-}
+  META_REASONING_EFFORT: ${META_REASONING_EFFORT:-low}
+  # Muse Contributor entrena con el contenido enviado: solo para pruebas con datos no sensibles.
+  AI_ALLOW_TRAINING_MODELS: ${AI_ALLOW_TRAINING_MODELS:-false}
   OCR_PROVIDER: ${OCR_PROVIDER:-none}
   # RAG-04: VLM para figuras (vacío = solo captions), parser (native | docling), VLM-enhanced en consulta.
   AI_VISION_MODEL: ${AI_VISION_MODEL:-}
   PARSER_PREFERENCE: ${PARSER_PREFERENCE:-native}
   INGEST_TABLE_SUMMARIES: ${INGEST_TABLE_SUMMARIES:-false}
+  INGEST_EQUATION_ANALYSIS: ${INGEST_EQUATION_ANALYSIS:-false}
+  # ADR-030: transcripción de audio (none | transcribe). Sin proveedor, las grabaciones quedan en error transcription_required.
+  TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-none}
+  TRANSCRIPTION_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-}
   RAG_VLM_ENHANCED: ${RAG_VLM_ENHANCED:-auto}
   # RAG-05: extracción de grafo (solo tenants con grafo habilitado por plan u organización).
   AI_GRAPH_MODEL: ${AI_GRAPH_MODEL:-local-graph-heuristic@v1}
@@ -34,6 +44,8 @@ x-app-env: &app-env
 services:
   postgres:
     image: pgvector/pgvector:pg17
+    # Without a restart policy, a Docker restart left the app services up (they have one) and Postgres down.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ragsis_owner
       POSTGRES_DB: ragsis
@@ -53,6 +65,7 @@ services:
   seaweedfs:
     # S3 compatible local (MinIO dejó de publicar imágenes comunitarias).
     image: chrislusf/seaweedfs:3.80
+    restart: unless-stopped
     command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
     volumes:
       - s3data:/data
@@ -67,6 +80,7 @@ services:
   elasticmq:
     # SQS compatible local con DLQ (maxReceiveCount = 4).
     image: softwaremill/elasticmq-native:1.6.11
+    restart: unless-stopped
     volumes:
       - ./elasticmq/elasticmq.conf:/opt/elasticmq.conf:ro
     ports: ["127.0.0.1:9324:9324"]
@@ -142,6 +156,9 @@ services:
       <<: *app-env
       DATABASE_URL: postgresql://ragsis_app:${RAGSIS_APP_DB_PASSWORD}@postgres:5432/ragsis
       OTEL_SERVICE_NAME: ragsis-rag-engine
+      # Public records in Ask (ADR-036). Only the rag-engine holds the Croma key. CROMA_DEMO=1: labelled sample data.
+      CROMA_API_KEY: ${CROMA_API_KEY:-}
+      CROMA_DEMO: ${CROMA_DEMO:-false}
     depends_on:
       migrate: { condition: service_completed_successfully }
 
@@ -179,6 +196,10 @@ services:
       # Confirmación de correo de /waitlist. En local no se envía nada: el enlace sale en la página y en el log.
       WAITLIST_EMAIL_FROM: ${WAITLIST_EMAIL_FROM:-}
       WAITLIST_EMAIL_TEST: ${WAITLIST_EMAIL_TEST:-1}
+      # Pagos con Polar (docs/payments-polar.md). Vacío = el checkout queda apagado.
+      POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
+      POLAR_SERVER: ${POLAR_SERVER:-sandbox}
+      POLAR_WEBHOOK_SECRET: ${POLAR_WEBHOOK_SECRET:-}
       AUTH_MODE: ${AUTH_MODE:-dev}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_AUDIENCE:-}

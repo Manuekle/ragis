@@ -6,7 +6,9 @@ import { IconClock, IconEdit, IconTrash } from "@/components/icons";
 import { useDropdown } from "@/components/motion";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { useConfirm } from "@/components/ui";
+import { tNow, useT } from "@/lib/use-t";
 
+import { dateLocale } from "@/lib/i18n";
 const PAGE = 30;
 
 /** "14:05" today, "Yesterday", weekday within a week, otherwise "12 Nov" (adds the year when it differs). */
@@ -15,10 +17,10 @@ export function whenLabel(iso: string, now = new Date()): string {
   if (Number.isNaN(d.getTime())) return "";
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 86_400_000);
-  if (diff <= 0) return d.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" });
-  if (diff === 1) return "Yesterday";
-  if (diff < 7) return d.toLocaleDateString("en", { weekday: "long" });
-  return d.toLocaleDateString("en", { day: "numeric", month: "short", ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
+  if (diff <= 0) return d.toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
+  if (diff === 1) return tNow("Yesterday");
+  if (diff < 7) return d.toLocaleDateString(dateLocale(), { weekday: "long" });
+  return d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short", ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
 }
 
 interface Props {
@@ -32,6 +34,7 @@ interface Props {
 }
 
 export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Props) {
+  const t = useT();
   const menu = useDropdown();
   const confirm = useConfirm();
   const [items, setItems] = useState<ConversationSummary[] | null>(null);
@@ -97,9 +100,9 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
 
   async function remove(c: ConversationSummary) {
     const ok = await confirm({
-      title: "Delete this conversation?",
+      title: t("Delete this conversation?"),
       body: `“${c.title}” and its answers will be removed for good. This can't be undone.`,
-      confirmLabel: "Delete",
+      confirmLabel: t("Delete"),
       tone: "danger",
     });
     if (!ok) return;
@@ -118,13 +121,11 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
   return (
     <div className="hist" ref={menu.ref}>
       <button type="button" className="ghost small" aria-haspopup="true" aria-expanded={menu.isOpen} onClick={menu.toggle}>
-        <IconClock size={15} />
-        History
-      </button>
-      <div className={`menu ${menu.cls}`} role="region" aria-label="Conversation history" data-origin="top-right" inert={!menu.isOpen}>
-        <div className="menu-label">Your conversations</div>
+        <IconClock size={15} />{t("History")}</button>
+      <div className={`menu ${menu.cls}`} role="region" aria-label={t("Conversation history")} data-origin="top-right" inert={!menu.isOpen}>
+        <div className="menu-label">{t("Your conversations")}</div>
         {items === null && !failed ? (
-          <SkeletonStatus label="Loading conversations…">
+          <SkeletonStatus label={t("Loading conversations…")}>
             <div className="stack" style={{ gap: 10, padding: "6px 10px 10px" }}>
               <Skel h={12} />
               <Skel w="70%" h={12} />
@@ -134,16 +135,14 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
         ) : (
           <div className="hist-list">
             {items?.length === 0 && (
-              <p className="hist-empty">
-                Nothing here yet. Your questions and answers are saved here automatically, and only you can see them.
-              </p>
+              <p className="hist-empty">{t("Nothing here yet. Your questions and answers are saved here automatically, and only you can see them.")}</p>
             )}
             {items?.map((c) => (
               <div key={c.id} className="hist-row" data-active={c.id === activeId}>
                 {renaming === c.id ? (
                   <input
                     className="hist-rename"
-                    aria-label="Conversation name"
+                    aria-label={t("Conversation name")}
                     value={draft}
                     maxLength={120}
                     autoFocus
@@ -170,7 +169,7 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
                   >
                     <span className="hist-title">{c.title}</span>
                     <span className="hist-meta">
-                      {whenLabel(c.updated_at)} · {c.turns} {c.turns === 1 ? "question" : "questions"}
+                      {whenLabel(c.updated_at)} · {c.turns === 1 ? t("1 question") : t("{n} questions", { n: c.turns })}
                     </span>
                   </button>
                 )}
@@ -179,8 +178,8 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
                     <button
                       type="button"
                       className="quiet icon small"
-                      aria-label={`Rename “${c.title}”`}
-                      title="Rename"
+                      aria-label={t("Rename “{title}”", { title: c.title })}
+                      title={t("Rename")}
                       disabled={disabled || busyId === c.id}
                       onClick={() => {
                         setDraft(c.title);
@@ -192,8 +191,8 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
                     <button
                       type="button"
                       className="quiet icon small"
-                      aria-label={`Delete “${c.title}”`}
-                      title="Delete"
+                      aria-label={t("Delete “{title}”", { title: c.title })}
+                      title={t("Delete")}
                       disabled={disabled || busyId === c.id}
                       onClick={() => remove(c)}
                     >
@@ -205,12 +204,12 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
             ))}
             {next && (
               <button type="button" className="ghost small hist-more" disabled={more} onClick={showMore}>
-                {more ? "Loading…" : "Show older"}
+                {more ? t("Loading…") : t("Show older")}
               </button>
             )}
           </div>
         )}
-        {failed && <p className="hist-empty hist-error" role="alert">Couldn't reach your history. Try again in a moment.</p>}
+        {failed && <p className="hist-empty hist-error" role="alert">{t("Couldn't reach your history. Try again in a moment.")}</p>}
       </div>
     </div>
   );

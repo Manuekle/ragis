@@ -73,16 +73,29 @@ export class Authenticator {
     }
     const name = typeof payload.name === "string" ? payload.name : undefined;
     // El tenant NO viene del token: se resuelve después con membresía verificada.
+    const emailVerified = !!this.devKey || payload.email_verified === true || payload.email_verified === "true";
     const userId = await withContext(this.pool, {}, async (db) => {
       const r = await db.query("SELECT app.upsert_user($1, $2, $3, $4) AS id", [idp, payload.sub, email, name ?? null]);
-      return r.rows[0].id as string;
+      const id = r.rows[0].id as string;
+      // Invitations by email (member_invitations): an admin invited this address, so the first sign-in with it
+      // joins the organization. Only with an address the identity provider verified.
+      if (emailVerified) await db.query("SELECT 1 FROM app.accept_member_invitations($1)", [id]);
+      return id;
     });
     const amr = Array.isArray(payload.amr) ? payload.amr.filter((x): x is string => typeof x === "string") : [];
-    return { idp, subject: payload.sub, email, name, userId, amr, emailVerified: !!this.devKey || payload.email_verified === true || payload.email_verified === "true" };
+    return { idp, subject: payload.sub, email, name, userId, amr, emailVerified };
   }
 }
 
 /** Token interno de vida corta para rag-engine (HS256, aud ragsis-rag). */
+/** ADR-037: scope filter signed into the internal token (`k` = kind; `m` expediente, `f` folder, `d` documents). */
+export interface InternalScope {
+  k: "space" | "matter" | "folder" | "documents" | "all";
+  m?: string;
+  f?: string;
+  d?: string[];
+}
+
 export async function issueInternalToken(
   secret: string,
   claims: {
@@ -96,6 +109,16 @@ export async function issueInternalToken(
     maxContextTokens: number;
     rerank: boolean;
     graph: boolean;
+    /** ADR-036: public records allowed for this question (country, web, lookups left, country picked in Ask). */
+    pub?: { c: string | null; w: boolean; n: number; o: string | null };
+    /**
+     * ADR-037: where this question may search. `wss`: workspaces (default: only `workspaceId`); `sc`: filter inside them
+     * (an expediente, a folder with its subfolders, or a list of documents). Always a subset of the person's spaces.
+     */
+    wss?: string[];
+    sc?: InternalScope;
+    /** «Solo IA privada» (llm_policy=local_only or an on_prem deployment): the rag-engine uses no cloud model. */
+    localOnly?: boolean;
   },
 ): Promise<string> {
   return new SignJWT({
@@ -108,6 +131,10 @@ export async function issueInternalToken(
     max_ctx: claims.maxContextTokens,
     rerank: claims.rerank,
     graph: claims.graph,
+    ...(claims.pub ? { pub: claims.pub } : {}),
+    ...(claims.wss ? { wss: claims.wss } : {}),
+    ...(claims.sc ? { sc: claims.sc } : {}),
+    ...(claims.localOnly ? { lo: true } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.userId)

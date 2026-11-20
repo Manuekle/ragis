@@ -10,6 +10,7 @@ class ModelKind(StrEnum):
     RERANK = "rerank"
     VISION = "vision"
     OCR = "ocr"
+    TRANSCRIBE = "transcribe"
 
 
 class DataClass(StrEnum):
@@ -17,6 +18,14 @@ class DataClass(StrEnum):
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
     RESTRICTED = "restricted"
+
+
+_CLASS_ORDER = (DataClass.PUBLIC, DataClass.INTERNAL, DataClass.CONFIDENTIAL, DataClass.RESTRICTED)
+
+
+def strictest(*classes: str) -> DataClass:
+    """La clasificación más estricta (la organización y los documentos que se envían a un modelo). Nunca relaja."""
+    return max((DataClass(c) for c in classes), key=_CLASS_ORDER.index)
 
 
 @dataclass(frozen=True)
@@ -90,3 +99,6 @@ class TenantAIPolicy:
     approved_regions: tuple[str, ...] = ("us-east-1",)
     max_output_tokens: int = 1200
     extra: dict = field(default_factory=dict)
+    # «Solo IA privada» elegida en el onboarding (o despliegue en servidores propios): ningún modelo en la nube,
+    # sea cual sea la clasificación de los datos.
+    local_only: bool = False

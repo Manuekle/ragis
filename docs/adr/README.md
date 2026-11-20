@@ -156,8 +156,8 @@ implemented in Postgres (`db/migrations/0005_graphrag.sql`) under this ACL model
   sources visible to that user. An entity shared between A and B, seen by a reader of A, only shows mentions from A.
 - **Deletion.** Sources cascade with their chunk (deletion, full reindex, failure); the worker collects the orphaned
   keys (already invisible) in the same commit.
-- **Extraction** (`ragsis_ingest/graph.py`) after chunking, one `AIGateway.generate` per chunk (text/table) with
-  `AI_GRAPH_MODEL` and the tenant's policy: with no allowed model (e.g. `restricted` with a cloud model) or with the
+- **Extraction** (`ragsis_ingest/graph.py`) after chunking, one `AIGateway.generate` per chunk (text/table;
+  figure/equation since ADR-029) with `AI_GRAPH_MODEL` and the tenant's policy: with no allowed model (e.g. `restricted` with a cloud model) or with the
   provider down → no graph and a warning in the audit (`graph_skipped_policy`); ingestion continues. Only mentions that
   appear literally in the chunk and relations between them are accepted. `local-graph-heuristic@v1` (proper nouns and
   acronyms) is the deterministic offline path (ADR-010).
@@ -484,7 +484,7 @@ keep the redirect from ADR-015. The Cognito client now allows `ALLOW_USER_PASSWO
 **Revisit when** MFA, social sign-in or federation is needed: at that point it is worth going back to the redirect flow or
 adopting Cognito managed login, which requires the Essentials plan.
 
-## ADR-027 · Infrastructure rehearsal in Floci before AWS
+## ADR-027 · Infrastructure rehearsal in Floci before AWS (superseded by ADR-032)
 
 **Context.** The pilot runs on AWS FREE plan credits (USD 100, six months). A misconfigured or forgotten resource spends
 credits and each attempt on real AWS takes longer than locally.
@@ -498,13 +498,15 @@ application keeps using SeaweedFS and ElasticMQ (ADR-012), not Floci.
 **Consequences.**
 - Floci validates the shape of the calls and the dependencies, not real AWS behavior: it does not check prices, quotas,
   instance type availability or `user_data`. The pilot rehearsal with Floci 2.4.0 creates all 28 resources and a second
-  `plan` has no changes; see [guides/floci.md](../guides/floci.md#known-limits).
+  `plan` has no changes; the Floci guide was replaced by [guides/aws-emulator.md](../guides/aws-emulator.md).
 - Its catalog does not include `m7i-flex.large`, so the rehearsal uses `m5.large` (same shape: 2 vCPU and 8 GiB) and
   real AWS uses the type in `main.tf`.
 - With `AWS_ENDPOINT_URL` pointing to Floci, the AWS CLI does not reach real AWS; the variable must be removed to operate
   there.
 
 **Revisit when** the emulator adds the pilot's instance types, or when the pilot becomes production.
+
+> **Superseded by ADR-032** (2026-11-11): the rehearsal rule stays, the emulator is now AWS Emulator.
 
 ## ADR-028 · Ask conversation history
 
@@ -539,3 +541,510 @@ conversation stays readable. This way the history is not a route to read what th
 
 **Revisit when** a customer asks for maximum retention or to disable the history, or when Ask passes prior context to the
 model (then it must be decided which hidden turns are excluded from the prompt).
+
+## ADR-029 · Cross-modal graph and modality-aware retrieval (ideas from RAG-Anything)
+
+**Context.** The RAG-Anything paper (Guo et al., 2025) adds three things on top of LightRAG: a *cross-modal* graph where
+every figure, table and equation is a node that anchors the entities found in it (`belongs_to`), fusion of that graph
+with the text graph by entity name, and retrieval that reads modality cues in the question. Its own failure analysis
+names "text-centric retrieval bias" as the main open problem. ragsis already had the parsing, the context-aware VLM
+description, the text graph, hybrid RRF retrieval, reranking and images attached at generation (ADR-018/019), but
+figures and equations were outside the graph and the question's modality was ignored. ADR-004/018 still apply: the
+library is not a dependency.
+
+**Decision.** Everything below reuses the provenance model of ADR-019: every row is tied to one source chunk and is
+visible only to someone who can read that chunk's document.
+
+- **Anchor nodes.** Graph extraction covers figure and equation chunks too (their indexed text: caption + VLM
+  description, or LaTeX + analysis). Every non-text chunk adds one anchor entity (`type` `figura` / `tabla` /
+  `ecuacion`) and a `pertenece_a` relation (weight 3) from each entity extracted from that chunk to the anchor. A
+  non-text chunk with no entities of its own is still a node.
+- **Deterministic, document-scoped names.** The anchor name is built by code, never by the model: the numbered label
+  of the caption when there is one (`Figura 2 · <document title>`), otherwise page and chunk position. Two documents
+  with their own "Figure 2" do not merge; a reindex yields the same key.
+- **Entity summary written by the model.** The model that describes a figure or analyzes an equation ends with a
+  `RESUMEN:` line; it is stored in `meta.entity_summary` and becomes the anchor's description (tables use their verified
+  summary). Without one, the description is derived: caption plus the start of the text, or the column list of a table.
+- **Equation analysis** (`INGEST_EQUATION_ANALYSIS`, off by default like table summaries). The generation model
+  explains what the equation computes and what each variable means, using the nearby text. Sentences with a number that
+  is neither in the equation nor in its context are dropped. The analysis is appended to the chunk, labelled as AI
+  generated, and the citation carries `ai_generated`.
+- **Intra-table graph** (`ragsis_ingest/table_graph.py`), deterministic and with no model. Row headers and column
+  headers are nodes scoped to their table (the "2020" of one table does not merge with another's; two rows called
+  "Total" stay apart). Relations: `fila_de`, `columna_de`, `unidad_de` (unit in parentheses in a header or in the
+  caption) and one `celda` relation per cell whose description is `row / column = value unit`. Caps per table chunk:
+  40 rows, 12 columns, 150 cells.
+- **Fusion is the existing key.** `entities.normalized_name` is unique per workspace, so an entity named in a figure
+  description and in a paragraph is one node with two sources.
+- **Dense graph index** (migration `0015_graph_embeddings.sql`). `entity_source_embeddings` and
+  `relation_source_embeddings` hold one vector per provenance row and model, in the same space as the chunks. What is
+  embedded is the mention as it appears in *its* chunk, never a description merged across documents. Same RLS as the
+  provenance tables, a trigger that ties each vector to its source row, cascade on deletion. `pertenece_a` rows are not
+  embedded. `reindex --mode embeddings` dual-writes them for a new model and `--purge-model` removes them.
+- **Graph seeds are lexical + dense.** `graph_search` adds the nearest entities/relations to the query vector to the
+  tsvector matches; both lists are normalized and summed. Similarity has a floor (the model's evidence threshold), so
+  an unrelated question seeds nothing.
+- **Modality-aware fusion.** `prompting.modality_preference` reads lexical cues (figura, gráfico, tabla, columna,
+  ecuación, fórmula and their English forms). Chunks of the requested kind get half a first-place vote in the RRF
+  (`MODALITY_BONUS`), and if one passes the evidence threshold but would fall outside the cut it takes the last
+  evidence slot. It only reorders candidates that already passed every filter and the threshold.
+- **Graph facts in the prompt.** With the graph on, entities and relations whose source is one of the *selected*
+  evidence chunks are added in a `<grafo>` block, each tagged with the `[n]` of its chunk, ranked by overlap with the
+  question and capped by `RAG_GRAPH_CONTEXT_TOKENS`. Nothing from chunks outside the evidence enters, so every fact is
+  citable and the verifier is unchanged: evidence and citations are still chunks.
+
+**Consequences.**
+- A question about a text passage can reach a figure through the shared entity, a question that names a row and a
+  column matches that cell's relation instead of the neighbouring row, and a paraphrase with no shared words can still
+  seed the graph.
+- Cost per document with the graph on: one extraction call per figure and equation chunk (they count toward
+  `GRAPH_MAX_CHUNKS_PER_DOC`), plus embedding tokens for entities and relations (metered as `embedding_tokens`). Tables
+  add up to ~200 graph rows per chunk.
+- `local-graph-heuristic@v1` no longer reads Markdown table rows as proper nouns; the intra-table graph models them.
+- `PIPELINE_VERSION` is `ingest-2026.11.3`. Documents indexed before need `make reindex ARGS="--org <uuid> --mode
+  graph"` (anchors, table structure, vectors) or `--mode full --only-stale` to also get entity summaries.
+- `retrieved_refs` in `query_runs` records `kind` and `modality` per candidate, for evaluation.
+
+**Not adopted.**
+- *Model-chosen anchor names.* The paper lets the VLM name the entity; here the name stays deterministic so that
+  reindexing is idempotent and two documents never collide.
+- *Graph facts from chunks outside the evidence.* They could not be cited or verified.
+- *One node per cell.* A cell is a relation between its row and its column; a node per cell would triple the rows for
+  the same lookup.
+
+**Revisit when** the evaluation set has multimodal questions that measure these paths separately, or when table chunks
+with more than 150 cells need full coverage.
+
+## ADR-030 · Audio recordings (speech to text with timestamps)
+
+**Context.** Meetings, calls and voice notes hold decisions that never reach a document, and RAG-Anything lists audio
+among its modalities. ragsis indexed only files with text or images. Transcription already has a pluggable shape in
+the codebase: OCR runs through a provider that works on the object already stored in S3 (Textract, ADR-018), and the
+tenant's data policy decides whether a cloud model may see the file.
+
+**Decision.**
+- **Formats:** MP3, WAV, M4A, OGG and FLAC. Validation checks the container by magic bytes (`ID3`/frame sync, `RIFF…WAVE`,
+  `ftyp`, `OggS`, `fLaC`) against the declared extension and MIME type, like every other format.
+- **Provider** (`ragsis_ingest/transcription.py`, `TRANSCRIPTION_PROVIDER`): `none` (default) or `transcribe`
+  (Amazon Transcribe, asynchronous, reading the version's S3 object; the file does not pass through the worker again).
+  The provider is a registered model (`aws-transcribe@v1`, cloud), so `require_allowed` applies the tenant's policy
+  before the call: a `restricted` tenant cannot index audio until there is a local transcriber. Language is fixed
+  (`TRANSCRIPTION_LANGUAGE`) or detected among `TRANSCRIPTION_LANGUAGE_OPTIONS`; speaker separation up to
+  `TRANSCRIPTION_MAX_SPEAKERS`.
+- **Quality gate:** words below `TRANSCRIPTION_MIN_WORD_CONFIDENCE` are dropped. A recording with no reliable speech
+  fails with `no_speech_detected`; one longer than `AUDIO_MAX_SECONDS` fails with `audio_too_long`; audio with no
+  provider configured fails with `transcription_required`. Each code has a plain-language message in the library.
+- **Chunks keep their time range.** Provider segments are grouped into chunks of about 320 tokens without splitting a
+  segment, breaking on long pauses (> 1.5 s) or segments longer than 45 s. Each chunk is `kind = 'audio'` with
+  `meta.t_start`, `meta.t_end` and `meta.speakers`; its text is one line per segment, `[mm:ss] Hablante N: …`. Speaker
+  labels tell voices apart; they are never names.
+- **Paid once.** The normalized transcript is stored as a derived tenant asset (`…/transcript.json`). A full reindex
+  reads it instead of transcribing again.
+- **Schema** (migration `0016_audio.sql`): `chunks.kind` accepts `audio`; `document_versions` gains
+  `duration_seconds`, `transcription_provider`, `transcription_language`; `usage_events.kind` accepts `audio_seconds`
+  (the unit the provider bills).
+- **Query:** audio chunks go through the same retrieval, graph (`GRAPH_KINDS`) and verifier as text. The prompt tells
+  the model that `tipo="audio"` sources are automatic transcripts. Questions with cues such as "grabación", "llamada",
+  "recording" or "call" prefer audio chunks (the modality bonus of ADR-029). Citations carry `t_start`/`t_end`.
+- **Interface:** the viewer plays the original recording next to its transcript (`AudioView`): clicking a line plays
+  from there, the line being spoken is highlighted, and a citation opens the recording at the cited moment without
+  autoplay. `GET …/documents/:id/versions/:ver/transcript` returns the audio chunks under RLS + ACL. The source card
+  says "Listen from mm:ss" and labels the transcript as written by AI.
+
+**Consequences.**
+- No derived audio files are produced; the original S3 object is what plays.
+- Local development and the pilot run with `TRANSCRIPTION_PROVIDER=none`, so recordings there end in
+  `transcription_required`. Turning on `transcribe` on AWS needs `transcribe:StartTranscriptionJob` and
+  `transcribe:GetTranscriptionJob` for the worker role, plus read access to the documents bucket and write access to
+  the derived-assets prefix (and the bucket's KMS key, if any). That IAM is not in Terraform yet.
+- Cost per recording: Transcribe per second of audio, metered as `audio_seconds`, plus the usual embedding (and graph)
+  tokens for the transcript.
+
+**Not adopted.**
+- *Local transcription (Whisper) in the worker image.* It would serve restricted tenants but adds a large model and CPU
+  or GPU sizing to the worker; it fits behind the same provider interface when there is demand.
+- *Speaker names.* Mapping voices to people needs consent and enrollment; numbered speakers are enough to follow a
+  conversation.
+
+**Revisit when** a restricted tenant needs audio, or recordings regularly exceed four hours.
+
+## ADR-031 · Library folders with content-based suggestions
+
+**Context.** The library was a flat list per workspace. People coming from shared drives expect folders, and a long
+flat list makes uploads hard to find. Folders must not become a second permission system next to the document ACL.
+
+**Decision.**
+- **Folders only organize.** Access is still the document's ACL (`document_acl`). Moving a document never changes who
+  can see it. Folder names are visible to the whole workspace; their contents are not: counts and listings are computed
+  under RLS, so each person only counts what they can read.
+- **Schema** (migration `0017_folders.sql`): `folders` (workspace-scoped, `parent_id`, up to 6 levels, no cycles, sibling
+  names unique case-insensitively, no slashes) and `documents.folder_id` (`ON DELETE SET NULL`). Triggers keep folder and
+  document in the same organization and workspace. Deleting a folder deletes its subfolders; no document is deleted,
+  they go back to "No folder".
+- **API** (`apps/api/src/routes/folders.ts`): list (with `document_count` and `unfiled_count`), create, rename or move,
+  delete, `POST …/documents/move` (up to 200 documents, audited as `document.moved`), upload straight into a folder
+  (`folder_id` on `…/documents/uploads`) and `folder_id` (or `none`) as a filter on the document list.
+- **Suggestions.** For documents without a folder, one suggested folder or none:
+  1. *Content:* each indexed document has a summary vector (`document_centroids`, the mean of its chunk vectors per
+     embedding model, refreshed by the worker on indexing). It is compared with the mean of the documents in each
+     folder. Thresholds: cosine similarity ≥ 0.45, or ≥ 0.6 when the folder holds a single document. Below that, no
+     suggestion is better than a wrong one.
+  2. *Name:* the folder name appears in the document title or text (full-text search). It covers new, empty folders.
+  The centroid table has the same row-level rule as chunks (tenant + document ACL), so a document someone cannot read
+  never shapes what is suggested to them. "No thanks" stores `folder_suggestion_dismissed_at`; moving the document
+  clears it.
+- **Interface:** breadcrumb trail, folder chips with counts, a "No folder" view, rename and delete on the current folder,
+  a move dialog per document, and the suggestion as one line under the document title ("Looks like it belongs in …",
+  "Move there", "No thanks"). Dropping files while inside a folder uploads them there.
+
+**Consequences.**
+- Retrieval ignores folders: a question searches every document the person can read, wherever it is filed.
+- The migration backfills `document_centroids` for documents already indexed.
+- Folder names can reveal that a topic exists even to people who cannot open its documents; that is the price of a
+  shared structure and is stated in the move dialog.
+
+**Not adopted.**
+- *Folder permissions.* Two access systems that can disagree is how drives leak; the ACL stays the only one.
+- *Automatic filing.* The suggestion is never applied without a person accepting it.
+- *Uploading a whole folder tree from disk.* Folders are created in the app; a directory upload can map onto them later.
+
+**Revisit when** workspaces regularly hold thousands of documents (bulk move, multi-select), or people ask for folder-level
+sharing.
+
+## ADR-032 · AWS Emulator replaces Floci for the infrastructure rehearsal
+
+**Context.** ADR-027 made every Terraform change go through a local emulator first. Floci did the job, but it is a
+third-party project that ran here as a hand-built Java process with its own failure modes (the JVM wedged when its jar
+was rebuilt, an incomplete instance type catalog). AWS now publishes [AWS Emulator](https://github.com/aws/aws-emulator)
+(CC0-1.0), an official emulator driven by the AWS API models, with published fidelity scores per release.
+
+**Decision.** The rehearsal runs against AWS Emulator in Docker (`infra/docker/aws-emulator/Dockerfile`,
+`scripts/aws-emulator.sh`, `make emulator-up`) on `https://127.0.0.1:9297`, published on loopback only and with
+telemetry off by default. `scripts/aws-rehearsal.sh` keeps its interface (`make rehearse*`), works in
+`infra/terraform/.emulator/` and takes endpoint, per-run SigV4 keys and CA certificate from `scripts/aws-emulator.sh env`.
+The local application keeps using SeaweedFS and ElasticMQ (ADR-012).
+
+**Consequences.**
+- With AWS Emulator 1.0.322 the pilot rehearsal creates 26 resources, a second `plan` has no changes and `destroy`
+  empties it. EC2 `DescribeTags` is not implemented, so `aws_instance.pilot` and `aws_eip.pilot` are left out by
+  default (`REHEARSAL_EXCLUDE`); the instance is validated only by the real `terraform plan` and first boot. Floci did
+  cover it.
+- Five emulator gaps are worked around in the rehearsal only (S3 Control host, egress revoke with `-1`, network
+  interfaces and empty AZ in `RunInstances`, Canonical SSM parameters); see
+  [guides/aws-emulator.md](../guides/aws-emulator.md#known-limits). The S3 Control workaround sets `insecure = true` on
+  the rehearsal provider, acceptable only because it targets the loopback emulator with throwaway keys.
+- Static `test` credentials no longer work: shells and tools must use the variables from `scripts/aws-emulator.sh env`.
+- The emulator updates often; the Dockerfile follows the LTS channel and can be pinned with `EMULATOR_CHANNEL`.
+
+**Revisit when** a release implements EC2 `DescribeTags` (drop the default exclusion) or fixes the gaps above (drop the
+matching workaround).
+
+## ADR-033 · Meta Muse as a cloud generation model, with a guard for training modes
+
+**Context.** Local generation with Ollama loads the developer's GPU and, on a 16 GB machine, competes with the stack for
+memory. The Meta Model API serves Muse Spark through an OpenAI-compatible Chat Completions endpoint. Its Contributor
+mode (`muse-spark-1.3-contributor`) costs USD 0.10 per million input tokens instead of 1.25, in exchange for Meta
+being allowed to train future models on the content sent. In a RAG system that content is customer document text.
+
+**Decision.** The AI gateway gets a `meta` provider (`https://api.meta.ai/v1/chat/completions`, `developer` role for the
+rules, `reasoning_effort=low`, margin on `max_completion_tokens` for reasoning) and two models:
+`meta-muse-spark-1.3@v1` and `meta-muse-spark-1.3-contributor@v1`. Both are `cloud` for the data policy (blocked for
+`restricted`, allowlist for `confidential`) and fall back only to `local-extractive@v1`, never to Ollama. Models flagged
+`trains_on_data` also need `AI_ALLOW_TRAINING_MODELS=true` in the deployment and are never allowed for `confidential`
+data, even when allowlisted. The flag defaults to `false`, so the pilot cannot use Contributor mode by accident.
+
+**Consequences.**
+- On the judicial suite (`eval/golden/judicial.yaml`) Muse Spark 1.3 Contributor answers all 24 questions correctly with
+  a median latency of about 3 s, against 16 of 24 with `qwen3:8b` before the fixes listed below.
+- Working on that suite also fixed three platform issues that affected every model: Ollama prompts truncated at 4096
+  tokens (`OLLAMA_NUM_CTX`), strong-evidence filter dropping the first lexical or graph result by hundredths
+  (top-3 now needs coverage 0.30 instead of 0.40), and graph links lost between a person in prose and the same person
+  in a table row (label-before-colon descriptions, proper-name rows also mention the global entity).
+- Evidence leaves AWS. Meta usage is billed by Meta and is not covered by AWS credits.
+
+**Revisit when** a tenant needs Muse with `confidential` data (Standard mode and an allowlist entry, never Contributor),
+or Meta changes the Contributor terms.
+
+
+## ADR-034 · Documents from the chat: verified Markdown first, files rendered on download
+
+**Context.** People ask Ask for deliverables, not only answers: "make a PowerPoint about the remote work policy", "a
+PDF report on the reimbursement deadlines", "export the rates table to Excel". The file must carry the same guarantees
+as an answer (only authorized evidence, a citation on every fact, the verifier), look professional in each format, and
+stay correct when access to a source is removed later. RAG-Anything's `enhanced_markdown.py` converts Markdown to PDF
+with WeasyPrint or Pandoc; both need system libraries or binaries, and WeasyPrint needed a restricted URL fetcher so a
+document could not embed local files. ADR-004/018 still apply: the library is not a dependency.
+
+**Decision.**
+- **One source: Markdown.** A file request is answered by a document writer prompt over the same evidence as an answer
+  (RLS + ACL, graph facts of the selected evidence). The model returns Markdown with `[n]` on every fact; a structure
+  is suggested per kind (report, presentation, table). With the local provider the document is built from literal
+  evidence sentences instead.
+- **Block-aware verification** (`documents/compose.py`). Headings are kept; paragraphs and bullets are verified sentence
+  by sentence like an answer (valid citation, lexical support, literal figures); each table row needs a valid citation
+  and its figures in the cited source, checked together with the header. Empty sections are removed, a "Sources"
+  section written by the model is dropped (the real one is generated), and no verified citation means no document.
+- **Intent detection** (`documents/intent.py`), deliberately conservative: a creation verb plus a format or document
+  word with an indefinite article or a target ("en PDF", "as slides"). A sentence starting with an interrogative is
+  never a file request, and "dame el PDF del contrato" (definite article) asks for an existing file. Retrieval uses the
+  topic with the instruction words removed. `output` on `POST …/query`: `answer` (default, previous contract), `auto`
+  (detect) or a format (`pdf`, `docx`, `pptx`, `xlsx`, `csv`, `md`) chosen with **Answer as** in the composer.
+  "Excel", "spreadsheet" and "a table" map to `xlsx`; only "CSV" maps to `csv`.
+- **Storage** (migrations `0018_generated_documents.sql` and `0020_generated_documents_xlsx.sql`). Only the verified Markdown and its citations are stored, in
+  the same transaction as the query trace. Private to its author (RLS: organization **and** user; admins do not see
+  it), no `UPDATE` grant: verified content is not edited afterwards. History keeps only the card (title, outline,
+  counts), never the Markdown.
+- **Rendering on download** (`documents/render/`, `POST /internal/render`). `GET …/generated-documents/:id/file?format=`
+  re-checks under RLS that every cited document is still active and visible; if not, `410 source_unavailable` and a
+  `deny` audit event. Otherwise it audits the download and asks the rag-engine to convert. Any stored document can be
+  taken in any format. Responses are `private, no-store`, `nosniff` and `CSP: sandbox`; the filename comes from a
+  strict pattern, never verbatim from the engine.
+- **Pure-Python renderers, no fetching.** Markdown is parsed with `markdown-it-py` (no HTML) into an intermediate model
+  shared by every format: ReportLab for PDF (embedded Noto Sans, SIL OFL), `python-docx` with real Word styles,
+  `python-pptx` on the blank layout (looks the same in PowerPoint, Keynote and Google Slides), `openpyxl` for
+  Excel (one sheet per table as a native Excel table with filters, frozen header and brand zebra; unambiguous
+  numbers stored as numbers, read in the document's language; every text cell typed as a string so nothing becomes
+  a formula; content and sources sheets), `csv` with BOM and formula-injection guard. Links stay as text with their URL and images become their alt text, so no renderer
+  downloads anything or touches the disk.
+
+**Consequences.**
+- One generation per file; extra formats cost only the conversion (no model call). Documents use
+  `RAG_DOCUMENT_MAX_OUTPUT_TOKENS` (3000) instead of the answer limit.
+- The rag-engine image gains `python-docx`, `python-pptx`, `openpyxl`, `reportlab` and `markdown-it-py` plus
+  about 3 MB of fonts.
+- Excel files carry values, not formulas: totals or pivots are left to the person, so nothing in the workbook is
+  a figure the evidence does not contain.
+- Follow-up turns are still stateless (ADR-028), so "now make it shorter" writes a new document from the evidence.
+
+**Not adopted.**
+- *HTML → PDF (WeasyPrint, headless Chrome) or Pandoc.* System dependencies in the image and a fetcher to lock down;
+  the shared intermediate model also keeps every format consistent.
+- *Storing the rendered files.* They would outlive a permission change and duplicate content in S3; rendering on
+  download takes 10–150 ms per file in local
+  tests.
+- *Asking the model for JSON slides or tables.* Markdown is what models write most reliably, what the verifier already
+  understands and what the person can export as is.
+
+**Revisit when** people need computed columns or totals in the workbook, charts drawn from table data, or
+follow-up edits of a generated document.
+
+## ADR-035 · Company teams, requests between teams and a two-part Inbox
+
+**Context.** A company works in departments (Legal, Finance & Treasury, People…). Their documents should not mix:
+Legal does not need Treasury's bank statements in its answers. But departments depend on each other: Legal asks
+Treasury for a wire transfer or a bank certificate, and today that happens in email and chat, outside the platform.
+The Inbox (ADR-022) only held what workflows and agents need from a person.
+
+**Decision.**
+- A **team** is a department that owns exactly one workspace (migration `0019_teams_requests`). The data boundary is
+  the ACL that already exists (`workspace:<id>` principal, ADR-008), so nothing new is needed for "Legal does not see
+  Treasury's files". Team membership **is** the workspace membership, with a `team_lead` flag on it: one source of
+  truth, nothing to keep in sync. Creating a team whose name matches an existing space adopts that space and its people.
+- Teams are managed in **Governance → Teams**, by admins only (the company's managers): they create, rename and archive
+  teams, put each person in their team (a person can be in more than one) and choose leads. There is no separate
+  teams section in the app. The team directory (names, members, leads) is visible to the whole organization, because
+  people need it to know whom to ask and to show team labels. What a team works on is not.
+- Once the company has **two or more** active teams, people carry a team label next to their name (Governance tables,
+  requests, the sidebar, the workspace switcher). With one team or none the label would say the same thing for
+  everybody, so it is hidden, and request cards show who asked instead of "team → team".
+- A **request** goes from a person (on behalf of one of their teams, or none) to another team. It has a per-organization
+  number (`#12`, from a counter row, since RLS hides most rows from any single user), priority, optional due date,
+  status (`open → in_progress → waiting → done`, plus `declined` and `cancelled`) and an append-only timeline of
+  comments and changes. The receiving team works it and assigns it to one of its members; the requester can cancel or
+  reopen it. Asking the requester for information (`waiting`) and declining need a note; the requester's reply puts the
+  request back in the team's hands.
+- **Visibility** is enforced by RLS: a request and its timeline are visible to the requester, the assignee and the
+  members of the sending and receiving teams. Org admins do **not** see other teams' requests (same rule as documents
+  and conversations): they manage teams, not their work. Someone who leaves a team loses access, and their open
+  assignments go back to the team's queue (`app.release_team_assignments`, `SECURITY DEFINER`, returns only a count).
+- The **Inbox** has two parts: *From people* (requests, as a list or a board with drag and drop, with the views *For me*,
+  *My teams* and *Sent by me*) and *From agents* (reviews and approvals from ADR-022). The sidebar counter adds both.
+  A request opens as a side panel over the Inbox (`?r=<id>`, so it can be linked), not as a page of its own.
+  A request needs a person's attention when it waits on them as requester, is open and assigned to them, or is open and
+  unassigned in a team they triage (they lead it, or the team has no lead).
+- Every change is audited (`team.*`, `team_request.*`) and emits an outbox event (`team_request.created`, `.updated`,
+  `.commented`) for future notifications. No route declares scopes, so service API keys cannot reach teams or requests.
+
+**Consequences.**
+- Separating departments is free for existing customers: their spaces become teams with one click, with the people
+  already in them.
+- An admin who is not in a team sees its name in the workspace switcher but not its documents, Ask answers or requests.
+- Requests carry no documents yet: a person writes where the file is ("attached in Legal's space").
+- There are no email or chat notifications yet; the Inbox counter is the only signal.
+
+**Revisit when** requests need attachments shared across the team boundary (it needs an explicit, audited share of
+one document, not a wider ACL), agents should file or answer requests on a team's behalf, or customers ask for
+notifications, SLAs or request templates per team.
+
+## ADR-036 · Public records in Ask: official government data and the web through Croma, on request
+
+**Context.** Ask answers only from the organization's documents. People also need outside facts while they work:
+whether a counterparty has court cases or sanctions, what a law or a regulator says, a company's registry data, or
+international news, depending on the country. [Croma](https://docs.usecroma.com) (`api.croma.run`) exposes official
+public records from 11 countries (Colombia, Mexico, Peru, Chile, United States, Brazil, El Salvador, Guatemala,
+Bolivia, Venezuela, Japan) plus web search, page extraction and research, as typed JSON behind one organization API key.
+Its catalog also includes lookups of a private person's data by ID number (criminal records, health and social security
+affiliations, bank accounts, personal tax invoices, vehicles by owner).
+
+**Decision.**
+- **On request, never automatic.** A *Public records* chip under the question box, off by default; the person picks
+  the organization's country, another country or *Worldwide*. Only organizations whose admin turned it on in
+  **Connected apps → Outside your documents** see it (migration `0021_public_sources`: switch, default country
+  — falls back to the onboarding profile —, web allowed, monthly lookup limit, default 300).
+- **The API decides, the rag-engine executes.** `POST …/query` takes `public_sources: true` and an optional `country`.
+  The API checks the switch and the month's remaining lookups and signs them into the internal token (`pub` claim:
+  country, web, lookups left, country picked). Without that claim the rag-engine never calls Croma; the request body
+  alone cannot turn it on. When the switch is off or the limit is reached the question is still answered from the
+  documents, and the result says why (`public_sources.unavailable`). Agents (sandbox and workflows) never send it.
+- **A curated allowlist.** `scripts/croma-catalog.py` builds `public_sources/croma_catalog.json` from Croma's public
+  catalog with ~70 search endpoints (companies, court cases, laws and gazettes, regulation and tax doctrine,
+  sanctions, public procurement, statistics, trademarks, the web). Personal-data lookups by ID number are left out, so
+  neither the model nor the user can reach them.
+- **Planning sees only the question.** The generation model gets the question and a shortlist (the countries in scope
+  plus worldwide tools) and returns JSON; ids outside the shortlist and unknown parameters are dropped, types, lengths,
+  enums and patterns are enforced, paging is capped at 5 records. It never sees the organization's documents, so what
+  goes to Croma can only come from what the person typed. Without a generative model (local extractive provider) a
+  keyword router picks the endpoint, and questions about the organization itself ("our policy…") never fall back to the
+  web. At most `CROMA_MAX_CALLS` (2) lookups per question, run in parallel with internal retrieval.
+- **Public results are evidence like any other.** Each record (up to 4 per lookup) or web page becomes a source
+  numbered after the internal ones, rendered as `<fuente origen="registro_publico|web">` with the retrieval date and the
+  data's `as_of`, escaped and declared untrusted in the system prompt; the same citation verifier applies. An empty
+  search is evidence too ("no matching records for …", scoped to that register). With public evidence and no internal
+  evidence the answer no longer abstains; when records match but do not quote the exact passage (a full-text hit inside
+  a ruling), the answer describes the matching records and points to them instead of abstaining. Citations carry `external: true`, source, country, URL and dates, and open the
+  official page instead of the document viewer.
+- **Privacy and audit.** Organizations whose data is classified `restricted` cannot turn it on (same rule as cloud
+  models: restricted data never goes to external APIs). The Croma key is a platform secret held only by the rag-engine
+  (`CROMA_API_KEY`); organizations never handle it. `query_runs.retrieved_refs` records each lookup's endpoint, outcome, credits and Croma request id,
+  never the search terms (the question itself is stored only as a hash). Each answer that used public records adds a
+  `query.public_sources` audit event (sources, countries, count); settings changes add
+  `organization.public_sources_updated`. Usage is counted in `usage_events` (`public_lookups`). History and generated
+  documents skip external citations when re-checking access, so a public record never hides an answer.
+- **Failures never cost the answer.** Missing key, exhausted credits (402), rate limits (429), a source that is down
+  (5xx), a timeout or an async job that did not finish (202) all degrade to a documents-only answer with a plain
+  reason. `CROMA_DEMO=1` answers with labelled sample records for development.
+
+**Consequences.**
+- Questions with outside facts get cited answers in one place; the person sees which register each fact came from.
+- Names, ID numbers and keywords from a question leave the organization (to Croma, and from there to the government
+  source). That is why it is off by default, explained in the chip and in Connected apps, and audited.
+- Croma bills per call (10 credits a live lookup, 1 a dataset answer, cache hits free); the monthly limit per
+  organization keeps one tenant from spending the platform's plan.
+- Lookups by personal ID, multi-step lookups (search, then fetch the full record), async jobs that need polling and
+  Croma monitors are not used.
+
+**Revisit when** a customer needs per-person background checks (needs a legal basis, consent and a separate
+permission, not this switch), organizations want their own Croma key, Croma adds countries or endpoints worth
+allowlisting (`scripts/croma-catalog.py --check` flags removed ones), or public lookups should be offered to agents
+as a tool under the policy engine.
+
+## ADR-037 · Expedientes (matters): work by client and case across spaces
+
+**Context.** Law firms work by client and case, not by space. In the judicial demo the D-16.857 case (Parra Rosas) is
+split: the Sentencia C-217 sits in *General*, the risk matrix and the checklist in *Litigio constitucional*. Ask only
+searched the active space, so asking about the ruling from *Litigio constitucional* abstained. Inside *General* the firm
+emulated client and case with folders ("Cliente — Juan Felipe Parra Rosas", "Expediente D-16.857"), but folders never
+scoped Ask (ADR-031), so an answer could mix documents of different clients.
+
+**Decision.**
+- **An expediente is a record of the firm**, not a folder and not a space (migration `0024_matters.sql`): `matters` with
+  title, client (required), counterparty, filing number (*radicado*, unique per organization, case-insensitive), court
+  (*despacho*), stage (free text with suggestions), owner (*responsable*) and status (`active`, `on_hold`, `closed`,
+  `archived`). `documents.matter_id` links a document to **one** expediente or none (`ON DELETE SET NULL`); a trigger
+  keeps both in the same organization.
+- **An expediente never widens access.** Linking does not touch `document_acl`. The record itself (client, counterparty,
+  filing number) is visible to every member of the organization, like the client list a firm uses for conflict
+  checks; document counts and listings are computed under the RLS of `documents`, so each person only counts and opens
+  what their ACL allows. Linking a document requires editor rights on that document's space. Viewers cannot write;
+  deleting an expediente (admins or its creator) unlinks its documents and never deletes them.
+- **API** (`apps/api/src/routes/matters.ts`): list, create, read (with the visible documents of every space the person
+  belongs to), update, delete; `POST …/documents/matter` (up to 200 documents, audited as `document.matter_linked`);
+  `POST …/matters/from-folder` creates an expediente from a folder and links the visible documents of the folder and its
+  subfolders (the folder stays). `GET …/documents` filters by `matter_id` (uuid or `none`) and returns the expediente.
+  Existing folders are converted only when someone asks ("Convertir en expediente"); the migration converts nothing.
+- **Ask with a scope.** `POST …/query` takes `scope`: `space` (default, as before), `matter`, `folder` (with subfolders,
+  inside the active space), `documents` (up to 50) or `all` ("buscar en todos mis espacios"). The API validates it and
+  signs it into the internal token: `wss` (the spaces the person is a member of; only the active one for `space` and
+  `folder`) and `sc` (the filter). The rag-engine never reads the scope from the request body. Hybrid, graph, facts and
+  bridge queries filter `workspace_id = ANY(wss)` and, when a filter is present, `document_id = ANY(docs)`, on top of the
+  same ACL check. A scoped answer is therefore always a subset of what the person could already ask space by space. A
+  scope with no readable documents abstains with `empty_scope`. `query_runs.scope` records where the question searched.
+  Agents keep the space scope.
+- **Interface** (Spanish first): an *Expedientes* page (grouped by client, with filing number, court, stage, owner,
+  status and document count, and a side panel to edit it, see its documents across spaces and ask inside it); in the
+  library, an *Expediente* filter, grouping, client and expediente columns, an "Expediente…" action per document and
+  "Convertir en expediente" on a folder; in Ask, a scope picker with the active scope shown as a chip, the scope of
+  each answer, `?scope=matter:<id>` deep links, and "Buscar en todos mis espacios" offered when a space-only question
+  abstains.
+
+**Consequences.**
+- A question about one case only reads that case's documents, wherever they are filed, and never another client's.
+- Client and counterparty names are visible to the whole firm even to people who cannot open the case's documents;
+  that is stated in the expediente form.
+- Folders keep organizing inside a space and can now also scope Ask.
+- The "Searched in …" label comes from the API, so the API checks every cited document against the signed scope before
+  returning the answer, with the same rules as the rag-engine. A rag-engine that did not apply the scope (an image older
+  than this decision during a deploy) gets a `503 scope_not_applied` instead of a mislabeled answer.
+
+**Not adopted.**
+- *Expediente = folder with fields.* Folders are per space and would not fix the split case.
+- *Expediente = space.* Moving documents between spaces changes their ACL (`workspace:` principal) and forces managing
+  members case by case.
+- *Several expedientes per document.* Columns, grouping and "move" become ambiguous; general jurisprudence stays without
+  an expediente and is found with "buscar en todos mis espacios".
+- *Per-expediente permissions.* A second access system next to the ACL (same reason as ADR-031).
+
+**Revisit when** firms need confidential expedientes whose client name only some people may see, conflict-of-interest
+checks against counterparties, or court calendars and deadlines tied to an expediente.
+
+## ADR-038 · Procedural deadlines ("términos"): proposed from documents, confirmed by a person, computed by the server
+
+**Context.** For a law firm the costliest failure is a missed procedural deadline. Ragis indexed autos, notices and
+judgments but had no notion of a term: only team requests carried an optional due date. Lawyers count terms by hand
+from the notification date, skipping weekends, public holidays and court vacancy, and a wrong count is malpractice.
+
+**Decision.**
+- **A deadline** (migration `0023_deadlines`, table `deadlines`) has a title, the event it runs from
+  (`trigger_kind`: notification, ejecutoria, filing, hearing, other) and its date, how it is counted (`unit`: business
+  days, calendar days, months, years, or a fixed date), its length, the rule that sets it (`legal_basis`), the person
+  responsible, a state (pending, done, cancelled; *overdue* is derived), notes, and — when it comes from a document —
+  the document, version, page and literal sentence. It lives in a workspace: the members of that workspace and the
+  responsible person see it (RLS, `app.sees_deadline`); org admins do not see other workspaces' deadlines.
+- **Nothing becomes a deadline on its own.** The ingest worker runs a deterministic detector
+  (`ragsis_ingest/deadlines.py`) on court-looking documents (two or more judicial markers) and stores
+  `deadline_candidates`: the literal sentence, the page of the block that holds it, the chunk, the amount and unit
+  ("días" without a qualifier are business days, art. 62 Ley 4 de 1913, flagged as assumed), a stated date and the
+  article cited nearby. A person confirms a candidate in the web — choosing the start date and who is responsible —
+  and the deadline records `confirmed_by` (the caller, enforced by RLS) and `confirmed_at`. The citation is copied from
+  the candidate on the server; the client cannot send its own. Candidates of older versions are superseded when a new
+  version is indexed; `reindex --mode deadlines` (or *Look for terms* on a document) rescans without OCR or vision.
+- **The server computes every due date** (`apps/api/src/lib/deadlines.ts`) and stores the breakdown (`computation`):
+  the term runs from the next day (art. 118 CGP); a personal notice by email counts as made two business days after
+  sending (art. 8 Ley 2213 de 2022, an option on the deadline); business days skip weekends, `public_holidays` of the
+  firm's country and its `court_closures`; months and years end on the same day number they started (or the end of a
+  shorter month); anything ending on a non-working day moves to the next working day. A fixed date stays as written
+  and is flagged when it falls on a non-working day.
+- **Holidays are data.** `public_holidays (country, day, name, basis)` holds Colombia 2024–2032, generated by
+  `scripts/holidays/co.py` (Ley 51 de 1983 and Easter). Another country is rows and a time zone. A computation that
+  leaves the loaded years says so.
+- **Court vacancy is per firm.** Admins add closures (one click for the Colombian collective vacation 20 Dec–10 Jan and
+  Holy Week Monday–Wednesday, which are suggested, never added on their own). Adding, removing or changing the country
+  recomputes every pending deadline through narrow `SECURITY DEFINER` functions and records a `recomputed` event.
+- **Reminders** go to the responsible lawyer by email through the signature SES sender (`SIGNATURE_EMAIL_FROM`): a week
+  before, two working days before, on the day, and once if it is overdue — non-overlapping windows, claimed per
+  (deadline, kind, due date) in `deadline_reminders` so replicas never double-send and a moved date gets its reminders
+  again, from 7:00 in the firm's time zone. Without SES no reminder goes out and the page says so.
+- **Calendar export**: `.ics` per deadline and for the list (all-day events with a one-day alarm), downloaded with the
+  user's session. The Inbox counter adds the user's deadlines due within two working days or overdue and the
+  candidates waiting in workspaces they edit.
+
+**Consequences.**
+- A missed term needs two failures now: nobody confirmed the candidate, or nobody acted on the reminders.
+- Recall depends on the patterns: unusual wording is missed (a person can still enter a deadline by hand), and court
+  documents without text (scans without OCR) propose nothing.
+- The computation is as good as the calendar: holidays beyond 2032 and closures a firm did not enter are not known.
+  Closures are firm-wide, not per court.
+
+**Revisit when** a firm needs per-court closures or hour-based terms, recall on real autos is too low (an LLM pass whose
+candidates must quote the page literally), firms want a subscribed calendar feed (needs a per-user secret URL), or
+deadlines should link to expedientes (matters) once that model exists.

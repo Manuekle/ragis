@@ -50,6 +50,7 @@ import { ViewerActions, ViewerLead } from "@/components/extend/viewer-chrome"
 import Papa from "papaparse"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { MoreHorizontalIcon, Download01Icon, Upload01Icon, Search01Icon, ArrowLeft01Icon, ArrowRight01Icon, MinusSignCircleIcon, PlusSignCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { useT, tNow } from "@/lib/use-t";
 
 const ZOOM_OPTIONS = [0.75, 1, 1.25, 1.5, 2] as const
 const CSV_SEARCH_BATCH_ROW_COUNT = 500
@@ -71,7 +72,7 @@ function toDisplayString(value: unknown): string {
 }
 function normalizeHeaderTitle(header: string, index: number): string {
   const trimmed = header.trim()
-  return trimmed.length > 0 ? trimmed : `Column ${index + 1}`
+  return trimmed.length > 0 ? trimmed : tNow("Column {v1}", { v1: index + 1 })
 }
 function columnIndexToA1(col: number) {
   let columnNumber = col + 1
@@ -238,6 +239,7 @@ function CsvFileActionsMenu({
   onDownload: () => void
   onUploadClick: () => void
 }) {
+  const tr = useT();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -246,7 +248,7 @@ function CsvFileActionsMenu({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Open CSV actions"
+            aria-label={tr("Open CSV actions")}
             disabled={isPending}
           >
             <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} className="size-4" />
@@ -255,9 +257,7 @@ function CsvFileActionsMenu({
       ></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuItem disabled={downloadDisabled} onClick={onDownload}>
-          <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />
-          Download
-        </DropdownMenuItem>
+          <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />{tr("Download")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -291,6 +291,7 @@ function CsvSearchPopover({
   controlsDisabled: boolean
   onGridSelectionChange: (selection: GridSelection) => void
 }) {
+  const tr = useT();
   const [searchDraft, setSearchDraft] = React.useState("")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [searchResults, setSearchResults] = React.useState<CsvSearchResult[]>(
@@ -306,12 +307,12 @@ function CsvSearchPopover({
     : ""
   const hasActiveQuery = Boolean(searchQuery.trim())
   const resultLabel = isSearching
-    ? "Searching"
+    ? tr("Searching")
     : !hasActiveQuery
-      ? "No search"
+      ? tr("No search")
       : searchResults.length
         ? `${activeResultIndex + 1} / ${searchResults.length}`
-        : "No results"
+        : tr("No results")
   const runSearch = React.useCallback(
     (rawQuery: string) => {
       const nextQuery = rawQuery.trim()
@@ -408,14 +409,14 @@ function CsvSearchPopover({
   }, [activeResult, activeResultKey, gridRef, onGridSelectionChange])
   return (
     <Popover>
-      <ToolbarTooltip label="Search CSV">
+      <ToolbarTooltip label={tr("Search CSV")}>
         <PopoverTrigger
           render={
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Search CSV"
+              aria-label={tr("Search CSV")}
               disabled={controlsDisabled}
             >
               <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className="size-4" />
@@ -426,7 +427,7 @@ function CsvSearchPopover({
       <PopoverContent align="end" className="w-72">
         <div className="space-y-3">
           <Input
-            placeholder="Search CSV"
+            placeholder={tr("Search CSV")}
             value={searchDraft}
             onChange={(event) => handleSearchDraftChange(event.target.value)}
             onKeyDown={(event) => {
@@ -467,7 +468,7 @@ function CsvSearchPopover({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Previous result"
+                aria-label={tr("Previous result")}
                 disabled={isSearching || searchResults.length === 0}
                 onClick={() => goToRelativeResult(-1)}
               >
@@ -477,7 +478,7 @@ function CsvSearchPopover({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Next result"
+                aria-label={tr("Next result")}
                 disabled={isSearching || searchResults.length === 0}
                 onClick={() => goToRelativeResult(1)}
               >
@@ -491,9 +492,7 @@ function CsvSearchPopover({
               variant="outline"
               size="sm"
               onClick={clearSearch}
-            >
-              Clear
-            </Button>
+            >{tr("Clear")}</Button>
           </div>
         </div>
       </PopoverContent>
@@ -527,6 +526,7 @@ function useIsDarkTheme() {
   )
 }
 export function CsvViewer({ className, data, search = false }: CsvViewerProps) {
+  const tr = useT();
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const gridRef = React.useRef<DataEditorRef | null>(null)
   const isDark = useIsDarkTheme()
@@ -698,11 +698,11 @@ export function CsvViewer({ className, data, search = false }: CsvViewerProps) {
         <TooltipProvider>
           <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
             <div className="flex flex-none items-center gap-1">
-              <ToolbarTooltip label="Zoom out">
+              <ToolbarTooltip label={tr("Zoom out")}>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Zoom out"
+                  aria-label={tr("Zoom out")}
                   disabled={zoom <= ZOOM_OPTIONS[0]}
                   onClick={() => stepZoom(-1)}
                 >
@@ -719,7 +719,7 @@ export function CsvViewer({ className, data, search = false }: CsvViewerProps) {
                 <SelectTrigger
                   size="sm"
                   className="w-[84px] min-w-[84px]"
-                  aria-label="Zoom level"
+                  aria-label={tr("Zoom level")}
                 >
                   <SelectValue>{Math.round(zoom * 100)}%</SelectValue>
                 </SelectTrigger>
@@ -731,11 +731,11 @@ export function CsvViewer({ className, data, search = false }: CsvViewerProps) {
                   ))}
                 </SelectContent>
               </Select>
-              <ToolbarTooltip label="Zoom in">
+              <ToolbarTooltip label={tr("Zoom in")}>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Zoom in"
+                  aria-label={tr("Zoom in")}
                   disabled={zoom >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]}
                   onClick={() => stepZoom(1)}
                 >
@@ -792,11 +792,8 @@ export function CsvViewer({ className, data, search = false }: CsvViewerProps) {
         ) : parsed.rows.length === 0 ? (
           <div className="grid h-full place-items-center bg-muted/30 p-4">
             <div className="max-w-md rounded-lg border bg-background p-4 text-center text-sm shadow-xs">
-              <p className="font-medium">Upload a CSV to preview</p>
-              <p className="mt-1 text-muted-foreground">
-                Pass delimited text with the <code>data</code> prop or upload a
-                CSV file.
-              </p>
+              <p className="font-medium">{tr("Upload a CSV to preview")}</p>
+              <p className="mt-1 text-muted-foreground">{tr("Pass delimited text with the")}{" "}<code>data</code>{" "}{tr("prop or upload a CSV file.")}</p>
               <InlineLoadingButton
                 type="button"
                 variant="outline"
@@ -805,9 +802,7 @@ export function CsvViewer({ className, data, search = false }: CsvViewerProps) {
                 loading={isPending}
                 onClick={() => inputRef.current?.click()}
               >
-                <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-                Upload CSV
-              </InlineLoadingButton>
+                <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{tr("Upload CSV")}</InlineLoadingButton>
             </div>
           </div>
         ) : !glide ? (
@@ -867,8 +862,9 @@ function InlineLoadingButton({
   )
 }
 function InlineSpinner({ className, ...props }: InlineRegistryIconProps) {
+  const tr = useT();
   return (
-    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
+    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label={tr("Loading")} className={cn("size-4 animate-spin", className)} {...props} />
   )
 }
 type InlineRegistryIconProps = Omit<

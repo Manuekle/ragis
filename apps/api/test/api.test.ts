@@ -11,6 +11,7 @@ import { createPool } from "../src/db/pool.js";
 import { migrate } from "../src/db/migrate.js";
 import type { Queue, Storage } from "../src/lib/aws.js";
 import type { RagClient } from "../src/routes/query.js";
+import type { MemberInvite } from "../src/lib/member-email.js";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const env = Object.fromEntries(
@@ -67,6 +68,7 @@ let pool: pg.Pool;
 const storage = new FakeStorage();
 const queue = new FakeQueue();
 const rag = new FakeRag();
+const sentInvites: MemberInvite[] = [];
 
 async function login(email: string): Promise<string> {
   const r = await app.inject({ method: "POST", url: "/v1/auth/dev-login", payload: { email } });
@@ -98,7 +100,7 @@ beforeAll(async () => {
     RAGSIS_ENV: "test",
   });
   pool = createPool(cfg.DATABASE_URL);
-  app = await buildApp({ cfg, pool, storage, queue, rag });
+  app = await buildApp({ cfg, pool, storage, queue, rag, memberMailer: async (invite) => void sentInvites.push(invite) });
 });
 
 afterAll(async () => {
@@ -124,6 +126,193 @@ describe("auth y tenancy", () => {
     expect((await call(bob, "GET", `/v1/organizations/${id}`)).statusCode).toBe(404);
     expect((await call(bob, "GET", `/v1/organizations/${id}/workspaces`)).statusCode).toBe(404);
     expect((await call(bob, "GET", `/v1/organizations/not-a-uuid`)).statusCode).toBe(404);
+  });
+});
+
+describe("invitaciones por correo", () => {
+  it("quien nunca entró queda invitado y se une al primer inicio de sesión; revocar y permisos", async () => {
+    const owner = await login("paula@invita.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Invita" })).json().id;
+
+    // Nunca inició sesión: invitación (202), correo en el idioma de quien invita, y aparece como pendiente.
+    const inv = await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "Nuevo.Asociado@Invita.test", role: "viewer", locale: "es" });
+    expect(inv.statusCode, inv.body).toBe(202);
+    expect(inv.json()).toMatchObject({ status: "invited", email: "nuevo.asociado@invita.test", role: "viewer", email_sent: true });
+    expect(sentInvites.at(-1)).toMatchObject({ to: "nuevo.asociado@invita.test", organization: "Despacho Invita", locale: "es" });
+    expect(sentInvites.at(-1)!.signInUrl).toMatch(/\/es\/login$/);
+    let pending = (await call(owner, "GET", `/v1/organizations/${org}/invitations`)).json().invitations;
+    expect(pending.map((i: { email: string }) => i.email)).toEqual(["nuevo.asociado@invita.test"]);
+    // Invitar otra vez actualiza la misma invitación (una abierta por dirección).
+    await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "nuevo.asociado@invita.test", role: "member" });
+    pending = (await call(owner, "GET", `/v1/organizations/${org}/invitations`)).json().invitations;
+    expect(pending).toHaveLength(1);
+    expect(pending[0].role).toBe("member");
+
+    // Primer inicio de sesión con esa dirección: ya es miembro con el rol elegido y la invitación se cierra.
+    const nuevo = await login("nuevo.asociado@invita.test");
+    const me = (await call(nuevo, "GET", "/v1/me")).json();
+    expect(me.organizations.find((o: { id: string }) => o.id === org)?.role).toBe("member");
+    expect((await call(owner, "GET", `/v1/organizations/${org}/invitations`)).json().invitations).toHaveLength(0);
+    const audit = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events.map((e: { action: string }) => e.action);
+    expect(audit).toEqual(expect.arrayContaining(["member.invited", "member.invitation_accepted"]));
+    // Un miembro que no es admin no ve ni revoca invitaciones.
+    expect((await call(nuevo, "GET", `/v1/organizations/${org}/invitations`)).statusCode).toBe(403);
+
+    // Revocada antes de entrar: no da acceso.
+    const rev = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "revocada@invita.test" })).json();
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/invitations/${rev.invitation_id}`)).statusCode).toBe(204);
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/invitations/${rev.invitation_id}`)).statusCode).toBe(404);
+    const revocada = await login("revocada@invita.test");
+    expect((await call(revocada, "GET", "/v1/me")).json().organizations.map((o: { id: string }) => o.id)).not.toContain(org);
+    expect((await call(revocada, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+
+    // Quien ya inició sesión alguna vez entra al momento (201 con user_id), como antes.
+    const added = await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "revocada@invita.test", role: "viewer" });
+    expect(added.statusCode).toBe(201);
+    expect(added.json()).toMatchObject({ status: "added", role: "viewer" });
+  });
+});
+
+describe("quitar y suspender miembros", () => {
+  // dev-login only issues a token; the user row exists after the first authenticated request.
+  const signedIn = async (email: string) => {
+    const token = await login(email);
+    await call(token, "GET", "/v1/me");
+    return token;
+  };
+
+  it("suspender corta el acceso al momento y reactivar lo devuelve con los mismos permisos", async () => {
+    const owner = await signedIn("olga@salida.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Salida" })).json().id;
+    const ws = (await call(owner, "GET", `/v1/organizations/${org}/workspaces`)).json().workspaces[0].id;
+    const asociado = await signedIn("asociado@salida.test");
+    const asociadoId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "asociado@salida.test", role: "member" })).json().user_id;
+    await call(owner, "POST", `/v1/organizations/${org}/workspaces/${ws}/members`, { user_id: asociadoId, role: "editor" });
+    expect((await call(asociado, "GET", `/v1/organizations/${org}`)).statusCode).toBe(200);
+
+    const sus = await call(owner, "PATCH", `/v1/organizations/${org}/members/${asociadoId}`, { status: "disabled" });
+    expect(sus.statusCode, sus.body).toBe(200);
+    expect(sus.json()).toEqual({ id: asociadoId, role: "member", status: "disabled" });
+    expect((await call(asociado, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+    expect((await call(asociado, "GET", `/v1/organizations/${org}/workspaces`)).statusCode).toBe(404);
+    expect((await call(asociado, "GET", "/v1/me")).json().organizations.map((o: { id: string }) => o.id)).not.toContain(org);
+    const listed = (await call(owner, "GET", `/v1/organizations/${org}/members`)).json().members;
+    expect(listed.find((m: { id: string }) => m.id === asociadoId)?.status).toBe("disabled");
+
+    expect((await call(owner, "PATCH", `/v1/organizations/${org}/members/${asociadoId}`, { status: "active" })).statusCode).toBe(200);
+    const back = (await call(asociado, "GET", `/v1/organizations/${org}/workspaces`)).json().workspaces;
+    expect(back.find((w: { id: string }) => w.id === ws)?.my_role).toBe("editor");
+    expect((await call(owner, "PATCH", `/v1/organizations/${org}/members/${asociadoId}`, { status: "removed" })).statusCode).toBe(400);
+
+    const audit = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events;
+    const suspended = audit.find((e: { action: string }) => e.action === "member.suspended");
+    expect(suspended).toMatchObject({ resource: `user:${asociadoId}`, decision: "allow" });
+    expect(suspended.metadata).toMatchObject({ email: "asociado@salida.test", role: "member", from: "active" });
+    expect(audit.map((e: { action: string }) => e.action)).toContain("member.reactivated");
+  });
+
+  it("quitar a alguien le quita la organización, espacios, grupos y roles; sus documentos se quedan", async () => {
+    const owner = await signedIn("rosa@salida.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Rosa" })).json().id;
+    const ws = (await call(owner, "GET", `/v1/organizations/${org}/workspaces`)).json().workspaces[0].id;
+    const ex = await signedIn("ex.asociado@salida.test");
+    const exId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "ex.asociado@salida.test", role: "member" })).json().user_id;
+    await call(owner, "POST", `/v1/organizations/${org}/workspaces/${ws}/members`, { user_id: exId, role: "editor" });
+    const group = (await call(owner, "POST", `/v1/organizations/${org}/groups`, { name: "Litigio" })).json().id;
+    await call(owner, "POST", `/v1/organizations/${org}/groups/${group}/members`, { user_id: exId });
+    const admin = new pg.Client({ connectionString: `postgres://ragsis_owner:${env.POSTGRES_PASSWORD}@127.0.0.1:${PORT}/${DB}` });
+    await admin.connect();
+    try {
+      await admin.query("INSERT INTO functional_roles (organization_id, user_id, role) VALUES ($1, $2, 'reviewer')", [org, exId]);
+      // A document they uploaded belongs to the firm and must survive the removal.
+      const up = await call(ex, "POST", `/v1/organizations/${org}/documents/uploads`, {
+        workspace_id: ws, filename: "demanda.md", content_type: "text/markdown", size_bytes: 100, title: "Demanda",
+      });
+      expect(up.statusCode, up.body).toBe(201);
+      const docId = up.json().document_id as string;
+      // A stale invitation to the same address must not bring them back.
+      await admin.query(
+        "INSERT INTO member_invitations (id, organization_id, email, role, invited_by) VALUES ($1, $2, 'ex.asociado@salida.test', 'member', $3)",
+        [randomUUID(), org, exId],
+      );
+
+      const del = await call(owner, "DELETE", `/v1/organizations/${org}/members/${exId}`);
+      expect(del.statusCode, del.body).toBe(204);
+      expect((await call(ex, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+      expect((await call(ex, "GET", `/v1/organizations/${org}/documents`)).statusCode).toBe(404);
+      expect((await call(owner, "GET", `/v1/organizations/${org}/members`)).json().members.map((m: { id: string }) => m.id)).not.toContain(exId);
+      expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${exId}`)).statusCode).toBe(404);
+
+      const left = async (table: string) => (await admin.query(`SELECT count(*)::int AS n FROM ${table} WHERE organization_id = $1 AND user_id = $2`, [org, exId])).rows[0].n;
+      expect(await left("memberships")).toBe(0);
+      expect(await left("workspace_members")).toBe(0);
+      expect(await left("group_members")).toBe(0);
+      expect(await left("functional_roles")).toBe(0);
+      expect((await admin.query("SELECT count(*)::int AS n FROM documents WHERE id = $1", [docId])).rows[0].n).toBe(1);
+      expect(
+        (await admin.query("SELECT count(*)::int AS n FROM member_invitations WHERE organization_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL", [org])).rows[0].n,
+      ).toBe(0);
+
+      const removed = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events.find((e: { action: string }) => e.action === "member.removed");
+      expect(removed).toMatchObject({ resource: `user:${exId}`, decision: "allow" });
+      expect(removed.metadata).toMatchObject({
+        email: "ex.asociado@salida.test", role: "member", workspaces: [ws], groups: [group], functional_roles: ["reviewer"], invitations_revoked: 1,
+      });
+      // Signing in again does not rejoin them.
+      const again = await signedIn("ex.asociado@salida.test");
+      expect((await call(again, "GET", "/v1/me")).json().organizations.map((o: { id: string }) => o.id)).not.toContain(org);
+    } finally {
+      await admin.end();
+    }
+  });
+
+  it("protege a los owners: un admin no los toca y el último owner no se quita, suspende ni degrada", async () => {
+    const owner = await signedIn("dueno@salida.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Dueño" })).json().id;
+    const ownerId = (await call(owner, "GET", "/v1/me")).json().user.id;
+    const adm = await signedIn("admin@salida.test");
+    const admId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "admin@salida.test", role: "admin" })).json().user_id;
+    const socio = await signedIn("socio@salida.test");
+    const socioId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "socio@salida.test", role: "member" })).json().user_id;
+    const miembro = await signedIn("miembro@salida.test");
+    const miembroId = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "miembro@salida.test", role: "member" })).json().user_id;
+
+    // Only admins remove or suspend; a member gets 403.
+    expect((await call(miembro, "DELETE", `/v1/organizations/${org}/members/${socioId}`)).statusCode).toBe(403);
+    expect((await call(miembro, "PATCH", `/v1/organizations/${org}/members/${socioId}`, { status: "disabled" })).statusCode).toBe(403);
+    // Nobody removes or suspends themselves from here.
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${ownerId}`)).statusCode).toBe(400);
+    expect((await call(adm, "PATCH", `/v1/organizations/${org}/members/${admId}`, { status: "disabled" })).statusCode).toBe(400);
+    // Unknown member: 404.
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${randomUUID()}`)).statusCode).toBe(404);
+
+    // An admin can't remove, suspend or demote an owner.
+    expect((await call(adm, "DELETE", `/v1/organizations/${org}/members/${ownerId}`)).statusCode).toBe(403);
+    expect((await call(adm, "PATCH", `/v1/organizations/${org}/members/${ownerId}`, { status: "disabled" })).statusCode).toBe(403);
+    expect((await call(adm, "POST", `/v1/organizations/${org}/members`, { email: "dueno@salida.test", role: "viewer" })).statusCode).toBe(403);
+    // The last owner can't demote themselves either.
+    expect((await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "dueno@salida.test", role: "admin" })).statusCode).toBe(409);
+    // An admin can remove another member.
+    expect((await call(adm, "DELETE", `/v1/organizations/${org}/members/${miembroId}`)).statusCode).toBe(204);
+
+    // With a second owner, one owner can suspend or remove the other, but never the last active one.
+    const admin = new pg.Client({ connectionString: `postgres://ragsis_owner:${env.POSTGRES_PASSWORD}@127.0.0.1:${PORT}/${DB}` });
+    await admin.connect();
+    try {
+      await admin.query("UPDATE memberships SET role = 'owner' WHERE organization_id = $1 AND user_id = $2", [org, socioId]);
+    } finally {
+      await admin.end();
+    }
+    expect((await call(owner, "PATCH", `/v1/organizations/${org}/members/${socioId}`, { status: "disabled" })).statusCode).toBe(200);
+    // socio is a suspended owner now: removing them leaves `owner` as the active owner, so it is allowed.
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/members/${socioId}`)).statusCode).toBe(204);
+    expect((await call(socio, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+    const members = (await call(owner, "GET", `/v1/organizations/${org}/members`)).json().members;
+    expect(members.filter((m: { role: string; status: string }) => m.role === "owner" && m.status === "active").map((m: { id: string }) => m.id)).toEqual([ownerId]);
+
+    const actions = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events.map((e: { action: string }) => e.action);
+    expect(actions.filter((a: string) => a === "member.removed")).toHaveLength(2);
+    expect(actions).toContain("member.suspended");
   });
 });
 
@@ -330,6 +519,26 @@ describe("consulta", () => {
     expect((await call(own, "POST", url, { question: "¿quién aprueba?", mode: "everything" })).statusCode).toBe(400);
   });
 
+  it("«Solo IA privada» (o «En tus servidores») firma `lo` para que Preguntar no use modelos en la nube", async () => {
+    const own = await login("private-ai@corp.test");
+    const o = (await call(own, "POST", "/v1/organizations", { name: "Private AI Corp" })).json();
+    const url = `/v1/organizations/${o.id}/workspaces/${o.default_workspace_id}/query`;
+    const profile = (body: object) => call(own, "PUT", `/v1/organizations/${o.id}/onboarding/profile`, body);
+    const ask = async () => {
+      expect((await call(own, "POST", url, { question: "¿Cuál es el plazo?" })).statusCode).toBe(200);
+      return rag.lastClaims?.lo;
+    };
+
+    expect(await ask()).toBeUndefined();
+    expect((await profile({ llm_policy: "local_only" })).statusCode).toBe(200);
+    expect(await ask()).toBe(true);
+    expect((await profile({ llm_policy: "cloud_allowed" })).statusCode).toBe(200);
+    expect(await ask()).toBeUndefined();
+    // «Runs on your own infrastructure. Nothing leaves it.»: la misma regla que ya usan los agentes.
+    expect((await profile({ deployment_preference: "on_prem" })).statusCode).toBe(200);
+    expect(await ask()).toBe(true);
+  });
+
   it("aplica rate limit por plan", async () => {
     const u = await login("rate@corp.test");
     const o = (await call(u, "POST", "/v1/organizations", { name: "Rate" })).json();
@@ -352,7 +561,8 @@ describe("claves de servicio (API-01)", () => {
     const { token, id } = created.json();
     expect(token).toMatch(/^rsk_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/);
     const listed = (await call(admin, "GET", `/v1/organizations/${o.id}/api-keys`)).json().api_keys;
-    expect(JSON.stringify(listed)).not.toContain(token.split("_")[2]);
+    // The secret is the 43 chars after "rsk_<prefix>_"; it can itself contain "_", so don't split on it.
+    expect(JSON.stringify(listed)).not.toContain(token.slice("rsk_".length + 12 + 1));
 
     // Consulta permitida en su workspace, con principals del usuario de servicio.
     const q = await call(token, "POST", `/v1/organizations/${o.id}/workspaces/${o.default_workspace_id}/query`, { question: "hola mundo" });

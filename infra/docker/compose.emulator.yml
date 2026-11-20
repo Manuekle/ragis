@@ -1,0 +1,6 @@
+# Override para correr api y web en el host contra AWS Emulator (scripts/dev-emulator.sh).
+# Publica el rag-engine en el host, porque la api en el host ya no lo alcanza por la red de compose.
+#   docker compose -f infra/docker/compose.yml -f infra/docker/compose.emulator.yml --env-file .env up -d rag-engine
+services:
+  rag-engine:
+    ports: ["127.0.0.1:8080:8080"]

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { withContext } from "../db/pool.js";
-import { badRequest, conflict, notFound } from "../lib/errors.js";
-import { assertUuid, audit, effectiveGraph, requireAdmin, tx } from "../lib/tenant.js";
+import { withContext, type Db } from "../db/pool.js";
+import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
+import { assertUuid, audit, effectiveGraph, requireAdmin, tx, type TenantContext } from "../lib/tenant.js";
 import type { Deps } from "../app.js";
 import { API_KEY_SCOPES, generateApiKey, hashSecret } from "../lib/apikeys.js";
 import { Qualification, scoreLead } from "../lib/lead-fit.js";
@@ -20,7 +20,10 @@ const CreateOrg = z.object({
 });
 const UpdateSettings = z.object({ graph_mode: z.enum(["inherit", "on", "off"]) }).strict();
 const CreateWorkspace = z.object({ name: z.string().trim().min(1).max(120) });
-const AddMember = z.object({ email: z.string().email(), role: z.enum(["admin", "member", "viewer"]).default("member") });
+// locale: language of the invitation email (the admin's), "en" when absent.
+const AddMember = z.object({ email: z.string().trim().email(), role: z.enum(["admin", "member", "viewer"]).default("member"), locale: z.enum(["es", "en"]).optional() });
+// Suspend (status "disabled") keeps the membership and every grant, so reactivating restores the same access.
+const UpdateMember = z.object({ status: z.enum(["active", "disabled"]) }).strict();
 const AddWsMember = z.object({ user_id: z.string().uuid(), role: z.enum(["editor", "reader"]).default("reader") });
 const CreateGroup = z.object({ name: z.string().trim().min(1).max(120) });
 const AddGroupMember = z.object({ user_id: z.string().uuid() });
@@ -31,8 +34,40 @@ const CreateApiKey = z.object({
   expires_in_days: z.number().int().min(1).max(365).default(90),
 });
 
+interface MemberRow {
+  role: string;
+  status: string;
+  email: string;
+}
+
+/** Locks the membership row of the person being changed so concurrent changes to the same member queue up. */
+async function lockMember(db: Db, t: TenantContext, userId: string): Promise<MemberRow> {
+  const r = await db.query(
+    `SELECT m.role, m.status, lower(u.email) AS email FROM memberships m JOIN users u ON u.id = m.user_id
+      WHERE m.organization_id = $1 AND m.user_id = $2 FOR UPDATE OF m`,
+    [t.organizationId, userId],
+  );
+  if (!r.rowCount) throw notFound("member");
+  return r.rows[0] as MemberRow;
+}
+
+/**
+ * Anything that takes access or the owner role away from an owner: only another owner may do it, and the organization
+ * always keeps at least one active owner. The other owners' rows are locked, so two owners removing each other at the
+ * same moment cannot leave the firm with none.
+ */
+async function guardOwner(db: Db, t: TenantContext, userId: string, target: MemberRow): Promise<void> {
+  if (target.role !== "owner") return;
+  if (t.role !== "owner") throw forbidden("only an owner can change another owner");
+  const others = await db.query(
+    "SELECT user_id FROM memberships WHERE organization_id = $1 AND role = 'owner' AND status = 'active' AND user_id <> $2 FOR UPDATE",
+    [t.organizationId, userId],
+  );
+  if (!others.rowCount) throw conflict("the organization must keep at least one active owner");
+}
+
 export async function orgRoutes(app: FastifyInstance, deps: Deps) {
-  const { pool } = deps;
+  const { pool, cfg } = deps;
 
   // Catálogo para la pantalla de alta (antes de que exista una organización): sector, enfoque RAG y despliegue probable.
   app.get("/v1/onboarding/catalog", async () => ({
@@ -105,7 +140,14 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
   app.get("/v1/organizations/:org", async (req) => {
     const t = req.tenant!;
     const org = await tx(pool, t, async (db) =>
-      (await db.query("SELECT id, name, slug, plan_id, data_class, region_policy, graph_mode, created_at FROM organizations WHERE id=$1", [t.organizationId])).rows[0],
+      (
+        await db.query(
+          `SELECT o.id, o.name, o.slug, o.plan_id, o.data_class, o.region_policy, o.graph_mode, o.created_at, p.sector_primary AS sector
+             FROM organizations o LEFT JOIN organization_profiles p ON p.organization_id = o.id
+            WHERE o.id=$1`,
+          [t.organizationId],
+        )
+      ).rows[0],
     );
     return { ...org, role: t.role, plan: t.plan, graph_enabled: t.graphEnabled, functional_roles: t.functionalRoles };
   });
@@ -131,12 +173,13 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
     const rows = await tx(pool, t, async (db) =>
       (
         await db.query(
-          `SELECT w.id, w.name, w.created_at, wm.role AS my_role,
+          `SELECT w.id, w.name, w.created_at, wm.role AS my_role, tm.id AS team_id, tm.color AS team_color,
                   CASE WHEN wm.role IS NOT NULL THEN EXISTS (
                     SELECT 1 FROM documents d
                      WHERE d.organization_id = w.organization_id AND d.workspace_id = w.id AND d.status = 'active'
                   ) END AS has_documents
              FROM workspaces w LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $1
+             LEFT JOIN teams tm ON tm.workspace_id = w.id
             ORDER BY w.created_at`,
           [t.userId],
         )
@@ -204,25 +247,154 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
     return { members: rows };
   });
 
+  // Someone who has already signed in joins right away (or gets the new role if already a member). Anyone else gets
+  // an invitation by email (member_invitations) and joins the first time they sign in with that verified address.
   app.post("/v1/organizations/:org/members", async (req, reply) => {
     const t = req.tenant!;
     requireAdmin(t);
     const body = AddMember.parse(req.body);
-    const userId = await tx(pool, t, async (db) => {
-      const r = await db.query("SELECT app.user_id_for_invite($1) AS id", [body.email]);
-      const uid = r.rows[0]?.id as string | null;
-      // Respuesta uniforme: no se revela si el email existe en otro tenant.
-      if (!uid) throw badRequest("the user must sign in once before being added");
-      await db.query(
-        `INSERT INTO memberships (organization_id, user_id, role) VALUES ($1,$2,$3)
-         ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = 'active'`,
-        [t.organizationId, uid, body.role],
-      );
-      await audit(db, t, "member.added", `user:${uid}`, "allow", { role: body.role });
-      return uid;
+    const email = body.email.trim().toLowerCase();
+    const out = await tx(pool, t, async (db) => {
+      const uid = (await db.query("SELECT app.user_id_for_invite($1) AS id", [email])).rows[0]?.id as string | null;
+      if (uid) {
+        // Re-adding an existing member changes their role: the owner rules apply (an owner is never demoted by an
+        // admin, and the last owner is never demoted at all).
+        const current = (
+          await db.query("SELECT m.role, m.status, $3::text AS email FROM memberships m WHERE m.organization_id = $1 AND m.user_id = $2 FOR UPDATE", [
+            t.organizationId,
+            uid,
+            email,
+          ])
+        ).rows[0] as MemberRow | undefined;
+        if (current) await guardOwner(db, t, uid, current);
+        await db.query(
+          `INSERT INTO memberships (organization_id, user_id, role) VALUES ($1,$2,$3)
+           ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = 'active'`,
+          [t.organizationId, uid, body.role],
+        );
+        await audit(db, t, "member.added", `user:${uid}`, "allow", { role: body.role });
+        return { status: "added" as const, user_id: uid };
+      }
+      const inv = (
+        await db.query(
+          `INSERT INTO member_invitations (id, organization_id, email, role, invited_by) VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (organization_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL
+             DO UPDATE SET role = EXCLUDED.role, invited_by = EXCLUDED.invited_by, created_at = now(), expires_at = now() + interval '14 days'
+           RETURNING id, expires_at`,
+          [randomUUID(), t.organizationId, email, body.role, t.userId],
+        )
+      ).rows[0] as { id: string; expires_at: string };
+      await audit(db, t, "member.invited", `invitation:${inv.id}`, "allow", { role: body.role });
+      const who = (
+        await db.query(
+          "SELECT o.name AS organization, coalesce(u.display_name, u.email) AS inviter FROM organizations o, users u WHERE o.id = $1 AND u.id = $2",
+          [t.organizationId, t.userId],
+        )
+      ).rows[0] as { organization: string; inviter: string };
+      return { status: "invited" as const, invitation_id: inv.id, expires_at: inv.expires_at, ...who };
     });
-    reply.code(201);
-    return { user_id: userId, role: body.role };
+    if (out.status === "added") {
+      reply.code(201);
+      return { status: "added", user_id: out.user_id, role: body.role };
+    }
+    // The email is a courtesy: the invitation already exists, so a failed send never undoes it.
+    let emailSent = false;
+    if (deps.memberMailer) {
+      try {
+        const signInUrl = `${cfg.PUBLIC_BASE_URL.replace(/\/$/, "")}${body.locale === "es" ? "/es/login" : "/login"}`;
+        await deps.memberMailer({ to: email, organization: out.organization, invitedBy: out.inviter, signInUrl, locale: body.locale ?? "en" });
+        emailSent = true;
+      } catch (err) {
+        req.log.error({ err }, "could not send member invitation email");
+      }
+    }
+    reply.code(202);
+    return { status: "invited", invitation_id: out.invitation_id, email, role: body.role, expires_at: out.expires_at, email_sent: emailSent };
+  });
+
+  // Suspend or reactivate. A suspended person keeps the membership and all grants but gets 404 on the organization on
+  // the very next request (resolveTenant only accepts status 'active').
+  app.patch("/v1/organizations/:org/members/:userId", async (req) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const userId = assertUuid((req.params as { userId: string }).userId, "member");
+    const body = UpdateMember.parse(req.body);
+    if (userId === t.userId) throw badRequest("you cannot change your own access");
+    return tx(pool, t, async (db) => {
+      const target = await lockMember(db, t, userId);
+      if (body.status === "disabled") await guardOwner(db, t, userId, target);
+      else if (target.role === "owner" && t.role !== "owner") throw forbidden("only an owner can change another owner");
+      if (target.status !== body.status) {
+        await db.query("UPDATE memberships SET status = $3 WHERE organization_id = $1 AND user_id = $2", [t.organizationId, userId, body.status]);
+        await audit(db, t, body.status === "disabled" ? "member.suspended" : "member.reactivated", `user:${userId}`, "allow", {
+          email: target.email,
+          role: target.role,
+          from: target.status,
+        });
+      }
+      return { id: userId, role: target.role, status: body.status };
+    });
+  });
+
+  // Remove someone from the firm: membership, workspace and team memberships, groups and functional roles go; their
+  // documents, conversations and audit history stay with the organization. Open invitations to the same address are
+  // revoked so an old invitation cannot bring them back.
+  app.delete("/v1/organizations/:org/members/:userId", async (req, reply) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const userId = assertUuid((req.params as { userId: string }).userId, "member");
+    if (userId === t.userId) throw badRequest("you cannot remove yourself");
+    await tx(pool, t, async (db) => {
+      const target = await lockMember(db, t, userId);
+      await guardOwner(db, t, userId, target);
+      const args = [t.organizationId, userId];
+      const ws = await db.query("DELETE FROM workspace_members WHERE organization_id = $1 AND user_id = $2 RETURNING workspace_id", args);
+      const groups = await db.query("DELETE FROM group_members WHERE organization_id = $1 AND user_id = $2 RETURNING group_id", args);
+      const roles = await db.query("DELETE FROM functional_roles WHERE organization_id = $1 AND user_id = $2 RETURNING role", args);
+      const invites = await db.query(
+        "UPDATE member_invitations SET revoked_at = now() WHERE organization_id = $1 AND email = $2 AND accepted_at IS NULL AND revoked_at IS NULL",
+        [t.organizationId, target.email],
+      );
+      await db.query("DELETE FROM memberships WHERE organization_id = $1 AND user_id = $2", args);
+      await audit(db, t, "member.removed", `user:${userId}`, "allow", {
+        email: target.email,
+        role: target.role,
+        status: target.status,
+        workspaces: ws.rows.map((r) => r.workspace_id),
+        groups: groups.rows.map((r) => r.group_id),
+        functional_roles: roles.rows.map((r) => r.role),
+        invitations_revoked: invites.rowCount ?? 0,
+      });
+    });
+    reply.code(204);
+  });
+
+  app.get("/v1/organizations/:org/invitations", async (req) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const rows = await tx(pool, t, async (db) =>
+      (
+        await db.query(
+          `SELECT i.id, i.email, i.role, i.created_at, i.expires_at, i.expires_at <= now() AS expired, coalesce(u.display_name, u.email) AS invited_by
+             FROM member_invitations i LEFT JOIN users u ON u.id = i.invited_by
+            WHERE i.accepted_at IS NULL AND i.revoked_at IS NULL ORDER BY i.created_at DESC`,
+        )
+      ).rows,
+    );
+    return { invitations: rows };
+  });
+
+  app.delete("/v1/organizations/:org/invitations/:id", async (req, reply) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const id = (req.params as { id: string }).id;
+    assertUuid(id);
+    await tx(pool, t, async (db) => {
+      const r = await db.query("UPDATE member_invitations SET revoked_at = now() WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL", [id]);
+      if (!r.rowCount) throw notFound("invitation");
+      await audit(db, t, "member.invitation_revoked", `invitation:${id}`);
+    });
+    reply.code(204);
   });
 
   app.get("/v1/organizations/:org/groups", async (req) => {

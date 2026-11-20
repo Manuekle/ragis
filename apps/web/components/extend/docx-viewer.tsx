@@ -59,6 +59,7 @@ import {
 import { FileThumbnail } from "@/components/extend/file-thumbnail"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { MoreHorizontalIcon, Moon02Icon, Comment01Icon, FileDiffIcon, Download01Icon, Upload01Icon, SidebarLeftIcon, MinusSignCircleIcon, PlusSignCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { useT, tNow } from "@/lib/use-t";
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -68,14 +69,13 @@ const DOCX_THUMBNAIL_LIST_PADDING = 16
 const DOCX_THUMBNAIL_ROW_ESTIMATE = 172
 const DEFAULT_ZOOM = 50
 const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 175, 200] as const
-const ZOOM_MODE_LABELS = {
-  "fit-page": "Fit page",
-  "fit-width": "Fit width",
-  automatic: "Automatic",
-} satisfies Record<Exclude<ViewerZoomLevel, number>, string>
+const ZOOM_MODE_LABELS = () => ({
+  "fit-page": tNow("Fit page"),
+  "fit-width": tNow("Fit width"),
+  automatic: tNow("Automatic"),
+} satisfies Record<Exclude<ViewerZoomLevel, number>, string>)
 const DOCX_PADDING_WARNING_TEXT = "a style property during rerender"
-const DOCX_THUMBNAIL_FOCUS_RING_CLASS =
-  "group-focus-visible/docx-thumbnail-sidebar:ring-2 group-focus-visible/docx-thumbnail-sidebar:ring-ring group-focus-visible/docx-thumbnail-sidebar:ring-offset-1 group-focus-visible/docx-thumbnail-sidebar:ring-offset-background"
+const DOCX_THUMBNAIL_FOCUS_RING_CLASS = "group-focus-visible/docx-thumbnail-sidebar:ring-2 group-focus-visible/docx-thumbnail-sidebar:ring-ring group-focus-visible/docx-thumbnail-sidebar:ring-offset-1 group-focus-visible/docx-thumbnail-sidebar:ring-offset-background"
 const DOCX_THUMBNAIL_PREFETCH_ROWS = 4
 type UploadedDocxFile = {
   file: File
@@ -200,7 +200,7 @@ function normalizeDocxZoomLevel(
   return value ?? DEFAULT_ZOOM
 }
 function isZoomMode(value: string): value is Exclude<ViewerZoomLevel, number> {
-  return value in ZOOM_MODE_LABELS
+  return value in ZOOM_MODE_LABELS()
 }
 function useDelayedLoadingIndicator(isLoading: boolean, delayMs: number) {
   const [showSpinner, setShowSpinner] = React.useState(false)
@@ -306,6 +306,7 @@ function DocxFileActionsMenu({
   showTrackedChanges: boolean
   showUploadButton: boolean
 }) {
+  const t = useT();
   const showFileActions = showDownloadButton || showUploadButton
   return (
     <DropdownMenu>
@@ -315,7 +316,7 @@ function DocxFileActionsMenu({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Open DOCX actions"
+            aria-label={t("Open DOCX actions")}
           >
             <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} className="size-4" />
           </Button>
@@ -331,9 +332,7 @@ function DocxFileActionsMenu({
               className={cn("justify-between")}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} className="size-4" />
-                Dark mode
-              </span>
+                <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} className="size-4" />{t("Dark mode")}</span>
             </DropdownMenuCheckboxItem>
             <DropdownMenuSeparator />
           </>
@@ -345,9 +344,7 @@ function DocxFileActionsMenu({
           className={cn("justify-between")}
         >
           <span className="flex min-w-0 items-center gap-2">
-            <HugeiconsIcon icon={Comment01Icon} strokeWidth={2} className="size-4" />
-            Comments
-          </span>
+            <HugeiconsIcon icon={Comment01Icon} strokeWidth={2} className="size-4" />{t("Comments")}</span>
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={showTrackedChanges}
@@ -358,9 +355,7 @@ function DocxFileActionsMenu({
           className={cn("justify-between")}
         >
           <span className="flex min-w-0 items-center gap-2">
-            <HugeiconsIcon icon={FileDiffIcon} strokeWidth={2} className="size-4" />
-            Edits
-          </span>
+            <HugeiconsIcon icon={FileDiffIcon} strokeWidth={2} className="size-4" />{t("Edits")}</span>
         </DropdownMenuCheckboxItem>
         {showFileActions ? <DropdownMenuSeparator /> : null}
         {showDownloadButton ? (
@@ -369,15 +364,11 @@ function DocxFileActionsMenu({
               <InlineSpinner className="size-4" />
             ) : (
               <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />
-            )}
-            Download
-          </DropdownMenuItem>
+            )}{t("Download")}</DropdownMenuItem>
         ) : null}
         {showUploadButton ? (
           <DropdownMenuItem onClick={onUploadClick}>
-            <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-            Upload
-          </DropdownMenuItem>
+            <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload")}</DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -394,6 +385,7 @@ function DocxPageNumberControl({
   onPageChange: (pageNumber: number) => void
   pageCount: number
 }) {
+  const t = useT();
   const activePage = useDocxActivePage(activePageStore)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const displayPage = pageCount ? activePage : 1
@@ -416,11 +408,11 @@ function DocxPageNumberControl({
   )
   return (
     <div className="flex items-center text-sm whitespace-nowrap text-primary">
-      <span>Page</span>
+      <span>{t("Page")}</span>
       {isEditing ? (
         <Input
           ref={inputRef}
-          aria-label="Page number"
+          aria-label={t("Page number")}
           inputMode="numeric"
           pattern="[0-9]*"
           value={draftPage}
@@ -446,7 +438,7 @@ function DocxPageNumberControl({
           variant="ghost"
           size="sm"
           className="font-normal"
-          aria-label={`Current page ${displayPage}. Edit page number`}
+          aria-label={t("Current page {displayPage}. Edit page number", { displayPage: displayPage })}
           disabled={controlsDisabled || !pageCount}
           onClick={() => {
             setDraftPage(String(displayPage))
@@ -456,7 +448,7 @@ function DocxPageNumberControl({
           {displayPage}
         </Button>
       )}
-      <span>of {pageCount || "-"}</span>
+      <span>{t("of")}{" "}{pageCount || "-"}</span>
     </div>
   )
 }
@@ -505,6 +497,7 @@ function DocxToolbar({
   toolbarActions?: React.ReactNode
   zoomLevel: ViewerZoomLevel
 }) {
+  const t = useT();
   const canZoomIn = resolvedZoom < ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
   const canZoomOut = resolvedZoom > ZOOM_OPTIONS[0]
   const selectValue =
@@ -520,12 +513,12 @@ function DocxToolbar({
       <TooltipProvider>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ViewerLead />
-          <ToolbarTooltip label="Toggle thumbnails">
+          <ToolbarTooltip label={t("Toggle thumbnails")}>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Toggle thumbnails"
+              aria-label={t("Toggle thumbnails")}
               disabled={controlsDisabled}
               onClick={onToggleSidebar}
             >
@@ -541,13 +534,13 @@ function DocxToolbar({
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
           <div className="flex flex-none items-center gap-1">
-            <ToolbarTooltip label="Zoom out">
+            <ToolbarTooltip label={t("Zoom out")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 disabled={controlsDisabled || !canZoomOut}
-                aria-label="Zoom out"
+                aria-label={t("Zoom out")}
                 onClick={() => onZoomChange(getNextZoomScale(resolvedZoom, -1))}
               >
                 <HugeiconsIcon icon={MinusSignCircleIcon} strokeWidth={2} className="size-4" />
@@ -565,12 +558,12 @@ function DocxToolbar({
               <SelectTrigger
                 size="sm"
                 className="w-[104px] min-w-[104px]"
-                aria-label="Zoom level"
+                aria-label={t("Zoom level")}
               >
                 <SelectValue>{Math.round(resolvedZoom)}%</SelectValue>
               </SelectTrigger>
               <SelectContent align="end" alignItemWithTrigger={false}>
-                {Object.entries(ZOOM_MODE_LABELS).map(([value, label]) => (
+                {Object.entries(ZOOM_MODE_LABELS()).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
                   </SelectItem>
@@ -582,13 +575,13 @@ function DocxToolbar({
                 ))}
               </SelectContent>
             </Select>
-            <ToolbarTooltip label="Zoom in">
+            <ToolbarTooltip label={t("Zoom in")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 disabled={controlsDisabled || !canZoomIn}
-                aria-label="Zoom in"
+                aria-label={t("Zoom in")}
                 onClick={() => onZoomChange(getNextZoomScale(resolvedZoom, 1))}
               >
                 <HugeiconsIcon icon={PlusSignCircleIcon} strokeWidth={2} className="size-4" />
@@ -693,6 +686,7 @@ function DocxThumbnailSidebarList({
   sidebarOpen: boolean
   thumbnails: DocxPageThumbnailItem[]
 }) {
+  const t = useT();
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
   const thumbnailListboxId = React.useId()
   const visibleThumbnails = React.useMemo(
@@ -842,7 +836,7 @@ function DocxThumbnailSidebarList({
                   aria-current={
                     thumbnail.pageNumber === activePage ? "page" : undefined
                   }
-                  aria-label={`Page ${thumbnail.pageNumber}`}
+                  aria-label={t("Page {pageNumber}", { pageNumber: thumbnail.pageNumber })}
                   aria-posinset={thumbnail.pageNumber}
                   aria-selected={thumbnail.pageNumber === activePage}
                   aria-setsize={pageCount}
@@ -1042,6 +1036,7 @@ function DocxViewerContent({
   toolbarActions?: React.ReactNode
   url?: string
 }) {
+  const t = useT();
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
   const [viewportElement, setViewportElement] =
@@ -1411,17 +1406,9 @@ function DocxViewerContent({
           {!url && !activeUploadedDocxFile ? (
             <div className="grid h-full min-h-96 place-items-center p-6 text-center">
               <div className="max-w-md rounded-lg border bg-background p-4 text-sm shadow-xs">
-                <div className="font-medium">
-                  Upload a Word document to preview
-                </div>
-                <div className="mt-1 text-muted-foreground">
-                  Pass a DOCX URL with the <code>src</code> prop or upload a
-                  file.
-                </div>
-                <div className="mt-1 text-muted-foreground">
-                  Legacy <code>.doc</code> support is limited and experimental;
-                  convert to DOCX for best fidelity.
-                </div>
+                <div className="font-medium">{t("Upload a Word document to preview")}</div>
+                <div className="mt-1 text-muted-foreground">{t("Pass a DOCX URL with the")}{" "}<code>src</code>{" "}{t("prop or upload a file.")}</div>
+                <div className="mt-1 text-muted-foreground">{t("Legacy")}{" "}<code>.doc</code>{" "}{t("support is limited and experimental; convert to DOCX for best fidelity.")}</div>
                 <Button
                   type="button"
                   variant="outline"
@@ -1429,15 +1416,13 @@ function DocxViewerContent({
                   className="mt-4"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-                  Upload Word document
-                </Button>
+                  <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload Word document")}</Button>
               </div>
             </div>
           ) : loadError ? (
             <div className="grid h-full min-h-96 place-items-center p-6 text-center">
               <div className="max-w-md rounded-lg border bg-background p-4 text-sm text-destructive shadow-xs">
-                <div className="font-medium">Unable to display DOCX</div>
+                <div className="font-medium">{t("Unable to display DOCX")}</div>
                 <div className="mt-1 text-muted-foreground">{loadError}</div>
               </div>
             </div>
@@ -1585,8 +1570,9 @@ function InlineComposeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
   }
 }
 function InlineSpinner({ className, ...props }: InlineRegistryIconProps) {
+  const t = useT();
   return (
-    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
+    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label={t("Loading")} className={cn("size-4 animate-spin", className)} {...props} />
   )
 }
 type InlineRegistryIconProps = Omit<

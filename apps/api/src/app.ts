@@ -7,14 +7,19 @@ import type { Config } from "./config.js";
 import { isApiKeyToken, keyAllows, resolveApiKey, tenantFromApiKey } from "./lib/apikeys.js";
 import { Authenticator, type AuthUser } from "./lib/auth.js";
 import type { Queue, Storage } from "./lib/aws.js";
-import { ApiError } from "./lib/errors.js";
+import { ApiError, isDependencyDown } from "./lib/errors.js";
 import { RateLimiter } from "./lib/ratelimit.js";
 import { resolveTenant, type TenantContext } from "./lib/tenant.js";
 import { registerTracing } from "./lib/telemetry.js";
 import { documentRoutes } from "./routes/documents.js";
+import { folderRoutes } from "./routes/folders.js";
+import { matterRoutes } from "./routes/matters.js";
 import { orgRoutes } from "./routes/orgs.js";
 import { queryRoutes, type RagClient } from "./routes/query.js";
 import { conversationRoutes } from "./routes/conversations.js";
+import { generatedDocumentRoutes } from "./routes/generated-documents.js";
+import { publicSourceRoutes } from "./routes/public-sources.js";
+import { teamRoutes } from "./routes/teams.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
 import { agentRoutes } from "./routes/agents.js";
 import { workflowRoutes } from "./routes/workflows.js";
@@ -23,9 +28,13 @@ import { createESignProvider, type ESignProvider } from "./lib/esign.js";
 import { externalRoutes } from "./routes/external.js";
 import { nativeSignatureRoutes } from "./routes/signatures.js";
 import { createSignatureMailer, type SignatureMailer } from "./lib/signature-email.js";
+import { createMemberMailer, type MemberMailer } from "./lib/member-email.js";
 import { deliverSignatureInvites } from "./lib/signature-native.js";
 import { ConnectorService, type ServiceOptions } from "./lib/connectors/service.js";
 import { connectorRoutes } from "./routes/connectors.js";
+import { deadlineRoutes } from "./routes/deadlines.js";
+import { createDeadlineMailer, type DeadlineMailer } from "./lib/deadline-email.js";
+import { sendDeadlineReminders } from "./lib/deadline-reminders.js";
 import { z } from "zod";
 
 declare module "fastify" {
@@ -55,12 +64,16 @@ export interface Deps {
   /** Proveedor de firma electrónica (ADR-023). */
   esign: ESignProvider;
   signatureMailer?: SignatureMailer;
+  /** Invitation emails to new members (same SES sender as signatures); absent = invitations send nothing. */
+  memberMailer?: MemberMailer;
+  /** Deadline reminder emails (ADR-038); same SES sender as signatures. */
+  deadlineMailer?: DeadlineMailer;
 }
 
 export async function buildApp(
-  deps: Omit<Deps, "limiter" | "esign"> & { limiter?: RateLimiter; esign?: ESignProvider; connectorOptions?: ServiceOptions },
+  deps: Omit<Deps, "limiter" | "esign"> & { limiter?: RateLimiter; esign?: ESignProvider; connectorOptions?: ServiceOptions; disableBackgroundJobs?: boolean },
 ): Promise<FastifyInstance> {
-  const full: Deps = { ...deps, limiter: deps.limiter ?? new RateLimiter(), esign: deps.esign ?? createESignProvider(deps.cfg), signatureMailer: deps.signatureMailer ?? createSignatureMailer(deps.cfg) };
+  const full: Deps = { ...deps, limiter: deps.limiter ?? new RateLimiter(), esign: deps.esign ?? createESignProvider(deps.cfg), signatureMailer: deps.signatureMailer ?? createSignatureMailer(deps.cfg), memberMailer: deps.memberMailer ?? createMemberMailer(deps.cfg), deadlineMailer: deps.deadlineMailer ?? createDeadlineMailer(deps.cfg) };
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? "info",
@@ -88,6 +101,12 @@ export async function buildApp(
       return reply.code(status).send({ error: { code: "bad_request", message: (err as Error).message } });
     }
     req.log.error({ err }, "unhandled error");
+    if (isDependencyDown(err)) {
+      // Postgres/S3/SQS unreachable (e.g. Docker restarted): tell the UI to retry rather than show a bare 500.
+      return reply.code(503).header("retry-after", "5").send({
+        error: { code: "service_unavailable", message: "Ragis can't reach one of its services right now. Try again in a moment.", request_id: req.id },
+      });
+    }
     return reply.code(500).send({ error: { code: "internal_error", message: "error interno", request_id: req.id } });
   });
 
@@ -125,9 +144,15 @@ export async function buildApp(
   });
 
   await orgRoutes(app, full);
+  await folderRoutes(app, full);
+  await matterRoutes(app, full);
   await documentRoutes(app, full);
   await queryRoutes(app, full);
   await conversationRoutes(app, full);
+  await generatedDocumentRoutes(app, full);
+  await publicSourceRoutes(app, full);
+  await teamRoutes(app, full);
+  await deadlineRoutes(app, full);
   await onboardingRoutes(app, full);
   await agentRoutes(app, full);
   const runner = new WorkflowRunner(full);
@@ -152,6 +177,20 @@ export async function buildApp(
     app.addHook("onClose", async () => {
       clearInterval(interval);
       await delivery;
+    });
+  }
+  if (full.deadlineMailer && !deps.disableBackgroundJobs) {
+    let sweep: Promise<unknown> | undefined;
+    const tick = () => {
+      sweep ??= sendDeadlineReminders(full)
+        .catch(() => app.log.error("deadline reminder sweep failed"))
+        .finally(() => { sweep = undefined; });
+    };
+    const interval = setInterval(tick, 5 * 60_000);
+    interval.unref();
+    app.addHook("onClose", async () => {
+      clearInterval(interval);
+      await sweep;
     });
   }
   return app;

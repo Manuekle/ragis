@@ -22,7 +22,7 @@ import {
   validateAgent,
   type PolicySubject,
 } from "../lib/policy.js";
-import { AGENT_TEMPLATES, blankConfig, configFromTemplate } from "../lib/presets.js";
+import { AGENT_TEMPLATES, SECTOR_TEMPLATES, SECTORS, blankConfig, configFromTemplate } from "../lib/presets.js";
 import { assertUuid, audit, isAdmin, tx, type TenantContext } from "../lib/tenant.js";
 
 const CreateAgent = z
@@ -30,6 +30,8 @@ const CreateAgent = z
     template: z.string().min(1).max(64).optional(),
     slug: AgentSlug.optional(),
     name: z.string().trim().min(2).max(80).optional(),
+    // The web sends the template's name and purpose in the reader's language, so the agent is saved in it.
+    purpose: z.string().trim().min(10).max(400).optional(),
     space_ids: z.array(z.string().uuid()).max(20).optional(),
   })
   .strict();
@@ -91,6 +93,8 @@ export async function agentRoutes(app: FastifyInstance, deps: Deps) {
     policy_version: POLICY_VERSION,
     tools: TOOL_CATALOG,
     templates: Object.values(AGENT_TEMPLATES),
+    // Templates each sector's Setup suggests, so the Studio can list the org's own first.
+    sector_templates: Object.fromEntries(SECTORS.map((s) => [s, SECTOR_TEMPLATES[s].agents])),
     autonomy: AUTONOMY,
     model_profiles: MODEL_PROFILES,
     output_schemas: OUTPUT_SCHEMAS,
@@ -151,6 +155,7 @@ export async function agentRoutes(app: FastifyInstance, deps: Deps) {
       const localOnly = subject.dataClass === "restricted" || subject.llmPolicy === "local_only";
       const cfg = tpl ? configFromTemplate(tpl, spaces, localOnly) : blankConfig(spaces, localOnly);
       if (body.name) cfg.name = body.name;
+      if (body.purpose) cfg.purpose = body.purpose;
       let slug = body.slug ?? (tpl ? tpl.slug : slugify(cfg.name));
       if (!body.slug) {
         const taken = new Set((await db.query("SELECT slug FROM agents WHERE slug LIKE $1", [`${slug}%`])).rows.map((r) => r.slug));

@@ -12,6 +12,12 @@ RUN pnpm --filter @ragsis/api build \
  && cp -r apps/api/dist /out/dist
 
 FROM node:24-alpine
+# The runtime only runs `node`. The package managers bundled in the base image
+# (npm, npx, corepack, yarn) are never used here, and npm ships its own
+# dependency tree (brace-expansion, undici, ...) that Trivy flags; drop them.
+RUN rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/bin/yarn /usr/local/bin/yarnpkg
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out/node_modules ./node_modules

@@ -3,7 +3,9 @@
 import { Component, type ComponentType, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { IconBuilding, IconCheck, IconCopy, IconDownload, IconLinkedIn, IconSpinner, IconUpload, IconUser, IconXSocial } from "@/components/icons";
+import { useLocale } from "@/components/LocaleProvider";
 import { TextField } from "@/components/ui";
+import { localePath } from "@/lib/i18n";
 import { BADGE_THEMES, type BadgeTheme, COMPANY_MAX, LOGO_MAX_BYTES, LOGO_MAX_PX, NAME_MAX, type PublicBadge, shareText } from "@/lib/badge";
 import type { BadgeCanvases, BadgeLayout, SceneProps } from "./BadgeScene";
 import { type BadgeLogo, drawAll, loadBadgeFonts } from "./draw";
@@ -64,16 +66,82 @@ const LOGO_FILES = /^image\/(png|jpeg|webp|svg\+xml)$/;
  * tells whether the picture is a solid square (an app icon, a mark on its own background), which
  * the card shows edge to edge. Throws a message meant for the person when the file can't be used.
  */
-async function toLogoPng(file: File): Promise<{ blob: Blob; canvas: HTMLCanvasElement; fill: boolean }> {
-  if (!LOGO_FILES.test(file.type)) throw new Error("That file isn't an image we can use. Try a PNG, JPG or SVG.");
-  if (file.size > 10 * 1024 * 1024) throw new Error("That image is too large. Try one under 10 MB.");
+const TEXT = {
+  en: {
+    notImage: "That file isn't an image we can use. Try a PNG, JPG or SVG.",
+    tooLarge: "That image is too large. Try one under 10 MB.",
+    noOpen: "We couldn't open that image. Try another file.",
+    empty: "That image looks empty. Try another file.",
+    detailed: "That image is too detailed to use as a logo. Try a simpler file.",
+    noSaveLogo: "Couldn't save your logo. Try again in a moment.",
+    noRemoveLogo: "Couldn't remove your logo. Try again in a moment.",
+    noServer: "Couldn't reach the server. Check your connection.",
+    badgeLabel: (n: number) => `Ragis waitlist badge number ${n}`,
+    drag: "Drag the badge",
+    nameLabel: "Name on the badge",
+    namePh: "Your name",
+    companyLabel: "Company",
+    companyPh: "Where you work",
+    logo: "Company logo",
+    replace: "Replace logo",
+    upload: "Upload your logo",
+    logoNote: "PNG, JPG or SVG. It goes on your badge, above your name.",
+    remove: "Remove it",
+    share: "Share your badge",
+    linkedin: "Share on LinkedIn",
+    postX: "Post on X",
+    copied: "Copied",
+    copy: "Copy link",
+    download: "Download image",
+    saving: "Saving…",
+    saved: "Saved. Your link shows the latest version.",
+    saveError: "Couldn't save the last change. Try again.",
+    auto: "Changes save on their own.",
+  },
+  es: {
+    notImage: "Ese archivo no es una imagen que podamos usar. Prueba con PNG, JPG o SVG.",
+    tooLarge: "Esa imagen es demasiado grande. Prueba con una de menos de 10 MB.",
+    noOpen: "No pudimos abrir esa imagen. Prueba con otro archivo.",
+    empty: "Esa imagen parece vacía. Prueba con otro archivo.",
+    detailed: "Esa imagen es demasiado detallada para un logotipo. Prueba con un archivo más sencillo.",
+    noSaveLogo: "No se pudo guardar tu logotipo. Inténtalo de nuevo en un momento.",
+    noRemoveLogo: "No se pudo quitar tu logotipo. Inténtalo de nuevo en un momento.",
+    noServer: "No se pudo conectar con el servidor. Comprueba tu conexión.",
+    badgeLabel: (n: number) => `Insignia número ${n} de la lista de espera de Ragis`,
+    drag: "Arrastra la insignia",
+    nameLabel: "Nombre en la insignia",
+    namePh: "Tu nombre",
+    companyLabel: "Empresa",
+    companyPh: "Dónde trabajas",
+    logo: "Logotipo de la empresa",
+    replace: "Cambiar logotipo",
+    upload: "Sube tu logotipo",
+    logoNote: "PNG, JPG o SVG. Va en tu insignia, encima de tu nombre.",
+    remove: "Quitarlo",
+    share: "Comparte tu insignia",
+    linkedin: "Compartir en LinkedIn",
+    postX: "Publicar en X",
+    copied: "Copiado",
+    copy: "Copiar enlace",
+    download: "Descargar imagen",
+    saving: "Guardando…",
+    saved: "Guardado. Tu enlace muestra la última versión.",
+    saveError: "No se pudo guardar el último cambio. Inténtalo de nuevo.",
+    auto: "Los cambios se guardan solos.",
+  },
+};
+type Text = (typeof TEXT)["en"];
+
+async function toLogoPng(file: File, t: Text): Promise<{ blob: Blob; canvas: HTMLCanvasElement; fill: boolean }> {
+  if (!LOGO_FILES.test(file.type)) throw new Error(t.notImage);
+  if (file.size > 10 * 1024 * 1024) throw new Error(t.tooLarge);
 
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
     img.src = url;
     await img.decode().catch(() => {
-      throw new Error("We couldn't open that image. Try another file.");
+      throw new Error(t.noOpen);
     });
     // An SVG without a size of its own reports none: give it a square to draw into.
     const iw = img.naturalWidth || LOGO_MAX_PX;
@@ -105,7 +173,7 @@ async function toLogoPng(file: File): Promise<{ blob: Blob; canvas: HTMLCanvasEl
           if (y > y1) y1 = y;
         }
       }
-      if (x1 < x0 || y1 < y0) throw new Error("That image looks empty. Try another file.");
+      if (x1 < x0 || y1 < y0) throw new Error(t.empty);
 
       const canvas = document.createElement("canvas");
       canvas.width = x1 - x0 + 1;
@@ -115,7 +183,7 @@ async function toLogoPng(file: File): Promise<{ blob: Blob; canvas: HTMLCanvasEl
       const ratio = canvas.width / canvas.height;
       if (blob && blob.size <= LOGO_MAX_BYTES) return { blob, canvas, fill: solid && ratio > 0.85 && ratio < 1.18 };
     }
-    throw new Error("That image is too detailed to use as a logo. Try a simpler file.");
+    throw new Error(t.detailed);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -191,9 +259,11 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
   const fileRef = useRef<HTMLInputElement>(null);
   const pending = useRef<{ timer?: ReturnType<typeof setTimeout>; body?: Record<string, string> }>({});
 
+  const locale = useLocale();
+  const t = TEXT[locale];
   const theme = useAppTheme();
   const owner = Boolean(token);
-  const shareUrl = `${origin}/waitlist/badge/${badge.slug}`;
+  const shareUrl = `${origin}${localePath(locale, `/waitlist/badge/${badge.slug}`)}`;
 
   // Remember the edit token in this browser, so the owner can come back to the badge page and change it.
   useEffect(() => {
@@ -357,7 +427,7 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
     const res = await fetch(`/api/waitlist/badge/${badge.slug}/logo${query}`, { ...request, headers: { ...request.headers, "x-badge-token": token } });
     const data = (await res.json().catch(() => ({}))) as { badge?: PublicBadge; error?: { message?: string } };
     if (res.status === 403) setToken(null);
-    if (!res.ok || !data.badge) throw new Error(data.error?.message ?? "Couldn't save your logo. Try again in a moment.");
+    if (!res.ok || !data.badge) throw new Error(data.error?.message ?? t.noSaveLogo);
     setBadge(data.badge);
     return true;
   }
@@ -367,13 +437,13 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
     setLogoBusy(true);
     setLogoError(null);
     try {
-      const png = await toLogoPng(file);
+      const png = await toLogoPng(file, t);
       await sendLogo({ method: "PUT", headers: { "content-type": "image/png" }, body: png.blob }, png.fill ? "?fill=1" : "");
       // Show it at once; the saved copy replaces it when it has loaded.
       setLogo(png.canvas);
       setLogoThumb(png.canvas.toDataURL("image/png"));
     } catch (err) {
-      setLogoError(err instanceof TypeError ? "Couldn't reach the server. Check your connection." : err instanceof Error ? err.message : "Couldn't save your logo. Try again in a moment.");
+      setLogoError(err instanceof TypeError ? t.noServer : err instanceof Error ? err.message : t.noSaveLogo);
     }
     setLogoBusy(false);
   }
@@ -387,7 +457,7 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
       setLogo(null);
       setLogoThumb(null);
     } catch (err) {
-      setLogoError(err instanceof TypeError ? "Couldn't reach the server. Check your connection." : err instanceof Error ? err.message : "Couldn't remove your logo. Try again in a moment.");
+      setLogoError(err instanceof TypeError ? t.noServer : err instanceof Error ? err.message : t.noRemoveLogo);
     }
     setLogoBusy(false);
   }
@@ -401,8 +471,8 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
     } catch {}
   }
 
-  const text = shareText(badge);
-  const label = `Ragis waitlist badge number ${badge.number}`;
+  const text = shareText(badge, locale);
+  const label = t.badgeLabel(badge.number);
   const three = mode === "loading" && Scene && canvases && fontsReady && theme && layout && version > 0;
 
   return (
@@ -412,7 +482,7 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
         <div ref={restRef} className="badge-rest">
           {mode === "flat" && <FlatBadge source={canvases?.front ?? null} version={version} label={label} />}
         </div>
-        {sceneReady && mode === "loading" && <p className="badge-hint">Drag the badge</p>}
+        {sceneReady && mode === "loading" && <p className="badge-hint">{t.drag}</p>}
       </div>
 
       {three &&
@@ -432,10 +502,10 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
           <>
             <div className="badge-edit">
               <TextField
-                label="Name on the badge"
+                label={t.nameLabel}
                 value={name}
                 maxLength={NAME_MAX}
-                placeholder="Your name"
+                placeholder={t.namePh}
                 autoComplete="name"
                 icon={IconUser}
                 onChange={(e) => {
@@ -444,10 +514,10 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
                 }}
               />
               <TextField
-                label="Company"
+                label={t.companyLabel}
                 value={company}
                 maxLength={COMPANY_MAX}
-                placeholder="Where you work"
+                placeholder={t.companyPh}
                 autoComplete="organization"
                 icon={IconBuilding}
                 onChange={(e) => {
@@ -457,7 +527,7 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
               />
 
               <div className="badge-logo">
-                <span className="label">Company logo</span>
+                <span className="label">{t.logo}</span>
                 <div className="badge-logo-row">
                   <span className="badge-logo-thumb" data-empty={logoThumb ? undefined : ""} data-fill={logoThumb && badge.logoFill ? "" : undefined}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -465,7 +535,7 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
                   </span>
                   <button type="button" className="gate-cta quiet badge-logo-btn" disabled={logoBusy} onClick={() => fileRef.current?.click()}>
                     {logoBusy ? <IconSpinner size={16} /> : <IconUpload size={16} />}
-                    {badge.ownLogo ? "Replace logo" : "Upload your logo"}
+                    {badge.ownLogo ? t.replace : t.upload}
                   </button>
                   <input
                     ref={fileRef}
@@ -479,12 +549,12 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
                   />
                 </div>
                 <p className="badge-logo-note" data-error={logoError ? "" : undefined} role={logoError ? "alert" : undefined}>
-                  {logoError ?? "PNG, JPG or SVG. It goes on your badge, above your name."}
+                  {logoError ?? t.logoNote}
                   {badge.ownLogo && !logoError && (
                     <>
                       {" "}
                       <button type="button" className="link" disabled={logoBusy} onClick={removeLogo}>
-                        Remove it
+                        {t.remove}
                       </button>
                     </>
                   )}
@@ -493,31 +563,31 @@ export function BadgeShowcase({ badge: initial, editToken, header, guest }: { ba
             </div>
 
             <div className="badge-share">
-              <span className="label">Share your badge</span>
+              <span className="label">{t.share}</span>
               {/* one row: the main way to share with its name on it, the rest as square icons */}
               <div className="badge-share-row">
                 <a className="gate-cta quiet badge-share-main" href={`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${text} ${shareUrl}`)}`} target="_blank" rel="noopener noreferrer" onClick={() => void flush()}>
                   <IconLinkedIn size={16} />
-                  Share on LinkedIn
+                  {t.linkedin}
                 </a>
-                <span className="badge-share-icon" data-tip="Post on X">
-                  <a className="gate-cta quiet" aria-label="Post on X" href={`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" onClick={() => void flush()}>
+                <span className="badge-share-icon" data-tip={t.postX}>
+                  <a className="gate-cta quiet" aria-label={t.postX} href={`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" onClick={() => void flush()}>
                     <IconXSocial size={16} />
                   </a>
                 </span>
-                <span className="badge-share-icon" data-tip={copied ? "Copied" : "Copy link"}>
-                  <button type="button" className="gate-cta quiet" aria-label="Copy link" onClick={copy}>
+                <span className="badge-share-icon" data-tip={copied ? t.copied : t.copy}>
+                  <button type="button" className="gate-cta quiet" aria-label={t.copy} onClick={copy}>
                     {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
                   </button>
                 </span>
-                <span className="badge-share-icon" data-tip="Download image">
-                  <a className="gate-cta quiet" aria-label="Download image" href={`/api/waitlist/badge/${badge.slug}/image?download=1&v=${encodeURIComponent(badge.updatedAt)}`} download={`ragis-badge-${badge.number}.png`} onClick={() => void flush()}>
+                <span className="badge-share-icon" data-tip={t.download}>
+                  <a className="gate-cta quiet" aria-label={t.download} href={`/api/waitlist/badge/${badge.slug}/image?download=1&v=${encodeURIComponent(badge.updatedAt)}`} download={`ragis-badge-${badge.number}.png`} onClick={() => void flush()}>
                     <IconDownload size={16} />
                   </a>
                 </span>
               </div>
               <p className="badge-save" aria-live="polite">
-                {save === "saving" ? "Saving…" : save === "saved" ? "Saved. Your link shows the latest version." : save === "error" ? "Couldn't save the last change. Try again." : "Changes save on their own."}
+                {save === "saving" ? t.saving : save === "saved" ? t.saved : save === "error" ? t.saveError : t.auto}
               </p>
             </div>
           </>

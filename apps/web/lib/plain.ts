@@ -15,6 +15,9 @@ export function duration(ms: number): string {
 
 export const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
+/** Organization role or plan code ("owner", "team") as an English word to pass through the translator. */
+export const roleWord = (role: string) => ({ owner: "Owner", admin: "Admin", member: "Member", viewer: "Viewer" })[role] ?? cap(role);
+
 /** Why a document couldn't be processed, from the ingest worker's error codes. */
 const DOC_ERRORS: Record<string, string> = {
   too_large: "File is larger than your plan allows",
@@ -37,6 +40,16 @@ const DOC_ERRORS: Record<string, string> = {
   no_extractable_text: "No readable text found",
   ocr_required: "Scanned file — text recognition isn't available on your plan",
   model_policy_violation: "Your data policy doesn't allow processing this file",
+  transcription_required: "Recording — turning speech into text isn't switched on for this workspace yet",
+  no_speech_detected: "No speech could be heard in this recording",
+  audio_too_long: "The recording is too long — split it into shorter parts",
   dead_letter: "Processing failed several times — try uploading again",
 };
-export const docError = (code: string) => DOC_ERRORS[code] ?? "Couldn't process this file — try uploading again";
+const IMAGE = /\.(png|jpe?g)$/i;
+// The same code reads differently per format: an image with no text is a photo, not a broken file.
+const IMAGE_ERRORS: Record<string, string> = {
+  no_extractable_text: "No text found in this image — photos without text need image descriptions switched on",
+  ocr_required: "Reading text in images isn't switched on for this workspace yet",
+};
+export const docError = (code: string, filename?: string) =>
+  (filename && IMAGE.test(filename) ? IMAGE_ERRORS[code] : undefined) ?? DOC_ERRORS[code] ?? "Couldn't process this file — try uploading again";

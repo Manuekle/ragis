@@ -1,6 +1,7 @@
 import type { IllustrationName } from "@/components/Illustration";
 import { PubTitle } from "./PubTitle";
-import { site } from "./site";
+import { getLocale } from "@/lib/locale";
+import { SITE_TEXT, site } from "./site";
 
 export interface LegalSection {
   id: string;
@@ -9,7 +10,9 @@ export interface LegalSection {
 }
 
 /** Legal document: framed title, sticky table of contents, numbered sections. */
-export function LegalPage({ title, lead, sections, art }: { title: React.ReactNode; lead: React.ReactNode; sections: LegalSection[]; art?: IllustrationName }) {
+export async function LegalPage({ title, lead, sections, art }: { title: React.ReactNode; lead: React.ReactNode; sections: LegalSection[]; art?: IllustrationName }) {
+  const locale = await getLocale();
+  const es = locale === "es";
   return (
     <div className="gate-col pub-col">
       <i className="gate-beam" data-line="left" aria-hidden="true" />
@@ -18,8 +21,8 @@ export function LegalPage({ title, lead, sections, art }: { title: React.ReactNo
       <PubTitle title={title} lead={lead} art={art} />
 
       <div className="pub-body legal">
-        <aside className="legal-toc" aria-label="On this page">
-          <span className="legal-updated">Updated {site.legalUpdated}</span>
+        <aside className="legal-toc" aria-label={es ? "En esta página" : "On this page"}>
+          <span className="legal-updated">{es ? "Actualizado el" : "Updated"} {SITE_TEXT[locale].legalUpdated}</span>
           <ol>
             {sections.map((s) => (
               <li key={s.id}>
@@ -45,12 +48,13 @@ export function LegalPage({ title, lead, sections, art }: { title: React.ReactNo
 }
 
 /** "email us at …" when CONTACT_EMAIL is set, otherwise point to the agreement. */
-export function ContactLine() {
+export async function ContactLine() {
+  const es = (await getLocale()) === "es";
   return site.contactEmail ? (
     <>
-      email us at <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>
+      {es ? "escríbenos a" : "email us at"} <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>
     </>
   ) : (
-    <>use the contact listed in your agreement or order form</>
+    <>{es ? "usa el contacto que figura en tu contrato o formulario de pedido" : "use the contact listed in your agreement or order form"}</>
   );
 }

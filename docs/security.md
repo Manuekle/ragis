@@ -13,6 +13,9 @@ tenants** (`ACL leakage = 0` in the golden set and in the isolation tests).
 | Document ACL applied **in SQL** before retrieval (ADR-008). | `services/rag-engine/…/retrieval.py` | `test_rag_flow.py`, adversarial golden set |
 | Bounded `SECURITY DEFINER` functions. | `db/migrations/0002_member_lookup.sql` | `test_isolation.py` |
 | The graph inherits the ACL of the source chunks (ADR-019). | `services/ingest-worker/…/graph.py` | `tests/python/test_graph_acl.py` |
+| Graph vectors (`entity_source_embeddings`, `relation_source_embeddings`) follow the RLS of their provenance row and are deleted with it (ADR-029). | `db/migrations/0015_graph_embeddings.sql` | `tests/python/test_crossmodal_graph.py` |
+| Recording transcripts are chunks: the transcript endpoint passes RLS + document ACL; a restricted tenant cannot send audio to a cloud transcriber (ADR-030). | `apps/api/src/routes/documents.ts`, `ragsis_ingest/pipeline.py` | `apps/api/test/folders.test.ts` (transcript case), `tests/python/test_audio.py` |
+| Folders never grant access; counts and suggestions are computed under RLS, and document summary vectors follow the document ACL (ADR-031). | `db/migrations/0017_folders.sql`, `apps/api/src/routes/folders.ts` | `apps/api/test/folders.test.ts` |
 
 What to do when a leak is suspected: [incident-cross-tenant.md](../ops/runbooks/incident-cross-tenant.md).
 
@@ -27,12 +30,22 @@ What to do when a leak is suspected: [incident-cross-tenant.md](../ops/runbooks/
 
 ## Documents and models
 
-- **Upload:** presigned URL straight to S3; quarantine; magic byte and MIME validation; macros and ZIP bombs; ClamAV.
+- **Upload:** presigned URL straight to S3; quarantine; magic byte and MIME validation (audio by container signature);
+  macros and ZIP bombs; ClamAV.
 - **Prompt:** document content is delimited and escaped; a document cannot give instructions to the system.
 - **Citations:** the verifier requires every citation and every figure to be in the cited text; otherwise the system
   abstains.
 - **Model policy by data classification:** `restricted` never calls external APIs and there is no silent fallback to the
-  cloud.
+  cloud. OCR (Textract) and transcription (Transcribe) are registered models and go through the same check, so a
+  restricted tenant cannot send a scan or a recording to them. The class that counts is the strictest of the
+  organization's and the documents involved (`documents.classification`): a `restricted` document in an `internal`
+  organization is never reranked, answered from, described, transcribed or summarized by a cloud model.
+- **"Private AI only":** an organization that chose `llm_policy = local_only` in onboarding, or the on-premises
+  deployment, gets the same model rule as `restricted` in Ask, agents and ingestion, whatever its data classification.
+  The rule is `app.ai_local_only()` (migration 0025); the API signs it into the internal token (`lo`) and the
+  ingest-worker reads it with the document version. Answers then come from the local extractive engine.
+- **AI-written text is labelled:** figure descriptions, table summaries, equation analyses and transcripts carry
+  `ai_generated` or a notice in the source card, and numbers that are not in the source are removed from AI summaries.
 - **PII:** redaction during ingestion and JSON logs with redaction. `query_runs` stores questions only as SHA-256. Ask
   history does store the text, private to its author, deletable and re-filtered by ACL on reload (ADR-028).
 - **Audit:** per-tenant hash chain (`audit_events`).
@@ -40,6 +53,10 @@ What to do when a leak is suspected: [incident-cross-tenant.md](../ops/runbooks/
   receive the files.
 - **Connectors:** OAuth tokens encrypted with AES-GCM (AAD), PKCE and single-use `state`; Gmail visible only to its
   owner; on disconnect, access is revoked and indexed content is removed (ADR-025).
+- **Public records (ADR-036):** off by default and per question. Only names and keywords taken from the question reach
+  Croma (the planner never sees documents); endpoints come from a curated allowlist without personal-ID lookups; the
+  key stays in the rag-engine; lookups are audited without their terms. Organizations with `restricted` data cannot
+  turn it on.
 
 ## Infrastructure
 
@@ -67,7 +84,8 @@ What to do when a leak is suspected: [incident-cross-tenant.md](../ops/runbooks/
 
 ## Open before production
 
-Validate Textract and Bedrock (including Nova and Claude vision) in the real account and Region; validate Docling and its
+Validate Textract, Transcribe and Bedrock (including Nova and Claude vision) in the real account and Region; add the
+Transcribe IAM permissions to Terraform before turning audio on; validate Docling and its
 local OCR in the worker image; session refresh tokens; ADOT collector on ECS; CloudFront; permissions pentest; and the
 legal and privacy gates of the Master Plan checklist (section 20). The full status list is in the
 [README](../README.md#status-against-the-master-plan).

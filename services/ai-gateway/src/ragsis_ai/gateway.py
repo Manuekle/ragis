@@ -65,6 +65,9 @@ class AIGateway:
             elif name == "ollama":
                 from .providers.ollama import OllamaProvider
                 self._providers[name] = OllamaProvider()
+            elif name == "meta":
+                from .providers.meta import MetaModelProvider
+                self._providers[name] = MetaModelProvider()
             else:
                 raise ProviderError(f"proveedor desconocido {name}")
         return self._providers[name]

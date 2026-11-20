@@ -1,29 +1,21 @@
 "use client";
 
-import Link from "next/link";
+import { LocaleLink as Link, useLocale } from "@/components/LocaleProvider";
 import { useState } from "react";
 import { IconAlert, IconSpinner } from "@/components/icons";
 import { SoftText } from "@/components/motion";
 import { TextField, useFormErrors } from "@/components/ui";
 import { AuthShell, GateChecks } from "./AuthShell";
+import { LOGIN } from "./copy";
+import { useT } from "@/lib/use-t";
 
 type Step = "signin" | "new_password" | "forgot" | "reset";
 
-const COPY: Record<Step, { title: string; lead: string; note?: string; cta: string; busy: string }> = {
-  signin: { title: "Sign in to Ragis.", lead: "Use your company account.", cta: "Sign in", busy: "Signing in…" },
-  new_password: {
-    title: "Choose a new password.",
-    lead: "Your account needs one before you continue.",
-    note: "Use at least 8 characters, with upper and lower case letters, a number and a symbol.",
-    cta: "Save and continue",
-    busy: "Saving…",
-  },
-  forgot: { title: "Reset your password.", lead: "We'll email you a code.", cta: "Send code", busy: "Sending…" },
-  reset: { title: "Check your email.", lead: "Enter the code and a new password.", cta: "Reset password", busy: "Resetting…" },
-};
-
 /** Inicio de sesión dentro de la app. Cognito solo guarda las cuentas; el navegador nunca sale del sitio. */
 export default function PasswordLoginForm() {
+  const t = LOGIN[useLocale()];
+  // Server errors arrive in English (lib/cognito.ts friendlyError); messages-es.ts has their Spanish.
+  const tr = useT();
   const [step, setStep] = useState<Step>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +24,7 @@ export default function PasswordLoginForm() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const form = useFormErrors();
-  const copy = COPY[step];
+  const copy = t.steps[step]!;
 
   function go(next: Step, opts?: { notice?: string; error?: string }) {
     setStep(next);
@@ -57,14 +49,14 @@ export default function PasswordLoginForm() {
       });
     } catch {
       setBusy(false);
-      setError("Couldn't reach the server. Check your connection.");
+      setError(t.noServer);
       return;
     }
     const data = (await res.json().catch(() => ({}))) as { next?: string; step?: Step; error?: { message?: string } };
     if (!res.ok) {
       setBusy(false);
-      if (res.status === 410) return go("signin", { error: data.error?.message });
-      setError(data.error?.message ?? "Couldn't complete that. Try again.");
+      if (res.status === 410) return go("signin", { error: tr(data.error?.message) });
+      setError(tr(data.error?.message) ?? t.noComplete);
       return;
     }
     if (data.next) {
@@ -72,23 +64,23 @@ export default function PasswordLoginForm() {
       return;
     }
     setBusy(false);
-    if (data.step === "signin") go("signin", { notice: "Password updated. Sign in with it." });
+    if (data.step === "signin") go("signin", { notice: t.updated });
     else if (data.step) go(data.step);
   }
 
   return (
-    <AuthShell title={copy.title} lead={copy.lead} linkBrandToHome>
+    <AuthShell title={copy.title} lead={copy.lead} home={t.home} linkBrandToHome>
       <form className="gate-form" onSubmit={submit} noValidate>
         {copy.note && <p className="gate-note">{copy.note}</p>}
         {(step === "signin" || step === "forgot" || step === "reset") && (
-          <TextField label="Work email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="email" autoFocus={step !== "reset"} {...form.field("email")} />
+          <TextField label={t.email} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.emailPlaceholder} autoComplete="email" autoFocus={step !== "reset"} {...form.field("email")} />
         )}
         {step === "reset" && (
-          <TextField label="Code from your email" required value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus {...form.field("code")} />
+          <TextField label={t.code} required value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus {...form.field("code")} />
         )}
         {step !== "forgot" && (
           <TextField
-            label={step === "signin" ? "Password" : "New password"}
+            label={step === "signin" ? t.password : t.newPassword}
             type="password"
             required
             minLength={step === "signin" ? undefined : 8}
@@ -112,18 +104,18 @@ export default function PasswordLoginForm() {
         </button>
         {step === "signin" && (
           <button type="button" className="gate-link" onClick={() => go("forgot")} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit", fontSize: 14 }}>
-            Forgot your password?
+            {t.forgot}
           </button>
         )}
         {(step === "forgot" || step === "reset") && (
           <button type="button" className="gate-link" onClick={() => go("signin")} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit", fontSize: 14 }}>
-            Back to sign in
+            {t.back}
           </button>
         )}
       </form>
-      <GateChecks items={["Cited answers", "Permission-aware", "PII redacted"]} />
+      <GateChecks items={t.checks} />
       <p className="gate-legal">
-        By continuing you agree to the <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.
+        {t.legalA}<Link href="/terms">{t.terms}</Link>{t.legalB}<Link href="/privacy">{t.privacy}</Link>.
       </p>
     </AuthShell>
   );

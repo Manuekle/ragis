@@ -1,4 +1,4 @@
-# Ragsis pilot on AWS Ohio
+# Ragis pilot on AWS Ohio
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../../docs/diagrams/aws-pilot-dark.svg">
@@ -11,23 +11,24 @@ This environment uses one `m7i-flex.large` EC2 instance with 2 vCPU and 8 GiB, U
 
 The public repository has the [GitHub pilot environment](https://github.com/Manuekle/ragis/settings/environments/26787121908/edit). It stores `AWS_REGION=us-east-2`, `DEPLOY_STAGE=pilot`, `RAGSIS_ENV=production` and `AUTH_MODE=oidc`, and allows the `codex/piloto-aws` branch. The start-up described here uses images from private ECR, pushed from your machine. To automate it later, a workflow and a deployment role limited to that environment are needed. CloudShell returned `AccessDenied` when listing IAM OIDC providers. That GitHub authorization is independent of the user login in Cognito.
 
-## Before touching AWS: rehearse in Floci
+## Before touching AWS: rehearse in AWS Emulator
 
-Every infrastructure change is tested first in the local emulator (Floci, `localhost:4566`). Only with a clean rehearsal do you continue with real AWS. Guide and known limits: [docs/guides/floci.md](../../docs/guides/floci.md).
+Every infrastructure change is tested first in the local emulator (AWS Emulator in Docker, `https://127.0.0.1:9297`). Only with a clean rehearsal do you continue with real AWS. Guide and known limits: [docs/guides/aws-emulator.md](../../docs/guides/aws-emulator.md).
 
 ```bash
-make rehearse-plan      # what Terraform would create in Floci
-make rehearse           # creates it in Floci
+make emulator-up        # starts the emulator
+make rehearse-plan      # what Terraform would create in the emulator
+make rehearse           # creates it in the emulator
 make rehearse-destroy   # deletes it
 ```
 
-The rehearsal uses its own state in `infra/terraform/.floci/` and never reads or modifies the real AWS state.
+The rehearsal uses its own state in `infra/terraform/.emulator/` and never reads or modifies the real AWS state.
 
 ## Prepare the AWS plan
 
 1. Define a subdomain that you control, for example `pilot.yourdomain.com`. The value is used in the certificate, the Cognito callback and the S3 CORS.
 2. Start a temporary `ragsis-pilot` profile for the **Rubber Ducking** project from your console account. Follow the profile's initial connection or renew it with `aws login --profile ragsis-pilot`. Select that project in the browser. [Temporary access to the AWS project](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html)
-3. From the Ragsis root, run a real plan with that profile. Replace `ACCOUNT_ID` and `PILOT_HOSTNAME` with the project's data. Save the plan locally to review the resources and the expected consumption of EC2, EBS, IPv4, KMS, S3, SQS and ECR before approving the creation.
+3. From the repository root, run a real plan with that profile. Replace `ACCOUNT_ID` and `PILOT_HOSTNAME` with the project's data. Save the plan locally to review the resources and the expected consumption of EC2, EBS, IPv4, KMS, S3, SQS and ECR before approving the creation.
 
 ```bash
 (
@@ -95,7 +96,7 @@ A stopped instance does not charge for compute, but the EBS disk and the Elastic
 
 ## Update images
 
-1. Rehearse the change locally (`make up`) and, if it touches Terraform, in Floci (`make rehearse`).
+1. Rehearse the change locally (`make up`) and, if it touches Terraform, in AWS Emulator (`make rehearse`).
 2. Build and publish the new images with a new tag (ECR tags are immutable) and note the digests.
 3. Update the `repo@sha256:...` references in `/opt/ragsis/.env.pilot`, keeping the passwords and the internal secret.
 4. Run `docker compose ... pull` and `up -d --wait` as in the initial start-up.

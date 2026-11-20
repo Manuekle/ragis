@@ -133,6 +133,27 @@ export function SkeletonRunRows({ count = 5 }: { count?: number }) {
   );
 }
 
+export function SkeletonActivityRows({ count = 6 }: { count?: number }) {
+  return (
+    <div className="card act-list" aria-hidden="true">
+      {range(count).map((i) => (
+        <div key={i} className="act-row">
+          <span className="meta">
+            <span className="title">
+              <Skel w={i % 2 === 0 ? "46%" : "38%"} h={14} />
+            </span>
+            <Skel w={i % 3 === 0 ? "58%" : "48%"} h={11} />
+          </span>
+          <span className="cell wait-cell">{i === 1 && <Skel w={110} h={22} r={999} />}</span>
+          <span className="cell state-cell">
+            <Skel w={84} h={22} r={999} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SkeletonTable({
   rows = 6,
   columns,

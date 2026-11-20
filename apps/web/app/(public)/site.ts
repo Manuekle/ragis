@@ -1,15 +1,27 @@
 // Public-site settings for the homepage, pricing and legal pages.
+import type { Locale } from "@/lib/i18n";
 
 export const site = {
   name: "Ragis",
   legalEntity: process.env.LEGAL_ENTITY ?? "Ragis",
   contactEmail: process.env.CONTACT_EMAIL ?? null,
   /** Date shown on Terms and Privacy. Bump it whenever either text changes. */
-  legalUpdated: "November 9, 2026",
+  legalUpdated: "November 14, 2026",
   /** One line on what Ragis is: page titles, share cards, search results and AI answers all reuse it. */
   tagline: "Cited AI answers from your company documents",
   description:
     "Ragis reads your company's PDFs, Word files, slides, spreadsheets and scans, and answers questions with the exact page each claim came from. Permission-aware and PII-redacted.",
+};
+
+/** The words of `site` in each language: tagline and description feed page titles, share cards and search results. */
+export const SITE_TEXT: Record<Locale, { tagline: string; description: string; legalUpdated: string }> = {
+  en: { tagline: site.tagline, description: site.description, legalUpdated: site.legalUpdated },
+  es: {
+    tagline: "Respuestas con citas de los documentos de tu empresa",
+    description:
+      "Ragis lee los PDF, archivos de Word, presentaciones, hojas de cálculo y escaneos de tu empresa, y responde con la página exacta de la que sale cada afirmación. Respeta permisos y oculta datos personales.",
+    legalUpdated: "14 de noviembre de 2026",
+  },
 };
 
 /**
@@ -30,11 +42,26 @@ export function absoluteUrl(path = "/"): string {
 /** The indexable public pages, in the order the sitemap and llms.txt list them. `updated` is the last real content change. */
 export const PUBLIC_PAGES = [
   { path: "/", title: "Ragis", summary: "What Ragis is, how it answers from your documents with page citations, and how it keeps data private.", updated: "2026-11-10", priority: 1 },
-  { path: "/pricing", title: "Pricing", summary: "Team Cloud, Business Cloud, Private Cloud and self-hosted plans, with quotas and prices.", updated: "2026-11-10", priority: 0.9 },
-  { path: "/waitlist", title: "Waitlist", summary: "Join the waitlist for early access, or back the project as a sponsor.", updated: "2026-11-10", priority: 0.8 },
-  { path: "/privacy", title: "Privacy Policy", summary: "What Ragis collects, why, where it is stored and how to control it.", updated: "2026-11-09", priority: 0.3 },
-  { path: "/terms", title: "Terms of Service", summary: "The terms that govern use of Ragis.", updated: "2026-11-09", priority: 0.3 },
+  { path: "/pricing", title: "Pricing", summary: "Team Cloud, Business Cloud, Private Cloud and self-hosted plans, with quotas and prices.", updated: "2026-11-14", priority: 0.9 },
+  { path: "/waitlist", title: "Waitlist", summary: "Join the waitlist for early access to answers your company can cite.", updated: "2026-11-14", priority: 0.8 },
+  { path: "/privacy", title: "Privacy Policy", summary: "What Ragis collects, why, where it is stored and how to control it.", updated: "2026-11-14", priority: 0.3 },
+  { path: "/terms", title: "Terms of Service", summary: "The terms that govern use of Ragis.", updated: "2026-11-14", priority: 0.3 },
 ] as const;
+
+/** Title and summary of each public page in Spanish; English ones sit in PUBLIC_PAGES. */
+export const PUBLIC_PAGES_ES: Record<PublicPath, { title: string; summary: string }> = {
+  "/": { title: "Ragis", summary: "Qué es Ragis, cómo responde desde tus documentos con citas de página y cómo protege la privacidad de los datos." },
+  "/pricing": { title: "Precios", summary: "Planes Team Cloud, Business Cloud, Private Cloud y autoalojado, con cuotas y precios." },
+  "/waitlist": { title: "Lista de espera", summary: "Únete a la lista de espera para el acceso anticipado a respuestas que tu empresa puede citar." },
+  "/privacy": { title: "Política de privacidad", summary: "Qué datos recoge Ragis, por qué, dónde se guardan y cómo controlarlos." },
+  "/terms": { title: "Términos del servicio", summary: "Los términos que rigen el uso de Ragis." },
+};
+
+/** A public page's title and summary in a language. */
+export function pageInfo(locale: Locale, path: PublicPath): { title: string; summary: string } {
+  const en = PUBLIC_PAGES.find((page) => page.path === path)!;
+  return locale === "es" ? PUBLIC_PAGES_ES[path] : { title: en.title, summary: en.summary };
+}
 
 export type PublicPath = (typeof PUBLIC_PAGES)[number]["path"];
 
@@ -53,12 +80,17 @@ export const publicOnly = process.env.PUBLIC_SITE_ONLY === "1";
 /** Where "Sign in" and "Get started" go. */
 export const signInHref = publicOnly ? "/waitlist" : "/login";
 export const signInLabel = publicOnly ? "Join the waitlist" : "Sign in";
+/** The same label in a language. */
+export const signInLabelFor = (locale: Locale) => (locale === "es" ? (publicOnly ? "Unirse a la lista de espera" : "Iniciar sesión") : signInLabel);
 
 /** Where "Contact sales" goes: a mailto when CONTACT_EMAIL is set, otherwise sign-in. */
 export const salesHref = site.contactEmail ? `mailto:${site.contactEmail}?subject=Ragis%20sales` : signInHref;
 
 const bookingUrl = URL.parse(process.env.DEMO_BOOKING_URL ?? "");
 const demoEmail = site.contactEmail?.trim();
+
+/** The demo button's label in a language; the link is the same. */
+export const demoLabel = (locale: Locale) => (bookingUrl?.protocol === "https:" ? (locale === "es" ? "Reservar una demo" : "Book a demo") : locale === "es" ? "Solicitar una demo" : "Request a demo");
 
 export const demoCta = bookingUrl?.protocol === "https:"
   ? { label: "Book a demo", href: bookingUrl.href }

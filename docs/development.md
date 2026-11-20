@@ -9,7 +9,7 @@
 | `pnpm` | 12.x (`packageManager`) | Node workspace |
 | Node | 24 or later | API and web |
 | Terraform | 1.9.x | Infrastructure (CI uses 1.9.8) |
-| Floci | 2.x | Infrastructure rehearsal ([guide](guides/floci.md)) |
+| Docker | 24+ | Also runs AWS Emulator for the infrastructure rehearsal ([guide](guides/aws-emulator.md)) |
 
 ## First run
 
@@ -46,6 +46,31 @@ make seed        # idempotent: if it already exists, it only repeats the quick A
 
 These emails exist only in your local database; they are not in Cognito or AWS. To start over: `make down` and delete
 the Postgres volume (`docker volume rm ragsis_pgdata`), then `make up` and `make seed`.
+
+### Judicial demo (for recordings and sales demos)
+
+```bash
+make seed-judicial        # "Ortiz Lozano Abogados": Sentencia C-217 de 2026 + firm files, agents, workflows
+make seed-judicial-week   # then: ten days of use, dated back (about 20 minutes with a local model)
+```
+
+`make seed-judicial-week` makes the firm look like it has used Ragis for over a week: seven people with names from the
+case files, three teams with requests between them, folders, eight new documents (one with a second version), about
+eighteen Ask conversations (some produce a PDF, Word, PowerPoint or Excel file), workflow runs approved and rejected
+across the week with three still waiting today, a partners' minute signed by both partners, a power of attorney
+waiting for the client's signature, and version 1.1.0 of the case searcher. Every action goes through the API and is
+then dated back to its day and hour in Postgres; the audit chain is recomputed so it still verifies. Don't use the
+organization while it runs: anything done meanwhile is dated into the story. It is safe to run again (it resumes).
+
+| Person | Email | What they show |
+|---|---|---|
+| Mariana Ortiz Lozano | `socia@ortizlozano.test` | Partner and owner: approvals, signatures, requests waiting on her |
+| Tomás Rengifo Bernal | `asociado@ortizlozano.test` | Associate: does not see the fee memo; a review waits on him |
+| Ricardo Lozano Pérez | `ricardo@ortizlozano.test` | Second partner (admin, auditor) |
+| Laura Méndez Quintero | `laura@ortizlozano.test` | Associate, leads legal research |
+| Andrés Felipe Quintana | `andres@ortizlozano.test` | Billing lead |
+| Camilo Herrera Duque | `camilo@ortizlozano.test` | Paralegal |
+| Daniela Suárez Pinto | `daniela@ortizlozano.test` | Administrative assistant (no access to the case file) |
 
 Questions to try in **Ask**. The sample corpus is in Spanish, so type the questions as written; the middle column is
 only a translation for reference.
@@ -114,7 +139,8 @@ español." ("Answer in Spanish.") when it detects a Spanish question.
 | `make reindex ARGS="--org <uuid> --mode embeddings --model <id> --dry-run"` | Reindex ([runbook](../ops/runbooks/reindex.md)) |
 | `make mock-oidc` | Test OIDC IdP at <http://localhost:9000> |
 | `make tf-validate` | `terraform validate` of the `dev` environment in Docker |
-| `make rehearse-plan` / `rehearse` / `rehearse-destroy` | Terraform rehearsal in Floci |
+| `make emulator-up` / `emulator-down` | Start or stop AWS Emulator (Docker) |
+| `make rehearse-plan` / `rehearse` / `rehearse-destroy` | Terraform rehearsal in AWS Emulator |
 | `make diagrams` | Regenerates the SVGs in `docs/diagrams` |
 
 ## Repository map
@@ -124,14 +150,14 @@ apps/
   web/                Next.js 16: UI and BFF (login, session, /api/auth/* routes)
   api/                Fastify: routes, authZ, uploads, agents, workflows, signatures, connectors
 services/
-  rag-engine/         FastAPI: query (retrieval, fusion, generation, verifier)
-  ingest-worker/      SQS consumer: validation, parsing, OCR, chunking, embeddings, index
+  rag-engine/         FastAPI: query (full text + vectors + graph, fusion, generation, verifier)
+  ingest-worker/      SQS consumer: validation, parsing, OCR, speech to text, chunking, graph, embeddings, index
   ai-gateway/         Model registry, residency policy, providers (local, bedrock, ollama)
 packages/
   ragsis-core/        Settings, DB with RLS context, internal token, telemetry
   contracts/          OpenAPI v1
   policy/             Authorization test index
-db/migrations/        0001…0013: schema, forced RLS, bounded functions
+db/migrations/        0001…0017: schema, forced RLS, bounded functions
 infra/
   docker/             compose.yml (local), compose.pilot.yml (pilot), Caddyfile.pilot
   terraform/
@@ -142,17 +168,18 @@ ops/runbooks/         Operational procedures
 eval/                 Golden set, sample corpus and metrics harness
 docs/                 This documentation, ADRs, diagrams and icons
 scripts/              dev-env.sh, e2e.py, aws-rehearsal.sh
-tests/python/         pytest: isolation, ingestion, RAG, multimodal, graph, traces
+tests/python/         pytest: isolation, ingestion, RAG, multimodal, audio, graph, traces
 ```
 
 ## Tests
 
 | Suite | Where | Covers |
 |---|---|---|
-| Python | `tests/python/` | RLS isolation, ACL in retrieval, RAG flow, multimodal, graph, reindex and OCR, traces |
-| API | `apps/api/test/` | Tenancy and roles, OIDC, signatures, Agent Studio, workflows, connectors |
+| Python | `tests/python/` | RLS isolation, ACL in retrieval, RAG flow, multimodal, audio, cross-modal graph, reindex and OCR, traces |
+| API | `apps/api/test/` | Tenancy and roles, OIDC, signatures, Agent Studio, workflows, connectors, conversations, folders and transcripts |
 | Web types | `pnpm --filter @ragsis/web lint` (`tsc --noEmit`) | The web has no test suite; it is validated with types |
 | E2E | `make e2e` | Full stack with the golden set (`eval/golden/sample.yaml`) |
+| Judicial case | `uv run python -m ragsis_eval.run --golden eval/golden/judicial.yaml` | Law-firm file for Sentencia C-217 de 2026: PDF, DOCX, XLSX, PPTX, TXT, HTML, permissions and multi-hop (corpus built by `eval/corpus/judicial/build_corpus.py`) |
 
 The Python and API suites need `make infra` (or `make test`, which brings it up).
 
@@ -179,7 +206,7 @@ to 200 real questions per vertical.
 - **Secrets:** never in Git or in its history; see [security.md](security.md).
 - **Language:** the README and all documentation are written in English; the UI is plain English for non-technical
   people, with expert options inside "Advanced" with sensible defaults.
-- **AWS:** every infrastructure change is rehearsed first in Floci ([guides/floci.md](guides/floci.md)).
+- **AWS:** every infrastructure change is rehearsed first in AWS Emulator ([guides/aws-emulator.md](guides/aws-emulator.md)).
 
 ## Recipes
 

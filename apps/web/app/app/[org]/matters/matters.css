@@ -1,0 +1,88 @@
+/* Expedientes (ADR-037): the list grouped by client, the side panel, the form and the expediente tags elsewhere. */
+
+.matter-table .matter-client-row th {
+  padding: 14px 16px 8px;
+  background: transparent;
+  border-bottom: 0;
+  text-align: left;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.matter-table tbody + tbody .matter-client-row th { border-top: 1px solid var(--border); }
+.matter-client-row .count { margin-left: 8px; color: var(--faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+.matter-open { font-weight: 500; text-align: left; }
+.matter-row[aria-selected="true"] td { background: var(--surface-2); }
+.matter-table a.btn.icon { width: 32px; padding: 0; justify-content: center; }
+
+.badge.matter-status:not(.ok, .accent) { background: var(--surface-2); color: var(--muted); }
+.matter-case { font-size: 12px; color: var(--muted); }
+.matter-empty { max-width: 560px; margin: 0 auto; text-align: center; }
+
+.matter-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
+.matter-form .field { min-width: 0; }
+.matter-form .select-trigger { width: 100%; }
+@media (max-width: 640px) { .matter-form { grid-template-columns: minmax(0, 1fr); } }
+.matter-privacy { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; }
+.matter-create-link { align-self: flex-start; margin-top: 8px; font-size: 13px; }
+
+.matter-docs { display: flex; flex-direction: column; gap: 14px; }
+.matter-space { margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.matter-docs ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.matter-docs li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.matter-docs .doc-open { text-align: left; }
+
+/* The expediente a document belongs to, under its title in the library. */
+.matter-tag { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; color: var(--text-2); }
+.matter-tag .svg-icon { flex: none; color: var(--accent); }
+.matter-tag .ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-group-row th {
+  padding: 12px 16px 6px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.library-group-row .muted { margin-left: 6px; font-weight: 400; }
+
+/* Ask: the scope the next question searches, and the scope each answer used. */
+.scope-chip.is-set { background: var(--accent-soft); color: var(--accent-text); }
+.scope-chip .scope-clear { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; border-radius: 999px; color: inherit; background: transparent; }
+@media (hover: hover) { .scope-chip .scope-clear:hover { background: color-mix(in oklab, currentColor 14%, transparent); } }
+.scope-search { margin: 4px 6px 6px; }
+.scope-search input { width: 100%; height: 34px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 13.5px; color: var(--text); }
+.scope-empty { padding: 6px 12px 10px; font-size: 13px; color: var(--muted); }
+.answer-scope .svg-icon { color: var(--accent); }
+.scope-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.doc-pick { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; margin: 6px 0 0; padding: 0; list-style: none; }
+.doc-pick label { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 8px; border-radius: var(--r-md); cursor: pointer; }
+@media (hover: hover) { .doc-pick label:hover { background: var(--surface-2); } }
+.doc-pick .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Library toolbar: expediente filter and grouping. */
+.library-matter-tools { gap: 8px; flex-wrap: wrap; }
+.library-matter-tools .select-trigger { max-width: 260px; }
+button.ghost.is-on { background: var(--accent-soft); color: var(--accent-text); }
+.library-group-row a { color: inherit; }
+
+/* A long expediente name must never push the send button out of the composer: the value truncates and, if the
+   chips still don't fit, they wrap onto a second row with send kept at the end. */
+.composer-bar { flex-wrap: wrap; row-gap: 6px; }
+.composer-bar .send { flex: none; }
+.scope-chip { min-width: 0; max-width: 100%; }
+.scope-chip .date-trigger { min-width: 0; }
+.scope-chip .date-value { min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-chip .date-trigger > .svg-icon { flex: none; }
+
+/* When the table hides its columns (globals.css: .hide-sm at 860px), the same facts move under the title. */
+.matter-compact, .matter-inline { display: none; }
+@media (max-width: 860px) {
+  .matter-compact { display: block; }
+  .matter-inline { display: inline-flex; margin-top: 2px; font-size: 12.5px; }
+}
+.doc-pick input[type="checkbox"] { appearance: auto; flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; border-radius: 4px; box-shadow: none; accent-color: var(--accent); cursor: pointer; }

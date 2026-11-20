@@ -169,12 +169,15 @@ class NoQueue implements Queue {
 /** RAG falso: cita cuando hay evidencia ("vacaciones"), se abstiene en otro caso. Registra el workspace pedido. */
 class FakeRag implements RagClient {
   calls: string[] = [];
+  /** Documento citado en cada espacio. Como el rag-engine real, solo cita documentos que existen en el espacio buscado. */
+  policy: Record<string, string> = {};
   async query(token: string, body: Record<string, unknown>) {
     const claims = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString());
     this.calls.push(claims.ws ?? claims.workspace_id ?? "");
     const q = String(body.question);
     if (/vacaciones/i.test(q)) {
-      return { status: 200, body: { trace_id: "qry_" + "1".repeat(24), answer: "Son 15 días hábiles [1].", abstained: false, citations: [{ n: 1, document_id: randomUUID(), title: "Política", page: 2, snippet: "15 días hábiles" }] } };
+      const doc = this.policy[claims.ws] ?? randomUUID();
+      return { status: 200, body: { trace_id: "qry_" + "1".repeat(24), answer: "Son 15 días hábiles [1].", abstained: false, citations: [{ n: 1, document_id: doc, title: "Política", page: 2, snippet: "15 días hábiles" }] } };
     }
     return { status: 200, body: { trace_id: "qry_" + "2".repeat(24), answer: "", abstained: true, abstain_reason: "insufficient_evidence", citations: [] } };
   }
@@ -298,8 +301,10 @@ describe("onboarding", () => {
     expect(s6.result.spaces.created.map((w: { name: string }) => w.name)).toEqual(["Contracts", "Case files"]);
     expect(s6.result.spaces.kept.map((w: { name: string }) => w.name)).toEqual(["General"]); // no duplica por mayúsculas
 
-    const s7 = (await step(7, { agents: ["contract_auditor", "reviewer", "signature_coordinator"] })).json();
+    const copy = { contract_auditor: { name: "Auditor de contratos", purpose: "Compara cláusulas con la política aprobada y marca diferencias." } };
+    const s7 = (await step(7, { agents: ["contract_auditor", "reviewer", "signature_coordinator"], copy })).json();
     expect(s7.result.agents.created.map((a: { template: string }) => a.template)).toEqual(["contract_auditor", "reviewer", "signature_coordinator"]);
+    expect((await call(owner, "GET", `/v1/organizations/${org}`)).json().sector).toBe("legal");
     expect(s7.result.agents.skipped).toEqual([]);
 
     expect((await step(8, {}, "skip")).statusCode).toBe(200);
@@ -310,6 +315,10 @@ describe("onboarding", () => {
     const auditor = agents.find((a: { slug: string }) => a.slug === "contract-auditor");
     const detail = (await call(owner, "GET", `/v1/organizations/${org}/agents/${auditor.id}`)).json();
     expect(detail.draft.knowledge.space_ids).toHaveLength(3);
+    // Saved with the name and purpose the person read in Setup; the template's instructions stay as they are.
+    expect(detail.draft.name).toBe("Auditor de contratos");
+    expect(detail.draft.purpose).toBe(copy.contract_auditor.purpose);
+    expect(agents.find((a: { slug: string }) => a.slug === "reviewer").name).toBe("Reviewer");
   });
 
   it("caso 10: cambiar Legal → Mixto propone, no borra ni sobrescribe agentes", async () => {
@@ -348,6 +357,30 @@ describe("agent studio", () => {
     privateWs = (await call(owner, "POST", `/v1/organizations/${org}/workspaces`, { name: "Board" })).json().id;
     const m = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "mario@studio.test", role: "member" })).json();
     await call(owner, "POST", `/v1/organizations/${org}/workspaces/${ws}/members`, { user_id: m.user_id, role: "reader" });
+    for (const space of [ws, privateWs]) {
+      const up = await call(owner, "POST", `/v1/organizations/${org}/documents/uploads`, {
+        workspace_id: space, filename: "politica-vacaciones.md", content_type: "text/markdown", size_bytes: 10, title: "Política de vacaciones",
+      });
+      expect(up.statusCode, up.body).toBe(201);
+      rag.policy[space] = up.json().document_id;
+    }
+  });
+
+  it("plantillas legales en el catálogo y agente creado con nombre y propósito en el idioma de quien lee", async () => {
+    const catalog = (await call(owner, "GET", `/v1/organizations/${org}/agents/catalog`)).json();
+    expect(catalog.sector_templates.legal.slice(0, 4)).toEqual(["case_summary", "chronology", "case_law", "due_diligence"]);
+    for (const code of catalog.sector_templates.legal) expect(catalog.templates.some((t: { code: string }) => t.code === code)).toBe(true);
+    const r = await call(owner, "POST", `/v1/organizations/${org}/agents`, { template: "chronology", name: "Cronología de hechos", purpose: "Arma una línea de tiempo con la fuente de cada hecho.", space_ids: [ws] });
+    expect(r.statusCode, r.body).toBe(201);
+    expect(r.json().validation).toMatchObject({ ok: true, errors: [] });
+    // Every new legal template passes the tenant policy as it comes (read-only tools, suggest only).
+    for (const template of ["case_summary", "case_law", "due_diligence"]) {
+      const v = (await call(owner, "POST", `/v1/organizations/${org}/agents`, { template, space_ids: [ws] })).json().validation;
+      expect(v, template).toMatchObject({ ok: true, errors: [] });
+    }
+    const d = (await call(owner, "GET", `/v1/organizations/${org}/agents/${r.json().id}`)).json();
+    expect(d.draft).toMatchObject({ name: "Cronología de hechos", purpose: "Arma una línea de tiempo con la fuente de cada hecho.", autonomy: "suggest" });
+    expect(d.slug).toBe("chronology");
   });
 
   it("caso 3: crear desde plantilla → publicar sin test se deniega (y se audita) → test → publicar 1.0.0", async () => {

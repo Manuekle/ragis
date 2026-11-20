@@ -1,11 +1,18 @@
-import Link from "next/link";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
+import { getLocale } from "@/lib/locale";
 import { breadcrumbLd, JsonLd, pageMetadata, webPageLd } from "@/lib/seo";
 import { ContactLine, LegalPage, type LegalSection } from "../LegalPage";
 import { pageUpdated, site } from "../site";
+import { FOUNDING_PACKAGES_OPEN, REFUND_POLICY, REFUND_POLICY_ES } from "../waitlist/sponsors";
 
 const DESCRIPTION = "The terms that govern use of Ragis: accounts and access, your content, acceptable use, AI-generated answers, plans and fees, security, and liability.";
 
-export const metadata = pageMetadata({ title: "Terms of Service", description: DESCRIPTION, path: "/terms" });
+const DESCRIPTION_ES = "Los términos que rigen el uso de Ragis: cuentas y acceso, tu contenido, uso aceptable, respuestas generadas por IA, planes y tarifas, seguridad y responsabilidad.";
+
+export async function generateMetadata() {
+  const locale = await getLocale();
+  return locale === "es" ? pageMetadata({ title: "Términos del servicio", description: DESCRIPTION_ES, path: "/terms", locale }) : pageMetadata({ title: "Terms of Service", description: DESCRIPTION, path: "/terms" });
+}
 
 // Template text: have counsel review it before launch and keep it in line with your order forms and DPA.
 const SECTIONS: LegalSection[] = [
@@ -79,6 +86,24 @@ const SECTIONS: LegalSection[] = [
       </>
     ),
   },
+  // Only while founding packages are offered (FOUNDING_PACKAGES_OPEN).
+  ...(FOUNDING_PACKAGES_OPEN
+    ? [
+        {
+          id: "founding-packages",
+          title: "Founding packages",
+          body: (
+            <>
+              <p>
+                A founding package (Supporter, Backer or Founding partner, described on the <Link href="/waitlist">waitlist page</Link>) is a one-time payment for early access to the Ragis software before it opens to the public, together with the extras listed for that package. Seats are limited for each package, and access is granted by invitation, in small groups, with founding package holders first.
+              </p>
+              <p>A founding package is not a donation or an investment. It carries no equity, no revenue share and no return. Once access opens, your use of Ragis is governed by these terms.</p>
+              <p>{REFUND_POLICY}</p>
+            </>
+          ),
+        },
+      ]
+    : []),
   {
     id: "security",
     title: "Security and confidentiality",
@@ -128,11 +153,163 @@ const SECTIONS: LegalSection[] = [
   },
 ];
 
-export default function TermsPage() {
+
+// Spanish version of the same sections, in the same order. A translation of the text above: change both together, and have counsel review it before launch.
+const SECTIONS_ES: LegalSection[] = [
+  {
+    id: "agreement",
+    title: "Acuerdo",
+    body: (
+      <>
+        <p>
+          Estos términos rigen el acceso y el uso de Ragis (el &ldquo;Servicio&rdquo;), prestado por {site.legalEntity}. Al crear una cuenta o usar el Servicio en nombre de una organización, aceptas estos términos para esa organización.
+        </p>
+        <p>Si tienes con nosotros un formulario de pedido o un contrato marco firmado, ese documento prevalece en lo que se contradiga con estos términos.</p>
+      </>
+    ),
+  },
+  {
+    id: "accounts",
+    title: "Cuentas y acceso",
+    body: (
+      <>
+        <p>Tu organización controla quién puede iniciar sesión, qué espacios de trabajo ve y qué documentos puede leer. Los propietarios y administradores son responsables de gestionar miembros y roles.</p>
+        <p>Mantén tus credenciales en secreto y avísanos sin demora de cualquier acceso no autorizado. Si tu organización usa inicio de sesión único, el acceso depende de tu proveedor de identidad.</p>
+      </>
+    ),
+  },
+  {
+    id: "content",
+    title: "Tu contenido",
+    body: (
+      <>
+        <p>Conservas todos los derechos sobre los documentos que subes y las preguntas que haces (el &ldquo;Contenido del Cliente&rdquo;). Solo nos concedes los derechos necesarios para alojar, indexar y tratar el Contenido del Cliente con el fin de prestarte el Servicio.</p>
+        <p>No usamos el Contenido del Cliente para entrenar modelos de IA. Confirmas que tienes derecho a subirlo, incluidos los datos personales que contenga.</p>
+      </>
+    ),
+  },
+  {
+    id: "acceptable-use",
+    title: "Uso aceptable",
+    body: (
+      <>
+        <p>Te comprometes a no:</p>
+        <ul>
+          <li>subir malware ni contenido que no tengas derecho a compartir;</li>
+          <li>intentar acceder a los datos de otra organización ni eludir permisos, cuotas o límites de frecuencia;</li>
+          <li>sondear, escanear ni someter a pruebas de carga el Servicio sin permiso por escrito;</li>
+          <li>usar el Servicio para infringir la ley o vulnerar los derechos de otros.</li>
+        </ul>
+        <p>Podemos suspender el acceso que ponga en riesgo el Servicio o a otros clientes, y te explicaremos el motivo cuando podamos.</p>
+      </>
+    ),
+  },
+  {
+    id: "ai-answers",
+    title: "Respuestas generadas por IA",
+    body: (
+      <>
+        <p>Las respuestas las genera una IA a partir de los documentos a los que tienes acceso y enlazan a los pasajes en los que se apoyan. Ragis se niega a responder cuando no encuentra respaldo, pero las respuestas aun así pueden ser incompletas o incorrectas.</p>
+        <p>Comprueba las fuentes citadas antes de apoyarte en una respuesta para decisiones legales, financieras, médicas u otras decisiones importantes. Sigues siendo responsable de esas decisiones.</p>
+      </>
+    ),
+  },
+  {
+    id: "plans",
+    title: "Planes, tarifas y cuotas",
+    body: (
+      <>
+        <p>
+          Las tarifas se facturan por adelantado según el calendario mensual o anual que indique tu formulario de pedido (consulta los <Link href="/pricing">precios</Link>), más la cuota de configuración única que figure en él. Cada plan incluye cuotas mensuales de consultas, documentos, almacenamiento y tamaño de archivo, y un límite de frecuencia por minuto.
+        </p>
+        <p>Al alcanzar una cuota, las nuevas solicitudes de ese tipo se bloquean hasta el siguiente periodo o hasta que mejores de plan. Las tarifas no incluyen impuestos y no son reembolsables, salvo que la ley o tu contrato dispongan otra cosa.</p>
+      </>
+    ),
+  },
+  // Only while founding packages are offered (FOUNDING_PACKAGES_OPEN).
+  ...(FOUNDING_PACKAGES_OPEN
+    ? [
+        {
+          id: "founding-packages",
+          title: "Paquetes fundadores",
+          body: (
+            <>
+              <p>
+                Un paquete fundador (Supporter, Backer o Founding partner, descritos en la <Link href="/waitlist">página de la lista de espera</Link>) es un pago único por el acceso anticipado al software de Ragis antes de que se abra al público, junto con los extras indicados para ese paquete. Las plazas de cada paquete son limitadas y el acceso se concede por invitación, en grupos pequeños, empezando por quienes tienen un paquete fundador.
+              </p>
+              <p>Un paquete fundador no es una donación ni una inversión. No otorga participación en el capital, ni parte de los ingresos, ni rentabilidad alguna. Cuando se abra el acceso, tu uso de Ragis se rige por estos términos.</p>
+              <p>{REFUND_POLICY_ES}</p>
+            </>
+          ),
+        },
+      ]
+    : []),
+  {
+    id: "security",
+    title: "Seguridad y confidencialidad",
+    body: (
+      <p>
+        Protegemos el Contenido del Cliente con aislamiento entre clientes, comprobaciones de permisos antes de recuperar información, cifrado en tránsito y en reposo, y acceso administrativo auditado. Cada parte mantiene en privado la información confidencial de la otra y la usa solo para cumplir estos términos. Los detalles están en nuestra <Link href="/privacy">política de privacidad</Link> y, si se ha firmado, en tu acuerdo de tratamiento de datos.
+      </p>
+    ),
+  },
+  {
+    id: "availability",
+    title: "Disponibilidad y soporte",
+    body: <p>Trabajamos para que el Servicio esté disponible y podemos realizar mantenimientos programados. Los compromisos de nivel de servicio solo se aplican cuando constan por escrito en tu contrato, como ocurre con Private Cloud.</p>,
+  },
+  {
+    id: "termination",
+    title: "Duración, terminación y tus datos",
+    body: (
+      <>
+        <p>Estos términos duran mientras uses el Servicio. Cualquiera de las partes puede darlos por terminados según establezca tu formulario de pedido, o de inmediato si la otra los incumple de forma sustancial y no lo subsana en los 30 días siguientes al aviso.</p>
+        <p>Antes de que se cierre tu cuenta puedes exportar tus documentos. Tras el cierre eliminamos el Contenido del Cliente del Servicio activo, incluido su índice de búsqueda, y las copias de seguridad caducan según su calendario habitual.</p>
+      </>
+    ),
+  },
+  {
+    id: "liability",
+    title: "Exclusiones y responsabilidad",
+    body: (
+      <p>
+        Salvo lo indicado en estos términos, el Servicio se presta &ldquo;tal cual&rdquo;. En la medida en que la ley lo permita, ninguna de las partes responde de daños indirectos ni consecuentes, y la responsabilidad total de cada parte se limita a las tarifas pagadas en los doce meses anteriores a la reclamación.
+      </p>
+    ),
+  },
+  {
+    id: "changes",
+    title: "Cambios",
+    body: <p>Podemos actualizar estos términos. Si los cambios son importantes, avisaremos a los propietarios de la organización con al menos 30 días de antelación. Seguir usando el Servicio cuando el cambio entre en vigor supone que lo aceptas.</p>,
+  },
+  {
+    id: "contact",
+    title: "Ley aplicable y contacto",
+    body: (
+      <p>
+        La ley aplicable y el foro son los que indique tu formulario de pedido. Para consultas sobre estos términos, <ContactLine />.
+      </p>
+    ),
+  },
+];
+
+export default async function TermsPage() {
+  const locale = await getLocale();
+  const es = locale === "es";
   return (
     <>
-      <JsonLd graph={[webPageLd({ path: "/terms", name: "Terms of Service", description: DESCRIPTION, updated: pageUpdated("/terms") }), breadcrumbLd([{ name: "Terms of Service", path: "/terms" }])]} />
-      <LegalPage title="Terms of Service." lead="The rules for using Ragis, written to be read." sections={SECTIONS} art="terms" />
+      <JsonLd
+        graph={[
+          webPageLd({ path: "/terms", name: es ? "Términos del servicio" : "Terms of Service", description: es ? DESCRIPTION_ES : DESCRIPTION, updated: pageUpdated("/terms"), locale }),
+          breadcrumbLd([{ name: es ? "Términos del servicio" : "Terms of Service", path: "/terms" }], locale),
+        ]}
+      />
+      <LegalPage
+        title={es ? "Términos del servicio." : "Terms of Service."}
+        lead={es ? "Las reglas para usar Ragis, escritas para que se lean." : "The rules for using Ragis, written to be read."}
+        sections={es ? SECTIONS_ES : SECTIONS}
+        art="terms"
+      />
     </>
   );
 }

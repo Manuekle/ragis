@@ -1,5 +1,6 @@
 import "server-only";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import type { Locale } from "./i18n";
 
 /**
  * The email that confirms a waitlist sign-up, sent with Amazon SES like the app's signature
@@ -19,32 +20,54 @@ export function confirmMode(): ConfirmMode {
 
 let client: SESv2Client | undefined;
 
+const MAIL = {
+  en: {
+    subject: "Confirm your place on the Ragis waitlist",
+    intro: "Confirm your email to save your place on the Ragis waitlist and open your badge:",
+    fine: "The link works for 24 hours and only once. If you didn't ask to join, ignore this email and nothing happens.",
+    heading: "Confirm your place on the waitlist",
+    lead: "One click saves your place and opens your badge.",
+    button: "Confirm my email",
+    or: "Or open this link:",
+  },
+  es: {
+    subject: "Confirma tu lugar en la lista de espera de Ragis",
+    intro: "Confirma tu correo para guardar tu lugar en la lista de espera de Ragis y abrir tu insignia:",
+    fine: "El enlace funciona durante 24 horas y solo una vez. Si no pediste unirte, ignora este correo y no pasará nada.",
+    heading: "Confirma tu lugar en la lista de espera",
+    lead: "Un clic guarda tu lugar y abre tu insignia.",
+    button: "Confirmar mi correo",
+    or: "O abre este enlace:",
+  },
+};
+
 const escape = (text: string) => text.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch] ?? ch);
 
 /** Sends the confirmation link. Throws when SES refuses or does not answer in ten seconds. */
-export async function sendConfirmEmail(to: string, url: string): Promise<void> {
+export async function sendConfirmEmail(to: string, url: string, locale: Locale = "en"): Promise<void> {
+  const m = MAIL[locale];
   const from = process.env.WAITLIST_EMAIL_FROM;
   if (!from) throw new Error("WAITLIST_EMAIL_FROM is not set");
   // Region and credentials come from the environment (AWS_REGION and the server's own role).
   client ??= new SESv2Client({});
   const text = [
-    "Confirm your email to save your place on the Ragis waitlist and open your badge:",
+    m.intro,
     "",
     url,
     "",
-    "The link works for 24 hours and only once. If you didn't ask to join, ignore this email and nothing happens.",
+    m.fine,
   ].join("\n");
   const href = escape(url);
-  const html = `<!doctype html><html><body style="margin:0;padding:32px 16px;background:#eeeef0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#18181b">
+  const html = `<!doctype html><html lang="${locale}"><body style="margin:0;padding:32px 16px;background:#eeeef0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#18181b">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fbfbfc;border-radius:20px;border:1px solid #e4e4e7"><tr><td style="padding:32px">
 <p style="margin:0 0 24px;font-size:20px;font-family:Georgia,'Times New Roman',serif">Ragis</p>
-<p style="margin:0 0 8px;font-size:22px;line-height:1.25">Confirm your place on the waitlist</p>
-<p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#52525b">One click saves your place and opens your badge.</p>
-<p style="margin:0 0 24px"><a href="${href}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#0a84ff;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none">Confirm my email</a></p>
-<p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#68686f">Or open this link:</p>
+<p style="margin:0 0 8px;font-size:22px;line-height:1.25">${m.heading}</p>
+<p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#52525b">${m.lead}</p>
+<p style="margin:0 0 24px"><a href="${href}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#0a84ff;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none">${m.button}</a></p>
+<p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#68686f">${m.or}</p>
 <p style="margin:0 0 24px;font-size:13px;line-height:1.5;word-break:break-all"><a href="${href}" style="color:#0068d6">${href}</a></p>
-<p style="margin:0;font-size:13px;line-height:1.5;color:#68686f">The link works for 24 hours and only once. If you didn't ask to join, ignore this email and nothing happens.</p>
+<p style="margin:0;font-size:13px;line-height:1.5;color:#68686f">${m.fine}</p>
 </td></tr></table></td></tr></table></body></html>`;
 
   await client.send(
@@ -53,7 +76,7 @@ export async function sendConfirmEmail(to: string, url: string): Promise<void> {
       Destination: { ToAddresses: [to] },
       Content: {
         Simple: {
-          Subject: { Data: "Confirm your place on the Ragis waitlist", Charset: "UTF-8" },
+          Subject: { Data: m.subject, Charset: "UTF-8" },
           Body: { Text: { Data: text, Charset: "UTF-8" }, Html: { Data: html, Charset: "UTF-8" } },
         },
       },

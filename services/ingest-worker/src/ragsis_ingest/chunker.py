@@ -1,6 +1,7 @@
 """Chunking estructural: respeta secciones, nunca parte una tabla salvo que exceda el máximo
 (en cuyo caso divide por filas repitiendo el encabezado y el caption). Solapamiento bajo: última oración.
-Figuras y ecuaciones son chunks propios (kind figure/equation) con bbox, activo S3 y metadatos."""
+Figuras y ecuaciones son chunks propios (kind figure/equation) con bbox, activo S3 y metadatos.
+Los tramos de audio (kind audio) son chunks propios con su rango de tiempo (meta.t_start / meta.t_end)."""
 
 from __future__ import annotations
 
@@ -93,12 +94,21 @@ class Chunker:
                          b.bbox if len(parts) == 1 else None, None, meta)
                 cursor += length
                 continue
+            if b.kind == "audio":
+                # Tramo de una grabación: ya viene acotado por tokens y con su rango de tiempo en meta.
+                flush()
+                overlap = ""
+                emit(b.text, "audio", cursor, cursor + length, [], None, None, b.meta)
+                cursor += length
+                continue
             if b.kind in ("figure", "equation"):
                 # La figura llega con su texto indexable final (caption + descripción) desde el enriquecedor;
                 # sin texto (sin VLM ni caption) no se indexa.
                 flush()
                 overlap = ""
                 body = b.text if b.kind == "figure" or not b.caption else f"{b.caption}\n{b.text}"
+                if b.kind == "equation" and b.meta.get("analysis"):
+                    body = f"{body}\nAnálisis de la ecuación (generado por IA): {b.meta['analysis']}"
                 meta = {**b.meta, **({"caption": b.caption} if b.caption else {})}
                 emit(body, b.kind, cursor, cursor + length, [b.page] if b.page else [], b.bbox, b.asset_key, meta)
                 cursor += length

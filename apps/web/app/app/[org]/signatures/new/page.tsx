@@ -7,6 +7,7 @@ import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 import { TextField } from "@/components/ui";
 import { api } from "@/lib/api";
 import { SoftText } from "@/components/motion";
+import { useT } from "@/lib/use-t";
 
 interface DocumentOption {
   version_id: string;
@@ -15,6 +16,7 @@ interface DocumentOption {
 }
 
 export default function NewEnvelopePage() {
+  const t = useT();
   const { org } = useParams<{ org: string }>();
   const router = useRouter();
   const key = useRef<string | null>(null);
@@ -55,24 +57,24 @@ export default function NewEnvelopePage() {
   return (
     <div className="page">
       <header className="page-bar">
-        <PageBreadcrumbs section="Signatures & sharing" href={`/app/${org}/signatures`} context="Request signatures" icon={IconSignature} />
+        <PageBreadcrumbs section={t("Signatures & sharing")} href={`/app/${org}/signatures`} context={t("Request signatures")} icon={IconSignature} />
       </header>
       <div className="main" style={{ maxWidth: 900 }}>
         <header className="page-head">
-          <div><h1>Request signatures</h1><p className="sub">Choose PDFs from your library and add the people who need to sign.</p></div>
+          <div><h1>{t("Request signatures")}</h1><p className="sub">{t("Choose PDFs from your library and add the people who need to sign.")}</p></div>
         </header>
         {error && <p role="alert" className="alert" style={{ marginTop: 16 }}>{error}</p>}
         <form className="stack" style={{ marginTop: 20 }} onSubmit={(event) => { event.preventDefault(); if (valid) void save(); }}>
           <fieldset className="stack" disabled={busy} style={{ padding: 0, border: 0, margin: 0, minWidth: 0 }}>
             <section className="card stack">
-              <h2>Request details</h2>
-              <TextField label="Subject" placeholder="e.g. Services agreement" value={subject} required minLength={2} maxLength={160} onChange={(e) => { key.current = null; setSubject(e.target.value); }} />
+              <h2>{t("Request details")}</h2>
+              <TextField label={t("Subject")} placeholder={t("e.g. Services agreement")} value={subject} required minLength={2} maxLength={160} onChange={(e) => { key.current = null; setSubject(e.target.value); }} />
             </section>
             <section className="card stack">
-              <h2>Documents <span className="count"><SoftText text={String(selected.length)} /></span></h2>
-              <TextField label="Find a PDF" type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
-              {!docs && !error && <p role="status">Loading PDFs…</p>}
-              {visibleDocs?.length === 0 && <p className="muted">{query ? "No PDFs match this search." : "Upload a PDF to the Library and wait for indexing."}</p>}
+              <h2>{t("Documents")}{" "}<span className="count"><SoftText text={String(selected.length)} /></span></h2>
+              <TextField label={t("Find a PDF")} type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
+              {!docs && !error && <p role="status">{t("Loading PDFs…")}</p>}
+              {visibleDocs?.length === 0 && <p className="muted">{query ? t("No PDFs match this search.") : t("Upload a PDF to the Library and wait for indexing.")}</p>}
               <div className="stack" style={{ gap: 8, maxHeight: 280, overflowY: "auto" }}>
                 {visibleDocs?.map((doc) => (
                   <label className="row" key={doc.version_id}>
@@ -91,33 +93,32 @@ export default function NewEnvelopePage() {
               </div>
             </section>
             <section className="card stack">
-              <h2>Signers</h2>
+              <h2>{t("Signers")}</h2>
               {signers.map((signer, index) => (
                 <div className="row" key={signer.id} style={{ alignItems: "end" }}>
-                  <TextField label={`Signer ${index + 1} name`} value={signer.name} maxLength={120} required minLength={2} onChange={(e) => {
+                  <TextField label={t("Signer {v1} name", { v1: index + 1 })} value={signer.name} maxLength={120} required minLength={2} onChange={(e) => {
                     key.current = null;
                     setSigners(signers.map((s) => s.id === signer.id ? { ...s, name: e.target.value } : s));
                   }} />
-                  <TextField label={`Signer ${index + 1} email`} type="email" value={signer.email} required onChange={(e) => {
+                  <TextField label={t("Signer {v1} email", { v1: index + 1 })} type="email" value={signer.email} required onChange={(e) => {
                     key.current = null;
                     setSigners(signers.map((s) => s.id === signer.id ? { ...s, email: e.target.value } : s));
                   }} />
-                  {signers.length > 1 && <button className="ghost small" type="button" aria-label={`Remove signer ${index + 1}`} onClick={() => {
+                  {signers.length > 1 && <button className="ghost small" type="button" aria-label={t("Remove signer {v1}", { v1: index + 1 })} onClick={() => {
                     key.current = null;
                     setSigners(signers.filter((s) => s.id !== signer.id));
-                  }}>Remove</button>}
+                  }}>{t("Remove")}</button>}
                 </div>
               ))}
               <div><button type="button" className="ghost" disabled={signers.length >= 10} onClick={() => {
                 key.current = null;
                 setSigners([...signers, { id: nextSignerId.current++, name: "", email: "" }]);
-              }}>Add signer</button></div>
+              }}>{t("Add signer")}</button></div>
             </section>
             <div className="row">
               <button type="submit" className="primary" disabled={!valid || busy}>
-                {busy ? <IconSpinner size={16} /> : <IconSignature size={16} />} Save draft
-              </button>
-              <p className="muted">Another signatory or an administrator will approve and send it.</p>
+                {busy ? <IconSpinner size={16} /> : <IconSignature size={16} />}{" "}{t("Save draft")}</button>
+              <p className="muted">{t("Another signatory or an administrator will approve and send it.")}</p>
             </div>
           </fieldset>
         </form>

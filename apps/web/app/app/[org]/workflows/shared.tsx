@@ -1,7 +1,9 @@
 "use client";
 
 import { IconAgent, IconBranch, IconCheck, IconFlag, IconHourglass, IconPlay, IconShield, IconSignature, IconUserCheck } from "@/components/icons";
+import { useT, tNow } from "@/lib/use-t";
 
+import { dateLocale } from "@/lib/i18n";
 /* ───────────── types (mirror apps/api/src/lib/workflow-dsl.ts) ───────────── */
 export type NodeType = "START" | "END" | "AGENT_TASK" | "HUMAN_REVIEW" | "APPROVAL_GATE" | "CONDITION" | "EXTERNAL_ACTION" | "WAIT_EVENT";
 export interface WfNode {
@@ -107,9 +109,10 @@ export const ERROR_COPY: Record<string, string> = {
 };
 
 export function StateBadge({ state }: { state: string }) {
+  const t = useT();
   return (
     <span className="state" data-s={state}>
-      {STATE_COPY[state] ?? state.toLowerCase()}
+      {t(STATE_COPY[state]) ?? state.toLowerCase()}
     </span>
   );
 }
@@ -126,11 +129,11 @@ export function NodeIcon({ type, size = 17 }: { type: NodeType | string; size?: 
   return <IconCheck size={size} />;
 }
 
-export const when = (s: string | null | undefined) => (s ? new Date(s).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—");
+export const when = (s: string | null | undefined) => (s ? new Date(s).toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" }) : "—");
 export const ago = (s: string) => {
   const m = Math.round((Date.now() - new Date(s).getTime()) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
+  if (m < 1) return tNow("just now");
+  if (m < 60) return tNow("{m} min ago", { m: m });
   const h = Math.round(m / 60);
-  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
+  return h < 24 ? tNow("{h} h ago", { h: h }) : tNow("{v1} d ago", { v1: Math.round(h / 24) });
 };

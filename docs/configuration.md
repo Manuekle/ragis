@@ -40,9 +40,12 @@ How sign-in works: [authentication.md](authentication.md).
 | `API_URL` | Internal API URL (`http://api:4000` in Compose). |
 | `DEMO_BOOKING_URL` | HTTPS booking URL or email to request the demo from the landing page. |
 | `CONTACT_EMAIL`, `LEGAL_ENTITY` | Contact details and legal entity name on public pages. |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Turso database for `/waitlist` (`waitlist` table, created automatically on first use). Without them, production responds 503 and development only logs to the console. A sponsorship slot is taken on confirmation: `UPDATE waitlist SET status = 'confirmed' WHERE email = '…'`. |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Turso database for `/waitlist` (`waitlist` table, created automatically on first use). Without them, production responds 503 and development only logs to the console. A sponsorship slot is taken when its payment arrives from Polar (see below); without Polar, by hand: `UPDATE waitlist SET status = 'confirmed' WHERE email = '…'`. Polar subscriptions are stored in `billing_subscriptions` in the same database. |
 | `WAITLIST_EMAIL_FROM` | Sender verified in Amazon SES to confirm the email on `/waitlist`. With it, the sign-up stays pending (`waitlist_pending` table) and only enters `waitlist` when the person opens the email link (24 h, single use). The web needs `AWS_REGION` and `ses:SendEmail` permission on that identity. Empty = sign-ups are stored unconfirmed. |
 | `WAITLIST_EMAIL_TEST` | `1` = test mode when there is no sender: no email is sent and the confirmation link appears on the page and in the log. It is the default in `infra/docker/compose.yml`; do not use it in production. |
+| `POLAR_ACCESS_TOKEN` | Polar organization access token. With it, `/pricing` opens a Polar checkout for Team and Business Cloud and `/waitlist` charges sponsor slots online. Empty = both pages keep the old manual flow. Setup and testing: [payments-polar.md](payments-polar.md). |
+| `POLAR_SERVER` | `sandbox` or `production` (default). Must match the environment the token was created in. |
+| `POLAR_WEBHOOK_SECRET` | Secret of the Polar webhook endpoint `https://<site>/api/polar/webhook`. Without it every delivery is rejected with 401 and no payment is recorded. |
 
 ## API (`apps/api/src/config.ts`)
 
@@ -63,7 +66,7 @@ How sign-in works: [authentication.md](authentication.md).
 | `ESIGN_PROVIDER` | `native` | `native`, `local` (simulates only, development) or `disabled`. |
 | `ESIGN_WEBHOOK_SECRET` | empty | At least 32 characters. |
 | `SIGNATURE_SEAL_SECRET` | derived | Stable secret for the Ed25519 seal (minimum 32 characters). Derived from `INTERNAL_SERVICE_SECRET` by default. |
-| `SIGNATURE_EMAIL_FROM` | empty | Verified SES sender. Empty in development uses the test invitation. |
+| `SIGNATURE_EMAIL_FROM` | empty | Verified SES sender for Ragsis Sign and for member invitation emails. Empty in development uses the test invitation; member invitations are still created, just not emailed. |
 
 ### Connectors
 
@@ -91,14 +94,23 @@ Each field is an uppercase variable (`ai_embedding_model` → `AI_EMBEDDING_MODE
 | `AI_EMBEDDING_MODEL` | `local-hash-1024@v1` | Embedding model. Changing it requires a reindex. |
 | `AI_GENERATION_MODEL` | `local-extractive@v1` | Answer generation model. |
 | `AI_RERANK_MODEL` | `local-lexical-rerank@v1` | Rerank. |
-| `AI_VISION_MODEL` | empty | VLM that describes figures during ingestion. Empty: captions only. |
-| `AI_GRAPH_MODEL` | empty | Entity and relation extraction. Empty: no graph even if the tenant has it enabled. |
+| `AI_VISION_MODEL` | empty | VLM that describes figures and uploaded photos during ingestion. Empty: captions only, and photos with no text fail with `no_extractable_text`. Muse options: `meta-muse-spark-1.3-vision@v1`, `meta-muse-spark-1.3-contributor-vision@v1` (Meta may train on the images; test data only). These are separate from the generation models, so turning vision on does not change how answers are built. |
+| `AI_GRAPH_MODEL` | empty (`local-graph-heuristic@v1` in local Compose) | Entity and relation extraction. Empty: no graph even if the tenant has it enabled. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. |
+| `OLLAMA_NUM_CTX` | `8192` | Context window requested from Ollama. Its own default (4096) silently drops the start of long RAG prompts: the rules and the first sources. Each new value reloads the model. |
+| `META_MODEL_API_KEY` | empty | Key for the Meta Model API (Muse). Only in `.env`, never in Git. |
+| `META_REASONING_EFFORT` | `low` | Muse reasoning effort (`minimal`, `low`, `medium`, `high`). RAG extracts and cites; more effort adds latency and cost. |
+| `AI_ALLOW_TRAINING_MODELS` | `false` | Allows models whose provider may train on what is sent (`meta-muse-spark-1.3-contributor@v1`). Never for `confidential` or `restricted` organizations. |
 
 For Bedrock: `AI_EMBEDDING_MODEL=bedrock-titan-embed-v2-1024@v1`, `AI_GENERATION_MODEL=bedrock-nova-lite@v1` (or
 `bedrock-claude-sonnet-5-5@v1`) and AWS credentials in the containers' environment. On the pilot EC2 they come from the
 `ragsis-pilot-ec2` role, which today does not include Bedrock permissions (they must be added and the models enabled in
 the account).
+
+For Meta Muse (cloud, outside AWS; AWS credits do not cover it): `AI_GENERATION_MODEL=meta-muse-spark-1.3@v1` and
+`META_MODEL_API_KEY`. Retrieved evidence is sent to Meta. The `-contributor` variant costs about 12 times less per input
+token because Meta may train on the content, so it also needs `AI_ALLOW_TRAINING_MODELS=true` and is only for
+non-sensitive test data (ADR-033). If Muse fails, the answer falls back to `local-extractive@v1`, never to Ollama.
 
 ### Ingestion and multimodal
 
@@ -118,7 +130,15 @@ the account).
 | `VISION_MIN_IMAGE_BYTES` / `VISION_MIN_IMAGE_SIDE` | `2048` / `64` | Discards icons and bullets. |
 | `VISION_MAX_IMAGE_BYTES` / `VISION_MAX_IMAGE_PIXELS` | `3750000` / `40000000` | Per-image limits (Bedrock Converse and defense against decompression bombs). |
 | `INGEST_TABLE_SUMMARIES` | `false` | Summarizes tables with the generation model, verifying figures. |
+| `INGEST_EQUATION_ANALYSIS` | `false` | Explains equations with the generation model and nearby text, verifying figures. |
 | `GRAPH_MAX_CHUNKS_PER_DOC` | `200` | Cap on chunks that feed the graph. |
+| `TRANSCRIPTION_PROVIDER` | `none` | `none` or `transcribe` (Amazon Transcribe). With `none`, recordings fail with `transcription_required` (ADR-030). |
+| `TRANSCRIPTION_LANGUAGE` | empty | Fixed language code (e.g. `es-US`). Empty: automatic detection. |
+| `TRANSCRIPTION_LANGUAGE_OPTIONS` | `es-US,es-ES,en-US,pt-BR` | Candidates for automatic language detection. |
+| `TRANSCRIPTION_MAX_SPEAKERS` | `10` | Speaker separation; below `2` turns it off. |
+| `TRANSCRIPTION_MIN_WORD_CONFIDENCE` | `0.4` | Words below this confidence are dropped from the transcript. |
+| `TRANSCRIPTION_TIMEOUT_SECONDS` | `3600` | Limit to wait for a transcription job. |
+| `AUDIO_MAX_SECONDS` | `14400` | Longest recording accepted (4 h); longer ones fail with `audio_too_long`. |
 
 ### Query
 
@@ -126,7 +146,23 @@ the account).
 |---|---|---|
 | `RAG_VLM_ENHANCED` | `auto` | Attaches images of cited figures if the generator has vision (`auto`, `on`, `off`). |
 | `RAG_VLM_MAX_IMAGES` | `3` | Maximum images per query. |
+| `RAG_GRAPH_CONTEXT_TOKENS` | `500` | Budget for graph facts of the selected evidence added to the prompt; `0` turns it off. |
+| `RAG_DOCUMENT_MAX_OUTPUT_TOKENS` | `3000` | Output tokens for a document written from the chat (ADR-034); answers keep their own limit. |
+| `DOCS_PAGE_SIZE` | `A4` | Page size of generated PDF and Word files (`A4` or `LETTER`). |
 | `INTERNAL_TOKEN_AUDIENCE`, `INTERNAL_TOKEN_ISSUER` | `ragsis-rag`, `ragsis-api` | Claims of the internal token. |
+
+### Public records (ADR-036)
+
+Only the rag-engine reads these. Organizations turn the feature on in Connected apps; they never see the key.
+
+| Variable | Default | Description |
+|---|---|---|
+| `CROMA_API_KEY` | empty | Croma organization key (`croma_live_…`, from platform.usecroma.com). A secret: Secrets Manager in AWS, never in Git. Empty = "Not set up". |
+| `CROMA_DEMO` | `false` | `1` = labelled sample records instead of live lookups (development only). |
+| `CROMA_BASE_URL` | `https://api.croma.run` | Croma host (HTTPS only). |
+| `CROMA_TIMEOUT_SECONDS` | `25` | Per-lookup timeout; slower async lookups are reported as still processing. |
+| `CROMA_MAX_CALLS` | `2` | Lookups per question (the API also caps it at 2 and at the organization's remaining monthly limit). |
+| `CROMA_CONTEXT_TOKENS` | `3500` | Prompt budget for public evidence. |
 
 ### Operations
 
@@ -135,7 +171,7 @@ the account).
 | `LOG_LEVEL` | `INFO` | Log level (JSON). |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Empty: no traces. With `make up-obs`: `http://jaeger:4318`. |
 | `OTEL_SERVICE_NAME` | per service | For example `ragsis-api`. |
-| `PIPELINE_VERSION` | `ingest-2026.11.2` | Pipeline version; stored with each chunk. |
+| `PIPELINE_VERSION` | `ingest-2026.11.3` | Pipeline version; stored with each chunk. |
 
 ## AWS pilot (`/opt/ragsis/.env.pilot`)
 
@@ -149,7 +185,7 @@ Template: [`infra/docker/.env.pilot.example`](../infra/docker/.env.pilot.example
 | `API_IMAGE`, `WEB_IMAGE`, `RAG_ENGINE_IMAGE`, `INGEST_WORKER_IMAGE` | ECR references by digest (`repo@sha256:…`) |
 | `POSTGRES_PASSWORD`, `RAGSIS_APP_DB_PASSWORD`, `RAGSIS_WORKER_DB_PASSWORD`, `INTERNAL_SERVICE_SECRET` | A different value per variable: `openssl rand -hex 32` on the host. Keep them when updating images. |
 
-The pilot fixes `AUTH_MODE=oidc`, `SESSION_COOKIE_SECURE=true`, `MALWARE_SCANNER=clamav`, `OCR_PROVIDER=none` and local
+The pilot fixes `AUTH_MODE=oidc`, `SESSION_COOKIE_SECURE=true`, `MALWARE_SCANNER=clamav`, `OCR_PROVIDER=none`, `TRANSCRIPTION_PROVIDER=none` and local
 models (`local-extractive@v1`, `local-hash-1024@v1`).
 
 ## Terraform
@@ -165,4 +201,4 @@ verified SES identity in the API's Region with production access). With a direct
 
 ## Rehearsal script variables
 
-`REHEARSAL_ENV`, `FLOCI_ENDPOINT`, `REHEARSAL_HOSTNAME` and `REHEARSAL_TARGETS`: see [guides/floci.md](guides/floci.md).
+`REHEARSAL_ENV`, `REHEARSAL_HOSTNAME`, `REHEARSAL_INSTANCE_TYPE`, `REHEARSAL_TARGETS` and the `EMULATOR_*` variables: see [guides/aws-emulator.md](guides/aws-emulator.md).

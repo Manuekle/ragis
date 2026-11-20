@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { IconFile, IconSignature } from "@/components/icons";
 import { SignatureForm, type SignatureDecision } from "@/components/SignatureForm";
 import { SoftText } from "@/components/motion";
+import { useT } from "@/lib/use-t";
 
 interface Invitation {
   subject: string | null;
@@ -27,6 +28,7 @@ async function request<T>(token: string, action: string, body?: unknown): Promis
 }
 
 export function GuestSignature() {
+  const t = useT();
   const [token, setToken] = useState("");
   const [invite, setInvite] = useState<Invitation | null>(null);
   const [preview, setPreview] = useState<{ title: string; url: string } | null>(null);
@@ -37,7 +39,7 @@ export function GuestSignature() {
   useEffect(() => {
     const key = window.location.hash.slice(1);
     if (!/^[A-Za-z0-9_-]{43}$/.test(key)) {
-      setError("Open the personal link from your signature invitation.");
+      setError(t("Open the personal link from your signature invitation."));
       setLoading(false);
       return;
     }
@@ -83,48 +85,48 @@ export function GuestSignature() {
   return (
     <main className="stack" style={{ maxWidth: 880, margin: "0 auto", padding: "clamp(20px, 5vw, 56px)" }}>
       <header className="stack" style={{ gap: 8 }}>
-        <span className="row muted"><IconSignature size={18} /> Ragsis Sign</span>
-        <h1>{invite?.subject ?? "Review and sign"}</h1>
-        {invite && <p className="muted">Signature invitation for {invite.email}</p>}
+        <span className="row muted"><IconSignature size={18} />{" "}{t("Ragsis Sign")}</span>
+        <h1>{invite?.subject ?? t("Review and sign")}</h1>
+        {invite && <p className="muted">{t("Signature invitation for")}{" "}{invite.email}</p>}
       </header>
       {error && <p className="alert" role="alert">{error}</p>}
-      {loading && <p role="status">Opening your invitation…</p>}
+      {loading && <p role="status">{t("Opening your invitation…")}</p>}
       {invite && (
         <>
           <section className="card stack">
-            <h2>Documents</h2>
+            <h2>{t("Documents")}</h2>
             {invite.documents.map((doc) => (
               <div className="row" key={doc.version_id}>
                 <IconFile size={16} />
                 <span style={{ flex: 1 }}>{doc.title}</span>
                 <button className="ghost small" type="button" disabled={!!busy} onClick={() => openDocument(doc)}>
-                  <SoftText text={busy === doc.version_id ? "Opening…" : "Review PDF"} />
+                  <SoftText text={busy === doc.version_id ? t("Opening…") : t("Review PDF")} />
                 </button>
               </div>
             ))}
             {preview && (
               <div className="stack">
                 <iframe key={preview.url} title={preview.title} src={preview.url} referrerPolicy="no-referrer" style={{ width: "100%", minHeight: "min(65vh, 560px)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }} />
-                <a href={preview.url} target="_blank" rel="noreferrer">Open {preview.title} in a new tab</a>
+                <a href={preview.url} target="_blank" rel="noreferrer">{t("Open")}{" "}{preview.title}{" "}{t("in a new tab")}</a>
               </div>
             )}
           </section>
           <section className="card stack">
             {invite.awaiting_me ? (
               <>
-                <h2>Your signature</h2>
+                <h2>{t("Your signature")}</h2>
                 <SignatureForm consentText={invite.consent_text} onRespond={respond} />
               </>
             ) : invite.state === "COMPLETED" ? (
               <>
-                <h2>All signatures collected</h2>
-                <div><button type="button" className="primary" disabled={!!busy} onClick={download}>Download signed PDF</button></div>
-                <Link href="/sign/verify">Verify a signed PDF</Link>
+                <h2>{t("All signatures collected")}</h2>
+                <div><button type="button" className="primary" disabled={!!busy} onClick={download}>{t("Download signed PDF")}</button></div>
+                <Link href="/sign/verify">{t("Verify a signed PDF")}</Link>
               </>
             ) : (
               <>
-                <h2>{invite.state === "DECLINED" ? "Signature declined" : "Signature recorded"}</h2>
-                {invite.state !== "DECLINED" && <p className="muted">Open this invitation again to download the PDF after the other signers finish.</p>}
+                <h2>{invite.state === "DECLINED" ? t("Signature declined") : t("Signature recorded")}</h2>
+                {invite.state !== "DECLINED" && <p className="muted">{t("Open this invitation again to download the PDF after the other signers finish.")}</p>}
               </>
             )}
           </section>

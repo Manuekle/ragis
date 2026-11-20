@@ -1,42 +1,37 @@
-import Link from "next/link";
+import { LocaleLink as Link } from "@/components/LocaleProvider";
 import DevLoginForm from "./DevLoginForm";
 import PasswordLoginForm from "./PasswordLoginForm";
 import { AuthShell, GateChecks } from "./AuthShell";
 import { IconAlert } from "@/components/icons";
 import { cognitoPasswordLogin } from "@/lib/cognito";
+import { getLocale } from "@/lib/locale";
+import { LOGIN } from "./copy";
 
 export const dynamic = "force-dynamic";
 
-const ERRORS: Record<string, string> = {
-  idp_error: "The identity provider rejected the sign-in.",
-  flow_expired: "The sign-in session expired. Try again.",
-  state_mismatch: "Invalid sign-in request. Try again.",
-  token_exchange_failed: "Couldn't complete sign-in with the provider.",
-  invalid_id_token: "The identity token is not valid.",
-};
-
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
+  const t = LOGIN[await getLocale()];
   if (process.env.AUTH_MODE !== "oidc") return <DevLoginForm />;
   // Cognito: el formulario vive en la app. Otros IdP OIDC siguen redirigiendo a su propia página (SSO).
   if (cognitoPasswordLogin()) return <PasswordLoginForm />;
   return (
-    <AuthShell title="Sign in to Ragis." lead="Use your company account." linkBrandToHome>
+    <AuthShell title={t.ssoTitle} lead={t.ssoLead} home={t.home} linkBrandToHome>
       <div className="gate-form">
-        <p className="gate-note">You&apos;ll go to your identity provider, then come back here.</p>
+        <p className="gate-note">{t.ssoNote}</p>
         {error && (
           <div className="alert">
             <IconAlert size={16} />
-            {ERRORS[error] ?? "Couldn't sign in."}
+            {t.ssoErrors[error] ?? t.ssoFallback}
           </div>
         )}
         <a href="/api/auth/login" className="gate-cta">
-          Continue with SSO
+          {t.sso}
         </a>
       </div>
-      <GateChecks items={["Cited answers", "Permission-aware", "PII redacted"]} />
+      <GateChecks items={t.checks} />
       <p className="gate-legal">
-        By continuing you agree to the <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.
+        {t.legalA}<Link href="/terms">{t.terms}</Link>{t.legalB}<Link href="/privacy">{t.privacy}</Link>.
       </p>
     </AuthShell>
   );

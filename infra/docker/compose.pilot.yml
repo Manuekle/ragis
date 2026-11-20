@@ -99,6 +99,7 @@ services:
       MALWARE_SCANNER: clamav
       CLAMAV_HOST: clamav
       OCR_PROVIDER: none
+      TRANSCRIPTION_PROVIDER: none
     tmpfs: ["/tmp:size=512m"]
     stop_grace_period: 30s
     depends_on:

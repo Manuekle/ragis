@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/use-t";
 
 const runtimeUrl = new URL("mermaid/dist/mermaid.min.js", import.meta.url).href;
 
@@ -55,6 +56,7 @@ function diagramDocument(source: string, isDark: boolean) {
 }
 
 export default function MermaidBlock({ source, isDark }: { source: string; isDark: boolean }) {
+  const t = useT();
   const iframe = useRef<HTMLIFrameElement>(null);
   const [size, setSize] = useState<DiagramSize | null>();
 
@@ -102,7 +104,7 @@ export default function MermaidBlock({ source, isDark }: { source: string; isDar
   if (size === null) {
     return (
       <>
-        <p className="faint">Couldn&apos;t render this Mermaid diagram.</p>
+        <p className="faint">{t("Couldn't render this Mermaid diagram.")}</p>
         <pre><code className="language-mermaid">{source}</code></pre>
       </>
     );
@@ -110,12 +112,12 @@ export default function MermaidBlock({ source, isDark }: { source: string; isDar
 
   return (
     <>
-      {!size && <p className="faint" role="status">Rendering Mermaid diagram…</p>}
-      <div className="viewer-mermaid-scroll" role="region" aria-label="Mermaid diagram" tabIndex={size ? 0 : undefined}>
+      {!size && <p className="faint" role="status">{t("Rendering Mermaid diagram…")}</p>}
+      <div className="viewer-mermaid-scroll" role="region" aria-label={t("Mermaid diagram")} tabIndex={size ? 0 : undefined}>
         <iframe
           ref={iframe}
           className="viewer-mermaid"
-          title="Mermaid diagram"
+          title={t("Mermaid diagram")}
           sandbox="allow-scripts"
           tabIndex={-1}
           aria-hidden={!size}

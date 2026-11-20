@@ -24,6 +24,20 @@ THEMES = {
     },
 }
 
+# One hue per content modality (stroke, fill), the same as docs/assets/icons/ragis/*.svg.
+MODALITIES = {
+    "light": {
+        "text": ("#c2410c", "#ffedd5"), "figure": ("#1d4ed8", "#dbeafe"), "equation": ("#7c3aed", "#ede9fe"),
+        "table": ("#047857", "#d1fae5"), "audio": ("#be185d", "#fce7f3"), "graph": ("#0369a1", "#e0f2fe"),
+        "vector": ("#4338ca", "#e0e7ff"), "query": ("#b54708", "#fff7ed"),
+    },
+    "dark": {
+        "text": ("#fdba74", "#3b2414"), "figure": ("#93c5fd", "#172554"), "equation": ("#c4b5fd", "#2e1065"),
+        "table": ("#6ee7b7", "#052e1f"), "audio": ("#f9a8d4", "#3f0a24"), "graph": ("#7dd3fc", "#082f49"),
+        "vector": ("#a5b4fc", "#1e1b4b"), "query": ("#fb923c", "#2a1708"),
+    },
+}
+
 FONT = "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
 _uid = 0
 
@@ -77,6 +91,11 @@ def inline_icon(name: str, theme: str, x: float, y: float, w: float, h: float | 
             return re.sub(r"\.([A-Za-z_][\w-]*)", lambda c: f".{pfx}{c.group(1)}", m.group(0))
         inner = re.sub(r"<style[^>]*>.*?</style>", pre_style, inner, flags=re.S)
         inner = re.sub(r'class="([^"]+)"', lambda m: 'class="' + " ".join(pfx + c for c in m.group(1).split()) + '"', inner)
+    # Presentation attributes on the icon's root <svg> (e.g. Docker's fill="#008fe2", fill="none") are inherited by its
+    # shapes; keep them on a wrapper <g> or the shapes fall back to black.
+    keep = re.findall(r'\s((?:fill|stroke|stroke-width|stroke-linecap|stroke-linejoin|color|opacity)="[^"]*")', attrs)
+    if keep:
+        inner = f'<g {" ".join(keep)}>{inner}</g>'
     return (f'<svg x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" viewBox="{viewbox}" '
             f'preserveAspectRatio="xMidYMid meet">{inner}</svg>')
 
@@ -160,6 +179,25 @@ class Canvas:
             self.add(f'<rect x="{lx - wd / 2:.1f}" y="{ly - hh / 2:.1f}" width="{wd:.1f}" height="{hh}" rx="4" '
                      f'fill="{t["label_bg"]}" fill-opacity="0.92"/>')
             self.text(lx, ly - hh / 2 + 13, label, 10.5, 500, t["muted"], "middle")
+
+    def mod(self, name: str) -> tuple[str, str]:
+        """(stroke, fill) of a content modality in this theme."""
+        return MODALITIES[self.theme][name]
+
+    def box(self, x: float, y: float, w: float, h: float, stroke: str, fill: str, rx: float = 8,
+            dashed: bool = False, width: float = 1.3) -> None:
+        dash = ' stroke-dasharray="5 4"' if dashed else ""
+        self.add(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="{rx}" fill="{fill}" '
+                 f'stroke="{stroke}" stroke-width="{width}"{dash}/>')
+
+    def dot(self, x: float, y: float, r: float, modality: str) -> None:
+        s, f = self.mod(modality)
+        self.add(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{f}" stroke="{s}" stroke-width="1.4"/>')
+
+    def link(self, a: tuple[float, float], b: tuple[float, float], dashed: bool = False) -> None:
+        dash = ' stroke-dasharray="3 3"' if dashed else ""
+        self.add(f'<line x1="{a[0]:.1f}" y1="{a[1]:.1f}" x2="{b[0]:.1f}" y2="{b[1]:.1f}" stroke="{self.t["line"]}" '
+                 f'stroke-width="1.2"{dash}/>')
 
     def step(self, x: float, y: float, n: int) -> None:
         self.add(f'<circle cx="{x}" cy="{y}" r="10" fill="{self.t["accent"]}"/>')

@@ -16,7 +16,7 @@ def clamp_bbox(x0: float, y0: float, x1: float, y1: float) -> BBox | None:
 
 @dataclass
 class Block:
-    kind: str                 # heading | paragraph | list | table | figure | equation
+    kind: str                 # heading | paragraph | list | table | figure | equation | audio
     text: str                 # figura: descripción/caption; ecuación: LaTeX o texto lineal
     level: int = 0            # nivel de heading
     page: int | None = None

@@ -4,9 +4,17 @@
   internal      -> Bedrock en región aprobada, o modelos locales.
   confidential  -> modelos locales, o modelo cloud explícitamente en allowlist del tenant.
   restricted    -> solo inferencia/embeddings locales; jamás llamadas a APIs externas.
+
+«Solo IA privada» (`local_only`, elegido en el onboarding o por desplegar en servidores propios): lo mismo que
+restricted para los modelos, sea cual sea la clasificación.
+
+Modelos que entrenan con el contenido enviado (`trains_on_data`, p. ej. Muse Contributor): solo si el despliegue lo
+habilita (AI_ALLOW_TRAINING_MODELS=true) y nunca con datos confidential o restricted, ni con allowlist.
 """
 
 from __future__ import annotations
+
+from ragsis_core.settings import get_settings
 
 from .registry import CLOUD, ModelSpec
 from .types import DataClass, TenantAIPolicy
@@ -22,6 +30,13 @@ def is_allowed(model: ModelSpec, policy: TenantAIPolicy) -> tuple[bool, str]:
         return True, "local"
     if dc == DataClass.RESTRICTED:
         return False, "tenant restringido: solo modelos locales"
+    if policy.local_only:
+        return False, "la organización eligió solo IA privada: ningún modelo en la nube"
+    if model.trains_on_data:
+        if not get_settings().ai_allow_training_models:
+            return False, f"{model.model_id} entrena con el contenido: deshabilitado en este despliegue"
+        if dc == DataClass.CONFIDENTIAL:
+            return False, "datos confidenciales: no se envían a modelos que entrenan con el contenido"
     if model.regions and not set(model.regions) & set(policy.approved_regions):
         return False, f"modelo {model.model_id} fuera de regiones aprobadas"
     if dc == DataClass.CONFIDENTIAL and model.model_id not in policy.model_allowlist:

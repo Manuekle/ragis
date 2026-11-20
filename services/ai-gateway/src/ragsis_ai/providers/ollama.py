@@ -16,8 +16,10 @@ from .base import ProviderError
 class OllamaProvider:
     name = "ollama"
 
-    def __init__(self, base_url: str | None = None, timeout: float = 120.0) -> None:
-        self.base_url = (base_url or get_settings().ollama_base_url).rstrip("/")
+    def __init__(self, base_url: str | None = None, timeout: float = 120.0, num_ctx: int | None = None) -> None:
+        s = get_settings()
+        self.base_url = (base_url or s.ollama_base_url).rstrip("/")
+        self.num_ctx = num_ctx or s.ollama_num_ctx
         self._http = httpx.Client(timeout=timeout)
 
     def generate(self, model: ModelSpec, request: GenerationRequest) -> GenerationResult:
@@ -29,7 +31,10 @@ class OllamaProvider:
                 # RAG necesita extraer y citar, no razonar; los modelos sin razonamiento ignoran el campo.
                 "think": False,
                 "messages": [{"role": "system", "content": request.system}, self._user_message(model, request)],
-                "options": {"num_predict": request.max_output_tokens},
+                # Sin num_ctx Ollama usa 4096 y recorta el prompt por el principio (instrucciones y primeras fuentes).
+                # Valor fijo: cambiarlo en cada llamada recargaría el modelo.
+                "options": {"num_predict": request.max_output_tokens,
+                            "num_ctx": min(self.num_ctx, model.context_tokens)},
             })
             r.raise_for_status()
         except httpx.HTTPError as exc:

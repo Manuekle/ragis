@@ -1,13 +1,21 @@
 /* ───────────── landing (app/page.tsx) ─────────────
    Builds on the .gate shell from globals.css: same guides, crosses, beams and
-   dither horizon, widened for a hero. The hero is locked to one viewport; the sections
-   below it (.land-more) scroll. */
+   dither horizon, widened for a hero. One page that scrolls: the hero fills the first
+   viewport, the sections below it (.land-more) and the wall of sponsors follow. */
 
 .land {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
   --horizon: clamp(120px, 22vh, 230px);
+}
+
+/* holiday snow over the hero and the wall (components/SeasonalSnow.tsx), above
+   the dither and under the copy; lighter behind the headline, full at the foot where it piles up */
+.gate-snow {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.6) 55%, #000 85%);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.6) 55%, #000 85%);
 }
 
 .land-nav { display: flex; align-items: center; gap: 10px; }
@@ -377,72 +385,13 @@
 .land-link { font-size: 13.5px; color: var(--muted); padding: 0 4px; }
 @media (hover: hover) { .land-link:hover { color: var(--text); text-decoration: none; } }
 
-/* floating view switches (components/LandingViews.tsx). Onward at the bottom: "See how it works" on
-   the hero, "Backers" on the content. Back at the top: "Start" on the content, "Back" on the wall.
-   Words only, on clear glass: a frosted pane with a hairline rim and a lit top edge, no fill colour
-   and no drop shadow, so it sits on the page instead of over it. A pill's labels share one cell, so
-   it keeps its size, and cross-blur into each other (text swap); a pill with nowhere to go slips
-   off its edge. */
-.land-scroll {
-  --land-scroll-off: 12px;
-  --glass: color-mix(in oklab, var(--bg) 38%, transparent);
-  --glass-hover: color-mix(in oklab, var(--bg) 58%, transparent);
-  --glass-rim: color-mix(in oklab, var(--text) 10%, transparent);
-  --glass-sheen: rgb(255 255 255 / 0.5);
-  position: fixed; left: 0; right: 0; z-index: 5; width: fit-content; margin-inline: auto;
-  display: grid; place-items: center; height: 30px; padding: 0 14px;
-  border: 0; border-radius: var(--r-pill); cursor: pointer;
-  font: inherit; font-size: 12.5px; letter-spacing: 0.005em; color: var(--muted); white-space: nowrap;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
-  box-shadow: inset 0 0 0 1px var(--glass-rim), inset 0 1px 0 var(--glass-sheen);
-  transition:
-    background-color var(--duration-quick, 150ms) ease, color var(--duration-quick, 150ms) ease,
-    opacity var(--duration-quick, 150ms) ease, translate var(--duration-fast, 250ms) var(--ease-smooth-out),
-    scale 150ms ease-out, visibility 0s;
-}
-:root[data-theme="dark"] .land-scroll { --glass-sheen: rgb(255 255 255 / 0.07); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .land-scroll { --glass-sheen: rgb(255 255 255 / 0.07); } }
-.land-scroll:active { scale: 0.97; }
-.land-scroll[data-edge="bottom"] { bottom: 22px; }
-/* level with the nav row (20px padding around a 30px pill) */
-.land-scroll[data-edge="top"] { top: 20px; --land-scroll-off: -12px; }
-.land-scroll:not([data-shown]) {
-  opacity: 0; translate: 0 var(--land-scroll-off); pointer-events: none; visibility: hidden;
-  transition:
-    opacity var(--duration-quick, 150ms) ease, translate var(--duration-fast, 250ms) var(--ease-smooth-out),
-    visibility 0s linear var(--duration-fast, 250ms);
-}
-.land-scroll-label {
-  grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 8px;
-  opacity: 0; filter: blur(2px); transform: translateY(4px);
-  transition:
-    opacity var(--duration-quick, 150ms) ease-in-out,
-    filter var(--duration-quick, 150ms) ease-in-out,
-    transform var(--duration-fast, 250ms) var(--ease-smooth-out);
-}
-.land-scroll[data-view="hero"] [data-for="hero"],
-.land-scroll[data-view="more"] [data-for="more"],
-.land-scroll[data-view="wall"] [data-for="wall"] { opacity: 1; filter: none; transform: none; }
-@media (hover: hover) { .land-scroll:hover { background: var(--glass-hover); color: var(--text); } }
-/* only the narrowest phones lack room between the logo and the sign-in pill: "Start"/"Back" drops below the nav */
-@media (max-width: 340px) {
-  .land-scroll[data-edge="top"] { top: 66px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .land-scroll { transition-property: background-color, color, opacity, visibility; translate: none !important; }
-  .land-scroll-label { transition: opacity var(--duration-quick, 150ms) ease; filter: none !important; transform: none !important; }
-}
-/* phones: no pull-to-refresh or rubber band at the ends, which would fight the pull that turns the page */
-html:has(.land-page) { overscroll-behavior-y: none; }
-
 /* ───────────── below the hero: what it is, what it does, why trust it ───────────── */
 .land-page { background: var(--bg); }
-/* the dashed column guides start at the very top, so they run behind the nav like on the hero */
+/* the dashed column guides run the full height of the content, edge to edge with the hero above */
 .land-more-wrap {
   --guide: color-mix(in oklab, var(--text) 14%, transparent);
   --land-edge: max(16px, calc((100% - 920px) / 2));
-  position: relative; isolation: isolate; min-height: 100dvh;
+  position: relative; isolation: isolate;
 }
 .land-more-wrap::before, .land-more-wrap::after {
   content: ""; position: absolute; top: 0; bottom: 0; width: 1px; z-index: -1; pointer-events: none;
@@ -452,7 +401,6 @@ html:has(.land-page) { overscroll-behavior-y: none; }
 .land-more-wrap::before { left: var(--land-edge); }
 .land-more-wrap::after { right: var(--land-edge); animation-direction: reverse; }
 @media (prefers-reduced-motion: reduce) { .land-more-wrap::before, .land-more-wrap::after { animation: none; } }
-.land-more-wrap > .gate-top { position: relative; z-index: 2; }
 
 .land-more {
   --guide: color-mix(in oklab, var(--text) 14%, transparent);
@@ -460,13 +408,35 @@ html:has(.land-page) { overscroll-behavior-y: none; }
   width: min(100% - 32px, 920px); margin: 0 auto;
 }
 .land-sec { padding: clamp(36px, 5vw, 60px) clamp(20px, 5vw, 48px); border-top: 1px dashed var(--guide); }
-.land-sec:first-child { border-top: 0; padding-top: clamp(8px, 2vw, 24px); }
+.land-sec:first-child { border-top: 0; }
 
 .land-sec h2 {
   margin: 0 0 clamp(28px, 4vw, 40px); max-width: 16em;
   font-weight: 400; font-size: clamp(28px, 4.4vw, 40px); line-height: 1.08; letter-spacing: -0.04em; text-wrap: balance;
 }
 .land-sec h2 em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.02em; color: var(--accent-text); }
+
+/* who already uses it: university logos in dashed cells, the claim beside them. Brand colours on
+   light; on dark they turn white, since Duke's navy and Stanford's cardinal vanish on the dark canvas. */
+.land-proof { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 28px clamp(24px, 4vw, 48px); }
+.land-proof-logos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.land-proof-logos li { display: grid; place-items: center; height: clamp(92px, 11vw, 132px); padding: 0 clamp(10px, 2vw, 22px); }
+.land-proof-logos li + li { border-left: 1px dashed var(--guide); }
+.land-proof-logos img { display: block; width: auto; height: auto; max-width: 100%; max-height: clamp(34px, 4.2vw, 46px); object-fit: contain; }
+:root[data-theme="dark"] .land-proof-logos img { filter: brightness(0) invert(1); opacity: 0.86; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .land-proof-logos img { filter: brightness(0) invert(1); opacity: 0.86; }
+}
+.land-proof-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.land-sec .land-proof-copy h2 { margin: 0; max-width: 14em; font-size: clamp(24px, 2.8vw, 30px); line-height: 1.12; }
+.land-proof-copy p { margin: 0; max-width: 30em; font-size: 14.5px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+.land-proof-cta { gap: 8px; margin-top: 6px; }
+.land-proof-cta .svg-icon { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+@media (hover: hover) { .land-proof-cta:hover .svg-icon { transform: translateX(2px); } }
+@media (max-width: 720px) {
+  .land-proof { grid-template-columns: 1fr; }
+  .land-proof-copy { order: -1; }
+}
 
 .land-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: center; gap: 12px clamp(16px, 4vw, 40px); margin-bottom: clamp(24px, 4vw, 36px); }
 .land-intro h2 { margin: 0; }
@@ -516,8 +486,8 @@ html:has(.land-page) { overscroll-behavior-y: none; }
 
 .land-final { text-align: left; }
 .land-final h2 { margin-bottom: 26px; }
-/* the content now ends here: leave room under the buttons for the floating "Backers" pill */
-.land-final { padding-bottom: clamp(88px, 11vw, 120px); }
+/* the content ends on the closing call; the wall's headline guide follows straight after */
+.land-final { padding-bottom: clamp(36px, 5vw, 56px); }
 
 
 /* Fit one screen: shed detail as the viewport gets short or narrow. */
@@ -545,12 +515,12 @@ html:has(.land-page) { overscroll-behavior-y: none; }
   .land-buttons .land-cta { flex: 1 0 auto; padding-inline: 8px; gap: 8px; }
 }
 
-/* ───────────── the wall of sponsors (third view; components/SponsorWall.tsx) ─────────────
+/* ───────────── the wall of sponsors (last section; components/SponsorWall.tsx) ─────────────
    Dressed like the hero: the same guides, crosses, beams and dither horizon, on the content's
    wider column. It grows past one screen when it has to, and closes on the footer. Seats shrink
    with the tier (cards, then tiles, then round seats); an open seat is a rounded dotted outline
    that lights up and marches when its tier's link (or the seat itself) is hovered. */
-.land-wall { --horizon: clamp(120px, 20vh, 210px); }
+.land-wall { --horizon: clamp(120px, 20vh, 210px); grid-template-rows: 1fr auto; }
 .land-wall-col { width: min(100% - 32px, 920px); }
 .land-wall .land-body { gap: 24px; padding-bottom: 12px; }
 .land-wall .land-lead { max-width: 38em; }

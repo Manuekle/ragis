@@ -12,6 +12,7 @@ import { Skel, SkeletonRunRows, SkeletonStatus } from "@/components/skeletons";
 import { useConfirm } from "@/components/ui";
 import { useOrg } from "../layout";
 import { StateBadge, ago, when } from "../workflows/shared";
+import { useT } from "@/lib/use-t";
 
 interface Envelope {
   id: string;
@@ -42,6 +43,7 @@ interface Share {
 type Tab = "envelopes" | "shares";
 
 export default function SignaturesPage() {
+  const t = useT();
   const { org } = useParams<{ org: string }>();
   const { org: orgInfo } = useOrg();
   const confirm = useConfirm();
@@ -74,7 +76,7 @@ export default function SignaturesPage() {
   }, [load]);
 
   async function reveal(s: Share) {
-    const ok = await confirm({ title: "Generate a new link?", body: "The link is shown once. Any link generated before stops working. Send it only to the listed recipients." });
+    const ok = await confirm({ title: t("Generate a new link?"), body: t("The link is shown once. Any link generated before stops working. Send it only to the listed recipients.") });
     if (!ok) return;
     try {
       const r = await api<{ url: string }>(`organizations/${org}/shares/${s.id}/reveal`, { method: "POST" });
@@ -85,10 +87,10 @@ export default function SignaturesPage() {
   }
 
   async function revoke(s: Share) {
-    if (!(await confirm({ title: "Revoke this link?", body: "Recipients lose access immediately. This can't be undone.", confirmLabel: "Revoke", tone: "danger" }))) return;
+    if (!(await confirm({ title: t("Revoke this link?"), body: t("Recipients lose access immediately. This can't be undone."), confirmLabel: t("Revoke"), tone: "danger" }))) return;
     try {
       await api(`organizations/${org}/shares/${s.id}/revoke`, { method: "POST" });
-      setNotice("Link revoked");
+      setNotice(t("Link revoked"));
       setRevealed(null);
       load();
     } catch (err) {
@@ -99,41 +101,33 @@ export default function SignaturesPage() {
   return (
     <div className="page">
       <header className="page-bar">
-        <PageBreadcrumbs section="Signatures & sharing" context={orgInfo?.name} icon={IconBuilding} />
+        <PageBreadcrumbs section={t("Signatures & sharing")} context={orgInfo?.name} icon={IconBuilding} />
       </header>
       <div className="main">
         <header className="page-head" style={{ marginBottom: 20 }}>
           <div>
-            <h1>Signatures & sharing</h1>
-            <p className="sub">Send documents for signature, track each signer and share approved files with expiring links.</p>
+            <h1>{t("Signatures & sharing")}</h1>
+            <p className="sub">{t("Send documents for signature, track each signer and share approved files with expiring links.")}</p>
           </div>
           <div className="row">
-            {provider === "native" && <Link className="btn ghost" href={`/app/${org}/signatures/mine`}>My signatures</Link>}
-            {canCreate && <Link className="btn primary" href={`/app/${org}/signatures/new`}><IconSignature size={16} /> Request signatures</Link>}
+            {provider === "native" && <Link className="btn ghost" href={`/app/${org}/signatures/mine`}>{t("My signatures")}</Link>}
+            {canCreate && <Link className="btn primary" href={`/app/${org}/signatures/new`}><IconSignature size={16} />{" "}{t("Request signatures")}</Link>}
           </div>
         </header>
 
         {provider === "local" && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <IconAlert size={16} />
-            Signatures are in test mode: they work for trying things out but aren't legally binding. Ask your administrator to turn on Ragsis Sign.
-          </div>
+            <IconAlert size={16} />{t("Signatures are in test mode: they work for trying things out but aren't legally binding. Ask your administrator to turn on Ragsis Sign.")}</div>
         )}
         {provider === "disabled" && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <IconAlert size={16} />
-            Electronic signatures aren't turned on yet, so signature steps in workflows won't work. Ask your administrator to turn them on.
-          </div>
+            <IconAlert size={16} />{t("Electronic signatures aren't turned on yet, so signature steps in workflows won't work. Ask your administrator to turn them on.")}</div>
         )}
 
-        <div className="tabs" role="tablist" aria-label="Sections">
-          <button type="button" role="tab" aria-selected={tab === "envelopes"} onClick={() => (setTab("envelopes"), history.replaceState(null, "", "#envelopes"))}>
-            Signature requests
-            {envelopes === undefined ? <Skel w={16} h={13} r={999} /> : envelopes !== null && <span className="count"><SoftText text={String(envelopes.length)} /></span>}
+        <div className="tabs" role="tablist" aria-label={t("Sections")}>
+          <button type="button" role="tab" aria-selected={tab === "envelopes"} onClick={() => (setTab("envelopes"), history.replaceState(null, "", "#envelopes"))}>{t("Signature requests")}{envelopes === undefined ? <Skel w={16} h={13} r={999} /> : envelopes !== null && <span className="count"><SoftText text={String(envelopes.length)} /></span>}
           </button>
-          <button type="button" role="tab" aria-selected={tab === "shares"} onClick={() => (setTab("shares"), history.replaceState(null, "", "#shares"))}>
-            Shared links
-            {envelopes === undefined ? <Skel w={16} h={13} r={999} /> : envelopes !== null && <span className="count"><SoftText text={String(shares.filter((s) => s.status === "active").length)} /></span>}
+          <button type="button" role="tab" aria-selected={tab === "shares"} onClick={() => (setTab("shares"), history.replaceState(null, "", "#shares"))}>{t("Shared links")}{envelopes === undefined ? <Skel w={16} h={13} r={999} /> : envelopes !== null && <span className="count"><SoftText text={String(shares.filter((s) => s.status === "active").length)} /></span>}
           </button>
         </div>
 
@@ -141,7 +135,7 @@ export default function SignaturesPage() {
           <div className="alert" style={{ marginTop: 16 }}>
             <IconAlert size={16} />
             <span style={{ flex: 1 }}>{error}</span>
-            <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label="Dismiss">
+            <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label={t("Dismiss")}>
               <IconX size={14} />
             </button>
           </div>
@@ -150,14 +144,14 @@ export default function SignaturesPage() {
         {tab === "envelopes" && envelopes !== null && (
           <section className="card tab-panel" style={{ padding: 0, overflow: "hidden", marginTop: 20 }}>
             {envelopes === undefined ? (
-              <SkeletonStatus label="Loading signature requests…">
+              <SkeletonStatus label={t("Loading signature requests…")}>
                 <SkeletonRunRows />
               </SkeletonStatus>
             ) : envelopes.length === 0 ? (
               <div className="empty">
                 <StateIllustration kind="signatures" />
-                <strong>No signature requests yet</strong>
-                <span>Request signatures here, or run a workflow that includes a signature step.</span>
+                <strong>{t("No signature requests yet")}</strong>
+                <span>{t("Request signatures here, or run a workflow that includes a signature step.")}</span>
               </div>
             ) : (
               envelopes.map((e) => (
@@ -165,11 +159,11 @@ export default function SignaturesPage() {
                   <span className="meta">
                     <strong>{e.subject ?? e.documents.map((d) => d.title).join(", ")}</strong>
                     <small>
-                      {e.signers.map((s) => s.name).join(", ")} · {e.workflow_name ?? "sent by hand"} · {ago(e.created_at)}
+                      {e.signers.map((s) => s.name).join(", ")} · {e.workflow_name ?? t("sent by hand")} · {ago(e.created_at)}
                     </small>
                   </span>
                   <span className="side">
-                    {e.awaiting_me && <span className="badge warn">Needs your signature</span>}
+                    {e.awaiting_me && <span className="badge warn">{t("Needs your signature")}</span>}
                     <StateBadge state={e.state} />
                   </span>
                 </Link>
@@ -182,10 +176,10 @@ export default function SignaturesPage() {
           <section className="tab-panel" style={{ marginTop: 20, paddingTop: 0 }}>
             {revealed && (
               <div className="secret">
-                <strong>Copy the link now. It won't be shown again, and earlier links stopped working.</strong>
+                <strong>{t("Copy the link now. It won't be shown again, and earlier links stopped working.")}</strong>
                 <div className="token">
                   <code>{revealed.url}</code>
-                  <button type="button" className="quiet icon small" aria-label="Copy link" onClick={() => navigator.clipboard.writeText(revealed.url).then(() => setNotice("Link copied"))}>
+                  <button type="button" className="quiet icon small" aria-label={t("Copy link")} onClick={() => navigator.clipboard.writeText(revealed.url).then(() => setNotice(t("Link copied")))}>
                     <IconCopy size={16} />
                   </button>
                 </div>
@@ -193,34 +187,29 @@ export default function SignaturesPage() {
             )}
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               {envelopes === undefined ? (
-                <SkeletonStatus label="Loading shared links…">
+                <SkeletonStatus label={t("Loading shared links…")}>
                   <SkeletonRunRows />
                 </SkeletonStatus>
               ) : shares.length === 0 ? (
                 <div className="empty">
                   <StateIllustration kind="signatures" />
-                  <strong>No shared links</strong>
-                  <span>Links are created by a workflow's share step, after someone approves who receives them.</span>
+                  <strong>{t("No shared links")}</strong>
+                  <span>{t("Links are created by a workflow's share step, after someone approves who receives them.")}</span>
                 </div>
               ) : (
                 shares.map((s) => (
                   <div key={s.id} className="run-row">
                     <span className="meta">
                       <strong>{s.title}</strong>
-                      <small>
-                        To {s.recipients.join(", ")} · approved by {s.approved_by_email ?? "—"} · expires {when(s.expires_at)} · {s.access_count} {s.access_count === 1 ? "download" : "downloads"}
+                      <small>{t("To")}{" "}{s.recipients.join(", ")}{" "}{t("· approved by")}{" "}{s.approved_by_email ?? "—"}{" "}{t("· expires")}{" "}{when(s.expires_at)} · {s.access_count} {s.access_count === 1 ? "download" : "downloads"}
                       </small>
                     </span>
                     <span className="side">
                       <StateBadge state={s.status} />
                       {s.can_manage && s.status === "active" && (
                         <>
-                          <button type="button" className="ghost small" onClick={() => reveal(s)}>
-                            Get link
-                          </button>
-                          <button type="button" className="danger small" onClick={() => revoke(s)}>
-                            Revoke
-                          </button>
+                          <button type="button" className="ghost small" onClick={() => reveal(s)}>{t("Get link")}</button>
+                          <button type="button" className="danger small" onClick={() => revoke(s)}>{t("Revoke")}</button>
                         </>
                       )}
                     </span>

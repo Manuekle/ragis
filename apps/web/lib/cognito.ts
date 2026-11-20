@@ -8,6 +8,8 @@ import { authMode, oidcConfig } from "@/lib/oidc";
  */
 export function cognitoPasswordLogin(): boolean {
   if (authMode() !== "oidc") return false;
+  // AWS Emulator emite tokens con issuer https://127.0.0.1:<puerto>/<pool>, sin el host cognito-idp.*; este flag fuerza el formulario propio.
+  if (process.env.COGNITO_PASSWORD_LOGIN === "true") return true;
   try {
     return new URL(process.env.OIDC_ISSUER ?? "").hostname.startsWith("cognito-idp.");
   } catch {
