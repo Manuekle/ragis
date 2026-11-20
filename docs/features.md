@@ -182,6 +182,18 @@ wait in the **Inbox** of whoever holds the functional role (assigned in *Governa
 hash of what was reviewed and to the cited document versions; a rejection stops the run. **Activity** shows the
 timeline, decisions and events of each run.
 
+## Inviting people
+
+In **Governance → Members** an admin types an email and a role and presses *Invite*. Someone who has signed in to Ragis
+before joins at once. Anyone else gets an invitation: it waits under *Pending invitation* (it can be sent again or
+cancelled) and turns into a membership the first time that person signs in with that address, as long as the identity
+provider verified the email. Invitations expire after 14 days, never change an existing membership, and both the
+invitation and its acceptance go to the audit log. With `SIGNATURE_EMAIL_FROM` set, the person also gets an email (in
+the admin's language) with the sign-in link.
+
+The invitation does not create the sign-in account. With the pilot's Cognito user pool (admin-created users only), an
+operator still creates the account; the membership then appears on the first sign-in, with no second step.
+
 ## Teams and requests between teams (ADR-035)
 
 Admins set up the company's departments in **Governance → Teams**: one click for common ones (Legal, Finance &

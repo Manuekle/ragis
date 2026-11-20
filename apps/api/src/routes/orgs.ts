@@ -20,7 +20,8 @@ const CreateOrg = z.object({
 });
 const UpdateSettings = z.object({ graph_mode: z.enum(["inherit", "on", "off"]) }).strict();
 const CreateWorkspace = z.object({ name: z.string().trim().min(1).max(120) });
-const AddMember = z.object({ email: z.string().email(), role: z.enum(["admin", "member", "viewer"]).default("member") });
+// locale: language of the invitation email (the admin's), "en" when absent.
+const AddMember = z.object({ email: z.string().trim().email(), role: z.enum(["admin", "member", "viewer"]).default("member"), locale: z.enum(["es", "en"]).optional() });
 const AddWsMember = z.object({ user_id: z.string().uuid(), role: z.enum(["editor", "reader"]).default("reader") });
 const CreateGroup = z.object({ name: z.string().trim().min(1).max(120) });
 const AddGroupMember = z.object({ user_id: z.string().uuid() });
@@ -32,7 +33,7 @@ const CreateApiKey = z.object({
 });
 
 export async function orgRoutes(app: FastifyInstance, deps: Deps) {
-  const { pool } = deps;
+  const { pool, cfg } = deps;
 
   // Catálogo para la pantalla de alta (antes de que exista una organización): sector, enfoque RAG y despliegue probable.
   app.get("/v1/onboarding/catalog", async () => ({
@@ -105,7 +106,14 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
   app.get("/v1/organizations/:org", async (req) => {
     const t = req.tenant!;
     const org = await tx(pool, t, async (db) =>
-      (await db.query("SELECT id, name, slug, plan_id, data_class, region_policy, graph_mode, created_at FROM organizations WHERE id=$1", [t.organizationId])).rows[0],
+      (
+        await db.query(
+          `SELECT o.id, o.name, o.slug, o.plan_id, o.data_class, o.region_policy, o.graph_mode, o.created_at, p.sector_primary AS sector
+             FROM organizations o LEFT JOIN organization_profiles p ON p.organization_id = o.id
+            WHERE o.id=$1`,
+          [t.organizationId],
+        )
+      ).rows[0],
     );
     return { ...org, role: t.role, plan: t.plan, graph_enabled: t.graphEnabled, functional_roles: t.functionalRoles };
   });
@@ -205,25 +213,87 @@ export async function orgRoutes(app: FastifyInstance, deps: Deps) {
     return { members: rows };
   });
 
+  // Someone who has already signed in joins right away (or gets the new role if already a member). Anyone else gets
+  // an invitation by email (member_invitations) and joins the first time they sign in with that verified address.
   app.post("/v1/organizations/:org/members", async (req, reply) => {
     const t = req.tenant!;
     requireAdmin(t);
     const body = AddMember.parse(req.body);
-    const userId = await tx(pool, t, async (db) => {
-      const r = await db.query("SELECT app.user_id_for_invite($1) AS id", [body.email]);
-      const uid = r.rows[0]?.id as string | null;
-      // Respuesta uniforme: no se revela si el email existe en otro tenant.
-      if (!uid) throw badRequest("the user must sign in once before being added");
-      await db.query(
-        `INSERT INTO memberships (organization_id, user_id, role) VALUES ($1,$2,$3)
-         ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = 'active'`,
-        [t.organizationId, uid, body.role],
-      );
-      await audit(db, t, "member.added", `user:${uid}`, "allow", { role: body.role });
-      return uid;
+    const email = body.email.trim().toLowerCase();
+    const out = await tx(pool, t, async (db) => {
+      const uid = (await db.query("SELECT app.user_id_for_invite($1) AS id", [email])).rows[0]?.id as string | null;
+      if (uid) {
+        await db.query(
+          `INSERT INTO memberships (organization_id, user_id, role) VALUES ($1,$2,$3)
+           ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = 'active'`,
+          [t.organizationId, uid, body.role],
+        );
+        await audit(db, t, "member.added", `user:${uid}`, "allow", { role: body.role });
+        return { status: "added" as const, user_id: uid };
+      }
+      const inv = (
+        await db.query(
+          `INSERT INTO member_invitations (id, organization_id, email, role, invited_by) VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (organization_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL
+             DO UPDATE SET role = EXCLUDED.role, invited_by = EXCLUDED.invited_by, created_at = now(), expires_at = now() + interval '14 days'
+           RETURNING id, expires_at`,
+          [randomUUID(), t.organizationId, email, body.role, t.userId],
+        )
+      ).rows[0] as { id: string; expires_at: string };
+      await audit(db, t, "member.invited", `invitation:${inv.id}`, "allow", { role: body.role });
+      const who = (
+        await db.query(
+          "SELECT o.name AS organization, coalesce(u.display_name, u.email) AS inviter FROM organizations o, users u WHERE o.id = $1 AND u.id = $2",
+          [t.organizationId, t.userId],
+        )
+      ).rows[0] as { organization: string; inviter: string };
+      return { status: "invited" as const, invitation_id: inv.id, expires_at: inv.expires_at, ...who };
     });
-    reply.code(201);
-    return { user_id: userId, role: body.role };
+    if (out.status === "added") {
+      reply.code(201);
+      return { status: "added", user_id: out.user_id, role: body.role };
+    }
+    // The email is a courtesy: the invitation already exists, so a failed send never undoes it.
+    let emailSent = false;
+    if (deps.memberMailer) {
+      try {
+        const signInUrl = `${cfg.PUBLIC_BASE_URL.replace(/\/$/, "")}${body.locale === "es" ? "/es/login" : "/login"}`;
+        await deps.memberMailer({ to: email, organization: out.organization, invitedBy: out.inviter, signInUrl, locale: body.locale ?? "en" });
+        emailSent = true;
+      } catch (err) {
+        req.log.error({ err }, "could not send member invitation email");
+      }
+    }
+    reply.code(202);
+    return { status: "invited", invitation_id: out.invitation_id, email, role: body.role, expires_at: out.expires_at, email_sent: emailSent };
+  });
+
+  app.get("/v1/organizations/:org/invitations", async (req) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const rows = await tx(pool, t, async (db) =>
+      (
+        await db.query(
+          `SELECT i.id, i.email, i.role, i.created_at, i.expires_at, i.expires_at <= now() AS expired, coalesce(u.display_name, u.email) AS invited_by
+             FROM member_invitations i LEFT JOIN users u ON u.id = i.invited_by
+            WHERE i.accepted_at IS NULL AND i.revoked_at IS NULL ORDER BY i.created_at DESC`,
+        )
+      ).rows,
+    );
+    return { invitations: rows };
+  });
+
+  app.delete("/v1/organizations/:org/invitations/:id", async (req, reply) => {
+    const t = req.tenant!;
+    requireAdmin(t);
+    const id = (req.params as { id: string }).id;
+    assertUuid(id);
+    await tx(pool, t, async (db) => {
+      const r = await db.query("UPDATE member_invitations SET revoked_at = now() WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL", [id]);
+      if (!r.rowCount) throw notFound("invitation");
+      await audit(db, t, "member.invitation_revoked", `invitation:${id}`);
+    });
+    reply.code(204);
   });
 
   app.get("/v1/organizations/:org/groups", async (req) => {

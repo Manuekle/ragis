@@ -27,6 +27,7 @@ import { createESignProvider, type ESignProvider } from "./lib/esign.js";
 import { externalRoutes } from "./routes/external.js";
 import { nativeSignatureRoutes } from "./routes/signatures.js";
 import { createSignatureMailer, type SignatureMailer } from "./lib/signature-email.js";
+import { createMemberMailer, type MemberMailer } from "./lib/member-email.js";
 import { deliverSignatureInvites } from "./lib/signature-native.js";
 import { ConnectorService, type ServiceOptions } from "./lib/connectors/service.js";
 import { connectorRoutes } from "./routes/connectors.js";
@@ -59,12 +60,14 @@ export interface Deps {
   /** Proveedor de firma electrónica (ADR-023). */
   esign: ESignProvider;
   signatureMailer?: SignatureMailer;
+  /** Invitation emails to new members (same SES sender as signatures); absent = invitations send nothing. */
+  memberMailer?: MemberMailer;
 }
 
 export async function buildApp(
   deps: Omit<Deps, "limiter" | "esign"> & { limiter?: RateLimiter; esign?: ESignProvider; connectorOptions?: ServiceOptions },
 ): Promise<FastifyInstance> {
-  const full: Deps = { ...deps, limiter: deps.limiter ?? new RateLimiter(), esign: deps.esign ?? createESignProvider(deps.cfg), signatureMailer: deps.signatureMailer ?? createSignatureMailer(deps.cfg) };
+  const full: Deps = { ...deps, limiter: deps.limiter ?? new RateLimiter(), esign: deps.esign ?? createESignProvider(deps.cfg), signatureMailer: deps.signatureMailer ?? createSignatureMailer(deps.cfg), memberMailer: deps.memberMailer ?? createMemberMailer(deps.cfg) };
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? "info",

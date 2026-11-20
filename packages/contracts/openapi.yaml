@@ -279,7 +279,7 @@ paths:
       responses: { "201": { description: Created } }
   /v1/organizations/{org}:
     parameters: [{ $ref: '#/components/parameters/org' }]
-    get: { summary: "Details, role and plan limits", responses: { "200": { description: OK }, "404": { description: Not a member } } }
+    get: { summary: "Details, role, plan limits and sector (from Setup; null until chosen)", responses: { "200": { description: OK }, "404": { description: Not a member } } }
   /v1/organizations/{org}/settings:
     parameters: [{ $ref: '#/components/parameters/org' }]
     patch:
@@ -323,7 +323,28 @@ paths:
   /v1/organizations/{org}/members:
     parameters: [{ $ref: '#/components/parameters/org' }]
     get: { summary: Members (admin), responses: { "200": { description: OK } } }
-    post: { summary: Adds an existing member by email (admin), responses: { "201": { description: OK } } }
+    post:
+      summary: Adds a member by email (admin). Someone who has signed in before joins now; anyone else gets an invitation and joins on their first sign-in with that verified address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                role: { type: string, enum: [admin, member, viewer], default: member }
+                locale: { type: string, enum: [es, en], description: Language of the invitation email }
+      responses:
+        "201": { description: "Has signed in before: joins now, or gets the new role if already a member { status: added, user_id, role }" }
+        "202": { description: "Invited (expires in 14 days) { status: invited, invitation_id, email, role, expires_at, email_sent }. The email goes out only when SIGNATURE_EMAIL_FROM is set" }
+  /v1/organizations/{org}/invitations:
+    parameters: [{ $ref: '#/components/parameters/org' }]
+    get: { summary: "Open member invitations (admin): email, role, invited_by, expires_at, expired", responses: { "200": { description: OK } } }
+  /v1/organizations/{org}/invitations/{id}:
+    parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
+    delete: { summary: Revokes an open invitation (admin, audited), responses: { "204": { description: Revoked }, "404": { description: Not found or no longer open } } }
   /v1/organizations/{org}/groups:
     parameters: [{ $ref: '#/components/parameters/org' }]
     get: { summary: Groups (ACL principals), responses: { "200": { description: OK } } }

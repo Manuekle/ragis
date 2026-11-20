@@ -73,12 +73,17 @@ export class Authenticator {
     }
     const name = typeof payload.name === "string" ? payload.name : undefined;
     // El tenant NO viene del token: se resuelve después con membresía verificada.
+    const emailVerified = !!this.devKey || payload.email_verified === true || payload.email_verified === "true";
     const userId = await withContext(this.pool, {}, async (db) => {
       const r = await db.query("SELECT app.upsert_user($1, $2, $3, $4) AS id", [idp, payload.sub, email, name ?? null]);
-      return r.rows[0].id as string;
+      const id = r.rows[0].id as string;
+      // Invitations by email (member_invitations): an admin invited this address, so the first sign-in with it
+      // joins the organization. Only with an address the identity provider verified.
+      if (emailVerified) await db.query("SELECT 1 FROM app.accept_member_invitations($1)", [id]);
+      return id;
     });
     const amr = Array.isArray(payload.amr) ? payload.amr.filter((x): x is string => typeof x === "string") : [];
-    return { idp, subject: payload.sub, email, name, userId, amr, emailVerified: !!this.devKey || payload.email_verified === true || payload.email_verified === "true" };
+    return { idp, subject: payload.sub, email, name, userId, amr, emailVerified };
   }
 }
 

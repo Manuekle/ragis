@@ -66,7 +66,7 @@ How sign-in works: [authentication.md](authentication.md).
 | `ESIGN_PROVIDER` | `native` | `native`, `local` (simulates only, development) or `disabled`. |
 | `ESIGN_WEBHOOK_SECRET` | empty | At least 32 characters. |
 | `SIGNATURE_SEAL_SECRET` | derived | Stable secret for the Ed25519 seal (minimum 32 characters). Derived from `INTERNAL_SERVICE_SECRET` by default. |
-| `SIGNATURE_EMAIL_FROM` | empty | Verified SES sender. Empty in development uses the test invitation. |
+| `SIGNATURE_EMAIL_FROM` | empty | Verified SES sender for Ragsis Sign and for member invitation emails. Empty in development uses the test invitation; member invitations are still created, just not emailed. |
 
 ### Connectors
 

@@ -11,6 +11,7 @@ import { createPool } from "../src/db/pool.js";
 import { migrate } from "../src/db/migrate.js";
 import type { Queue, Storage } from "../src/lib/aws.js";
 import type { RagClient } from "../src/routes/query.js";
+import type { MemberInvite } from "../src/lib/member-email.js";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const env = Object.fromEntries(
@@ -67,6 +68,7 @@ let pool: pg.Pool;
 const storage = new FakeStorage();
 const queue = new FakeQueue();
 const rag = new FakeRag();
+const sentInvites: MemberInvite[] = [];
 
 async function login(email: string): Promise<string> {
   const r = await app.inject({ method: "POST", url: "/v1/auth/dev-login", payload: { email } });
@@ -98,7 +100,7 @@ beforeAll(async () => {
     RAGSIS_ENV: "test",
   });
   pool = createPool(cfg.DATABASE_URL);
-  app = await buildApp({ cfg, pool, storage, queue, rag });
+  app = await buildApp({ cfg, pool, storage, queue, rag, memberMailer: async (invite) => void sentInvites.push(invite) });
 });
 
 afterAll(async () => {
@@ -124,6 +126,50 @@ describe("auth y tenancy", () => {
     expect((await call(bob, "GET", `/v1/organizations/${id}`)).statusCode).toBe(404);
     expect((await call(bob, "GET", `/v1/organizations/${id}/workspaces`)).statusCode).toBe(404);
     expect((await call(bob, "GET", `/v1/organizations/not-a-uuid`)).statusCode).toBe(404);
+  });
+});
+
+describe("invitaciones por correo", () => {
+  it("quien nunca entró queda invitado y se une al primer inicio de sesión; revocar y permisos", async () => {
+    const owner = await login("paula@invita.test");
+    const org = (await call(owner, "POST", "/v1/organizations", { name: "Despacho Invita" })).json().id;
+
+    // Nunca inició sesión: invitación (202), correo en el idioma de quien invita, y aparece como pendiente.
+    const inv = await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "Nuevo.Asociado@Invita.test", role: "viewer", locale: "es" });
+    expect(inv.statusCode, inv.body).toBe(202);
+    expect(inv.json()).toMatchObject({ status: "invited", email: "nuevo.asociado@invita.test", role: "viewer", email_sent: true });
+    expect(sentInvites.at(-1)).toMatchObject({ to: "nuevo.asociado@invita.test", organization: "Despacho Invita", locale: "es" });
+    expect(sentInvites.at(-1)!.signInUrl).toMatch(/\/es\/login$/);
+    let pending = (await call(owner, "GET", `/v1/organizations/${org}/invitations`)).json().invitations;
+    expect(pending.map((i: { email: string }) => i.email)).toEqual(["nuevo.asociado@invita.test"]);
+    // Invitar otra vez actualiza la misma invitación (una abierta por dirección).
+    await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "nuevo.asociado@invita.test", role: "member" });
+    pending = (await call(owner, "GET", `/v1/organizations/${org}/invitations`)).json().invitations;
+    expect(pending).toHaveLength(1);
+    expect(pending[0].role).toBe("member");
+
+    // Primer inicio de sesión con esa dirección: ya es miembro con el rol elegido y la invitación se cierra.
+    const nuevo = await login("nuevo.asociado@invita.test");
+    const me = (await call(nuevo, "GET", "/v1/me")).json();
+    expect(me.organizations.find((o: { id: string }) => o.id === org)?.role).toBe("member");
+    expect((await call(owner, "GET", `/v1/organizations/${org}/invitations`)).json().invitations).toHaveLength(0);
+    const audit = (await call(owner, "GET", `/v1/organizations/${org}/audit`)).json().events.map((e: { action: string }) => e.action);
+    expect(audit).toEqual(expect.arrayContaining(["member.invited", "member.invitation_accepted"]));
+    // Un miembro que no es admin no ve ni revoca invitaciones.
+    expect((await call(nuevo, "GET", `/v1/organizations/${org}/invitations`)).statusCode).toBe(403);
+
+    // Revocada antes de entrar: no da acceso.
+    const rev = (await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "revocada@invita.test" })).json();
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/invitations/${rev.invitation_id}`)).statusCode).toBe(204);
+    expect((await call(owner, "DELETE", `/v1/organizations/${org}/invitations/${rev.invitation_id}`)).statusCode).toBe(404);
+    const revocada = await login("revocada@invita.test");
+    expect((await call(revocada, "GET", "/v1/me")).json().organizations.map((o: { id: string }) => o.id)).not.toContain(org);
+    expect((await call(revocada, "GET", `/v1/organizations/${org}`)).statusCode).toBe(404);
+
+    // Quien ya inició sesión alguna vez entra al momento (201 con user_id), como antes.
+    const added = await call(owner, "POST", `/v1/organizations/${org}/members`, { email: "revocada@invita.test", role: "viewer" });
+    expect(added.statusCode).toBe(201);
+    expect(added.json()).toMatchObject({ status: "added", role: "viewer" });
   });
 });
 
