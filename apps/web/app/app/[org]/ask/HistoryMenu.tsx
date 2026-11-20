@@ -169,7 +169,7 @@ export function HistoryMenu({ orgId, activeId, disabled, onOpen, onDeleted }: Pr
                   >
                     <span className="hist-title">{c.title}</span>
                     <span className="hist-meta">
-                      {whenLabel(c.updated_at)} · {c.turns} {c.turns === 1 ? "question" : "questions"}
+                      {whenLabel(c.updated_at)} · {c.turns === 1 ? t("1 question") : t("{n} questions", { n: c.turns })}
                     </span>
                   </button>
                 )}

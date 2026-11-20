@@ -1562,6 +1562,8 @@ export const ES: Record<string, string> = {
  "Ragis can't reach one of its services right now. Try again in a moment.": "Ragis no puede conectar ahora con uno de sus servicios. Inténtalo de nuevo en un momento.",
  "1 source": "1 fuente",
  "{n} sources": "{n} fuentes",
+ "1 question": "1 pregunta",
+ "{n} questions": "{n} preguntas",
  "at {time}": "en {time}",
  "effective from {date}": "vigente desde {date}",
  "chat": "texto",
