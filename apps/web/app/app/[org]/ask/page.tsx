@@ -22,7 +22,8 @@ import {
   IconThumbDown,
   IconThumbUp,
 } from "@/components/icons";
-import { StreamText, Swap, ThinkingStates, useDropdown } from "@/components/motion";
+import { Swap, ThinkingStates, useDropdown } from "@/components/motion";
+import { AnswerText } from "@/components/AnswerText";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { ClickUpLogo, FolderGlyph, GmailLogo, SlackLogo } from "@/components/brand-logos";
 import { DatePicker } from "@/components/ui";
@@ -264,7 +265,7 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: {
       {r &&
         (r.abstain_reason === "smalltalk" ? (
           // Saludos y cortesías: respuesta fija del asistente, no es una abstención por falta de evidencia.
-          <StreamText text={r.answer} animate={fresh} onCite={cite} />
+          <AnswerText text={r.answer} animate={fresh} onCite={cite} />
         ) : r.abstained ? (
           <div className="abstain">
             <IconAlert size={18} variant="duotone" />
@@ -292,7 +293,7 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: {
             </div>
           </div>
         ) : (
-          <StreamText text={r.answer} animate={fresh} onCite={cite} />
+          <AnswerText text={r.answer} animate={fresh} onCite={cite} />
         ))}
 
       {r && !r.abstained && r.document && <DocumentCard doc={r.document} orgId={orgId} onPreview={onPreview} />}
