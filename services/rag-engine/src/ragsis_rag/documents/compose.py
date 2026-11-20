@@ -22,7 +22,7 @@ from ragsis_ai.types import Evidence
 from ragsis_core.text import content_terms, split_sentences
 
 from ..prompting import is_abstention, looks_spanish, render_sources
-from ..verifier import _AFTER_CITE, _CITE, _NUMBER, _add_citations, _completion, _supported
+from ..verifier import _AFTER_CITE, _CITE, _NUMBER, _add_citations, _completion, _supported, balance_strong
 from .intent import DocumentRequest
 from .model import tidy_citations
 
@@ -129,7 +129,7 @@ def _verify_text(text: str, by_n: dict[int, Evidence], terms: dict[int, set[str]
             valid = valid + extra
         kept.append(clean)
         cited.extend(n for n in valid if n not in cited)
-    out = " ".join(s for s in kept if s).strip()
+    out = balance_strong(" ".join(s for s in kept if s))
     # Lo que queda sin ninguna cita (solo una etiqueta suelta) no es contenido.
     return (out if _CITE.search(out) else ""), dropped
 

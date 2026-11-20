@@ -7,6 +7,9 @@
 - Citas incompletas se completan: si una oración encadena hechos de dos fuentes (multi-hop) pero el modelo cita solo
   una, y otra fuente entregada cubre los términos que la citada no tiene, se agrega su [n]. Los modelos pequeños
   suelen citar una sola fuente aunque la respuesta use dos.
+- Las oraciones no se parten en abreviaturas («el num. 4 del art. 93», «M.P. Carlos Camargo Assis») ni entre una
+  etiqueta y su valor («Ponente: …»): partirlas dejaba un trozo sin cita que se descartaba y cambiaba lo afirmado.
+- Una negrita que abría o cerraba en una oración descartada no queda como «**» suelto.
 """
 
 from __future__ import annotations
@@ -74,6 +77,32 @@ def _completion(sentence: str, valid: list[int], terms: dict[int, set[str]]) -> 
     return extra
 
 
+_STRONG = re.compile(r"\*\*")
+
+
+def balance_strong(text: str) -> str:
+    """Quita los «**» sin pareja. Al descartar una oración sin respaldo puede quedar suelta la negrita que abría o
+    cerraba en ella («Ponente: Carlos Camargo Assis [2].**»), y la web la mostraría como asteriscos literales.
+
+    Un «**» con texto pegado a la izquierda cierra la negrita abierta; con texto pegado a la derecha abre una nueva.
+    """
+    orphans: list[int] = []
+    opened: list[int] = []
+    for m in _STRONG.finditer(text):
+        before = text[m.start() - 1] if m.start() else " "
+        after = text[m.end()] if m.end() < len(text) else " "
+        if not before.isspace() and opened:
+            opened.pop()
+        elif not after.isspace():
+            opened.append(m.start())
+        else:
+            orphans.append(m.start())
+    for i in sorted(orphans + opened, reverse=True):
+        left, right = text[:i], text[i + 2:]
+        text = left.rstrip(" ") + " " + right.lstrip(" ") if left.endswith(" ") and right.startswith(" ") else left + right
+    return text.strip()
+
+
 def _add_citations(sentence: str, extra: list[int]) -> str:
     last = list(_CITE.finditer(sentence))[-1]
     marks = "".join(f"[{n}]" for n in extra)
@@ -116,4 +145,4 @@ def verify(answer: str, evidence: list[Evidence]) -> Verification:
 
     if not cited:
         return Verification("", [], True, "no_verified_citations", dropped, invalid)
-    return Verification(" ".join(s for s in kept if s), cited, False, None, dropped, invalid)
+    return Verification(balance_strong(" ".join(s for s in kept if s)), cited, False, None, dropped, invalid)
