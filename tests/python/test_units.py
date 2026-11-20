@@ -216,6 +216,46 @@ def test_verifier_does_not_add_unrelated_sources():
     assert v.cited == [2]
 
 
+CASE = [Evidence(1, "Demandante: Inversiones Ortiz S.A.S. Demandado: Constructora Lozano Ltda.", "Demanda"),
+        Evidence(2, "La demandante pretende la resolución del contrato de obra y el pago de perjuicios.", "Demanda"),
+        Evidence(3, "Por auto del juzgado se abrió el proceso a pruebas y se fijó audiencia inicial.", "Auto")]
+
+
+def test_verifier_keeps_markdown_lines():
+    v = verify("**Partes:**\n"
+               "- Demandante: Inversiones Ortiz S.A.S. [1]\n"
+               "- Demandado: Constructora Lozano Ltda. [1]\n"
+               "\n\n"
+               "## Pretensiones\n"
+               "1. La resolución del contrato de obra [2].\n"
+               "2. El pago de perjuicios [2].\n"
+               "\n"
+               "**Etapa procesal:** El juzgado abrió el proceso a pruebas [3].", CASE)
+    assert v.cited == [1, 2, 3]
+    assert v.answer == ("**Partes:**\n"
+                        "- Demandante: Inversiones Ortiz S.A.S. [1]\n"
+                        "- Demandado: Constructora Lozano Ltda. [1]\n"
+                        "\n"
+                        "## Pretensiones\n"
+                        "1. La resolución del contrato de obra [2].\n"
+                        "2. El pago de perjuicios [2].\n"
+                        "\n"
+                        "**Etapa procesal:** El juzgado abrió el proceso a pruebas [3].")
+
+
+def test_verifier_drops_unsupported_list_items_whole():
+    v = verify("- Demandante: Inversiones Ortiz S.A.S. [1]\n"
+               "- La demanda se presentó el 14 de marzo de 2024 ante el Juzgado Quinto Civil [1]\n"
+               "- El proceso está en etapa de pruebas [3].", CASE)
+    assert v.answer == "- Demandante: Inversiones Ortiz S.A.S. [1]\n- El proceso está en etapa de pruebas [3]."
+    assert v.dropped_sentences == 1
+
+
+def test_verifier_joins_a_sentence_split_across_lines():
+    v = verify("La demandante pretende la resolución del contrato\nde obra y el pago de perjuicios [2].", CASE)
+    assert v.answer == "La demandante pretende la resolución del contrato de obra y el pago de perjuicios [2]."
+
+
 def test_verifier_abstains_without_support():
     assert verify("La empresa fue fundada en 1990 en Medellín.", EV).abstained
     assert verify("El plazo es 30 días. [9]", EV).abstained
