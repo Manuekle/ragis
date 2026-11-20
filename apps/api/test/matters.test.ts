@@ -138,6 +138,7 @@ describe("expedientes (ADR-037)", () => {
 
     const list = (await call(carol, "GET", `${base}/matters`)).json();
     expect(list.can_edit).toBe(false);
+    expect(list.people.map((x: { name: string }) => x.name).sort()).toEqual(["alice@crud.test", "bob@crud.test", "carol@crud.test"]);
     expect(list.matters.map((x: { client_name: string }) => x.client_name)).toEqual(["Inversiones Gómez SAS", "Juan Felipe Parra Rosas"]);
     expect((await call(alice, "GET", `${base}/matters?q=16.857`)).json().matters).toHaveLength(1);
 

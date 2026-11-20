@@ -153,7 +153,17 @@ export async function matterRoutes(app: FastifyInstance, deps: Deps) {
           LIMIT 500`,
         [memberWorkspaces(t), q.status ?? null, q.q || null],
       );
-      return { matters: r.rows.map((m) => ({ ...m, can_delete: canDelete(t, m) })), can_edit: t.role !== "viewer" };
+      // Para elegir responsable: los miembros activos (nombre visible), sin exigir rol de admin.
+      const people = await db.query(
+        `SELECT u.id, coalesce(u.display_name, u.email) AS name FROM memberships m JOIN users u ON u.id = m.user_id
+          WHERE m.organization_id = $1 AND m.status = 'active' ORDER BY lower(coalesce(u.display_name, u.email))`,
+        [t.organizationId],
+      );
+      return {
+        matters: r.rows.map((m) => ({ ...m, can_delete: canDelete(t, m) })),
+        can_edit: t.role !== "viewer",
+        people: people.rows,
+      };
     });
   });
 
