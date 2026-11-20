@@ -27,7 +27,7 @@ const RenameBody = z.object({ title: z.string().trim().min(1).max(120) });
 
 /** Solo los campos que la pantalla necesita; nada interno (tiempos, costes) pasa al historial. */
 function snapshot(result: Record<string, unknown>): Record<string, unknown> {
-  const keep = ["trace_id", "answer", "abstained", "abstain_reason", "citations", "retrieval_strategy", "question_class", "generation_model", "latency_ms", "public_sources"];
+  const keep = ["trace_id", "answer", "abstained", "abstain_reason", "citations", "retrieval_strategy", "question_class", "generation_model", "latency_ms", "public_sources", "scope"];
   const out = Object.fromEntries(keep.filter((k) => k in result).map((k) => [k, result[k]]));
   // Documento generado (ADR-034): solo la tarjeta; el Markdown vive en generated_documents y se pide al abrirlo.
   const doc = result.document as Record<string, unknown> | null | undefined;
