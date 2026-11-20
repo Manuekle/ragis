@@ -947,7 +947,7 @@ emulated client and case with folders ("Cliente — Juan Felipe Parra Rosas", "E
 scoped Ask (ADR-031), so an answer could mix documents of different clients.
 
 **Decision.**
-- **An expediente is a record of the firm**, not a folder and not a space (migration `0022_matters.sql`): `matters` with
+- **An expediente is a record of the firm**, not a folder and not a space (migration `0024_matters.sql`): `matters` with
   title, client (required), counterparty, filing number (*radicado*, unique per organization, case-insensitive), court
   (*despacho*), stage (free text with suggestions), owner (*responsable*) and status (`active`, `on_hold`, `closed`,
   `archived`). `documents.matter_id` links a document to **one** expediente or none (`ON DELETE SET NULL`); a trigger
