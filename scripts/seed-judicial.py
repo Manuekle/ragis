@@ -47,6 +47,24 @@ QUESTIONS = [
     ("owner", "¿Quién es responsable de la nueva demanda y cuántas horas ha registrado en el caso?"),
 ]
 
+# ADR-037: the case as an expediente. Titles are linked wherever they are filed (General or a team's space): the
+# week script adds the risk matrix and the checklist in «Litigio constitucional».
+MATTER = {
+    "title": "Parra Rosas — D-16.857",
+    "client_name": "Juan Felipe Parra Rosas",
+    "case_number": "D-16.857",
+    "court": "Corte Constitucional — Sala Plena",
+    "stage": "Fallo",
+    "status": "active",
+}
+MATTER_DOCS = [
+    "Sentencia C-217 de 2026", "Escrito de corrección de la demanda", "Cronología del expediente",
+    "Estrategia después del fallo", "Acta de reunión con el cliente", "Memorando confidencial de honorarios",
+    "Informe trimestral al cliente N.º 1", "Poder especial — Juan Felipe Parra Rosas",
+    "Acta de reunión con el cliente — 12 de noviembre", "Matriz de riesgos de la nueva demanda",
+    "Lista de verificación — nueva demanda",
+]
+
 ROLES = {
     OWNER: ["reviewer", "approver", "signatory", "agent_designer", "knowledge_manager"],
     READER: ["reviewer"],
@@ -205,6 +223,27 @@ def set_access(owner: Session, org: str) -> None:
     )
 
 
+def ensure_matter(s: Session, org: str, spec: dict, titles: list[str], owner_id: str | None = None) -> str:
+    """Creates the expediente once (found by its filing number) and links the documents with these titles in every
+    space `s` can see. Linking never changes who can read a document (ADR-037)."""
+    base = f"organizations/{org}"
+    found = [m for m in s.req("GET", f"{base}/matters", params={"q": spec["case_number"]}).json()["matters"]
+             if (m["case_number"] or "").lower() == spec["case_number"].lower()]
+    if found:
+        matter = found[0]
+    else:
+        matter = s.req("POST", f"{base}/matters", json={**spec, **({"owner_id": owner_id} if owner_id else {})}).json()
+    ids = []
+    for w in s.req("GET", f"{base}/workspaces").json()["workspaces"]:
+        docs = s.req("GET", f"{base}/documents", params={"workspace_id": w["id"], "limit": 200}).json()["documents"]
+        ids += [d["id"] for d in docs if d["title"] in titles and d.get("matter_id") != matter["id"]]
+    if ids:
+        s.req("POST", f"{base}/documents/matter", json={"document_ids": ids, "matter_id": matter["id"]})
+    count = s.req("GET", f"{base}/matters/{matter['id']}").json()["document_count"]
+    print(f"  Expediente «{matter['title']}»: {count} documents{f' ({len(ids)} linked now)' if ids else ''}.")
+    return matter["id"]
+
+
 def ensure_agents(owner: Session, org: str, ws: str) -> None:
     base = f"organizations/{org}/agents"
     by_template = {a["template_code"]: a for a in owner.req("GET", base).json()["agents"]}
@@ -337,6 +376,7 @@ def main() -> int:
     print("\nSetting up agents, workflows and activity:")
     complete_onboarding(owner, org)
     set_access(owner, org)
+    ensure_matter(owner, org, MATTER, MATTER_DOCS, owner.user_id)
     ensure_agents(owner, org, ws)
     workflows = ensure_workflows(owner, org)
     seed_runs(sessions, org, workflows, date.today().isoformat() if args.fresh_runs else "v1")
@@ -346,6 +386,12 @@ def main() -> int:
         res = sessions[who].req("POST", f"organizations/{org}/workspaces/{ws}/query", json={"question": question}).json()
         state = "abstains" if res["abstained"] else f"{len(res['citations'])} citation(s)"
         print(f"  [{who:6}] {question}\n           -> {state}: {res['answer'][:140]}")
+
+    m = next(x for x in owner.req("GET", f"organizations/{org}/matters", params={"q": MATTER["case_number"]}).json()["matters"])
+    res = owner.req("POST", f"organizations/{org}/workspaces/{ws}/query",
+                    json={"question": QUESTIONS[0][1], "scope": {"type": "matter", "id": m["id"]}}).json()
+    state = "abstains" if res["abstained"] else f"{len(res['citations'])} citation(s)"
+    print(f"  [owner ] {QUESTIONS[0][1]} (expediente {MATTER['case_number']})\n           -> {state}")
 
     print(f"\nOpen {args.web} and sign in with {OWNER} (partner) or {READER} (associate).")
     return 0

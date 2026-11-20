@@ -10,6 +10,8 @@ dated back to its day and hour in Postgres, so lists, histories and the audit lo
     lead and members; requests between them with assignments, comments, waiting/done states and due dates.
   - Library: folders for the case file, eight new documents (DOCX, XLSX, PDF, TXT, Markdown) uploaded on the day they
     belong to, and a second version of the hours sheet.
+  - Expedientes (ADR-037): «Parra Rosas — D-16.857», whose documents sit in «General» and «Litigio constitucional», and
+    «Seguimiento LAT-506», followed by the research team.
   - Ask: about eighteen conversations across five people, some with follow-ups and some that produce a PDF, Word,
     PowerPoint or Excel file.
   - Workflows: runs started and decided across the week (approved, rejected) and three that still wait today.
@@ -87,6 +89,21 @@ FOLDERS = {
     "Jurisprudencia": ["Boletín de jurisprudencia laboral"],
     "Socios": ["Memorando confidencial de honorarios"],
 }
+
+# ADR-037: expedientes, (fields, who links them, document titles). Titles are linked in whichever space they are filed:
+# the D-16.857 case spans «General» and «Litigio constitucional»; LAT-506 is followed in «Investigación jurídica».
+MATTERS = [
+    ({"title": "Parra Rosas — D-16.857", "client_name": CLIENT["name"], "case_number": "D-16.857",
+      "court": "Corte Constitucional — Sala Plena", "stage": "Fallo", "status": "active"}, "mariana",
+     ["Sentencia C-217 de 2026", "Escrito de corrección de la demanda", "Cronología del expediente",
+      "Estrategia después del fallo", "Acta de reunión con el cliente", "Memorando confidencial de honorarios",
+      "Informe trimestral al cliente N.º 1", "Poder especial — Juan Felipe Parra Rosas",
+      "Acta de reunión con el cliente — 12 de noviembre", "Matriz de riesgos de la nueva demanda",
+      "Lista de verificación — nueva demanda"]),
+    ({"title": "Seguimiento LAT-506 — Ley 2528 de 2025", "client_name": CLIENT["name"], "case_number": "LAT-506",
+      "court": "Corte Constitucional — Sala Plena", "stage": "Ponencia", "status": "active"}, "laura",
+     ["Seguimiento del expediente LAT-506 — noviembre 2026"]),
+]
 
 
 def day(n: int) -> date:
@@ -487,6 +504,21 @@ class Firm:
 
     def ws(self, key: str) -> str:
         return self.general if key == "general" else self.teams[key]["workspace_id"]
+
+
+def setup_matters(f: Firm) -> None:
+    """Expedientes (ADR-037): created once (found by filing number) and linked to their documents in every space."""
+    for spec, who, titles in MATTERS:
+        found = [m for m in f.r(who, "GET", "matters", params={"q": spec["case_number"]}).json()["matters"]
+                 if (m["case_number"] or "").lower() == spec["case_number"].lower()]
+        matter = found[0] if found else f.r(who, "POST", "matters", json={**spec, "owner_id": f.uid[who]}).json()
+        ids = []
+        for w in f.r(who, "GET", "workspaces").json()["workspaces"]:
+            docs = f.r(who, "GET", "documents", params={"workspace_id": w["id"], "limit": 200}).json()["documents"]
+            ids += [d["id"] for d in docs if d["title"] in titles and d.get("matter_id") != matter["id"]]
+        if ids:
+            f.r(who, "POST", "documents/matter", json={"document_ids": ids, "matter_id": matter["id"]})
+    print(f"  Expedientes: {', '.join(m[0]['title'] for m in MATTERS)}.")
 
 
 def setup_people(f: Firm) -> None:
@@ -948,6 +980,7 @@ def story(f: Firm) -> list[tuple[int, str, str, Callable[[], object]]]:
                                               "acta-reunion-cliente-noviembre.txt", doc_acta_cliente(day(1)), cli)),
         (1, "15:10", "run", run("estrategia", "mariana", "contract_review",
             "Revisa la estrategia después del fallo y señala los riesgos para la próxima revisión del comité de litigio.")),
+        (1, "15:40", "matters", lambda: setup_matters(f)),
         (1, "16:00", "ask", lambda: ask(f, "tomas", "reunion-nov", G, [
             "¿Qué se decidió en la reunión con el cliente del 12 de noviembre de 2026?",
             "¿Cuándo debe enviarse el segundo informe trimestral al cliente?"])),
