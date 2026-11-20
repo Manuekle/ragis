@@ -117,6 +117,8 @@ export async function issueInternalToken(
      */
     wss?: string[];
     sc?: InternalScope;
+    /** «Solo IA privada» (llm_policy=local_only or an on_prem deployment): the rag-engine uses no cloud model. */
+    localOnly?: boolean;
   },
 ): Promise<string> {
   return new SignJWT({
@@ -132,6 +134,7 @@ export async function issueInternalToken(
     ...(claims.pub ? { pub: claims.pub } : {}),
     ...(claims.wss ? { wss: claims.wss } : {}),
     ...(claims.sc ? { sc: claims.sc } : {}),
+    ...(claims.localOnly ? { lo: true } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.userId)

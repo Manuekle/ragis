@@ -37,6 +37,16 @@ def content_terms(text: str) -> list[str]:
     return [w for w in words(text) if w not in SPANISH_STOPWORDS and (len(w) > 2 or w.isdigit())]
 
 
+_ES_CHARS = re.compile(r"[¿¡áéíóúñ]", re.I)
+_ES_WORDS = re.compile(r"\b(el|la|los|las|de|del|que|cu[aá]l(?:es)?|qu[eé]|qui[eé]n(?:es)?|c[oó]mo|d[oó]nde|cu[aá]ndo|"
+                       r"para|por|con|una|es|son|se|en|su|sus)\b", re.I)
+
+
+def looks_spanish(text: str) -> bool:
+    """Heurística barata del idioma de una pregunta: tildes, signos de apertura o al menos dos palabras funcionales."""
+    return bool(_ES_CHARS.search(text)) or len(_ES_WORDS.findall(text)) >= 2
+
+
 def estimate_tokens(text: str) -> int:
     """Estimación conservadora (~1.3 tokens por palabra en español, mínimo por caracteres).
 

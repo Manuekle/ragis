@@ -5,6 +5,9 @@
   confidential  -> modelos locales, o modelo cloud explícitamente en allowlist del tenant.
   restricted    -> solo inferencia/embeddings locales; jamás llamadas a APIs externas.
 
+«Solo IA privada» (`local_only`, elegido en el onboarding o por desplegar en servidores propios): lo mismo que
+restricted para los modelos, sea cual sea la clasificación.
+
 Modelos que entrenan con el contenido enviado (`trains_on_data`, p. ej. Muse Contributor): solo si el despliegue lo
 habilita (AI_ALLOW_TRAINING_MODELS=true) y nunca con datos confidential o restricted, ni con allowlist.
 """
@@ -27,6 +30,8 @@ def is_allowed(model: ModelSpec, policy: TenantAIPolicy) -> tuple[bool, str]:
         return True, "local"
     if dc == DataClass.RESTRICTED:
         return False, "tenant restringido: solo modelos locales"
+    if policy.local_only:
+        return False, "la organización eligió solo IA privada: ningún modelo en la nube"
     if model.trains_on_data:
         if not get_settings().ai_allow_training_models:
             return False, f"{model.model_id} entrena con el contenido: deshabilitado en este despliegue"

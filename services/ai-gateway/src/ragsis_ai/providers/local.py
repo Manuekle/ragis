@@ -18,7 +18,7 @@ import math
 import re
 from collections import Counter
 
-from ragsis_core.text import SPANISH_STOPWORDS, content_terms, estimate_tokens, fold, split_sentences
+from ragsis_core.text import SPANISH_STOPWORDS, content_terms, estimate_tokens, fold, looks_spanish, split_sentences
 
 from ..registry import ModelSpec
 from ..types import GenerationRequest, GenerationResult
@@ -274,7 +274,9 @@ class LocalProvider:
         if not picked:
             text = "I couldn't find enough evidence in the authorized documents to answer."
         else:
-            text = "According to the documents: " + " ".join(
+            # El arranque sigue el idioma de la pregunta; las oraciones citadas van tal cual están en la fuente.
+            lead = "Según los documentos: " if looks_spanish(request.question) else "According to the documents: "
+            text = lead + " ".join(
                 f"{sent}{'' if sent.endswith(('.', ';', ':')) else '.'} [{n}]" for n, sent in picked
             )
         return GenerationResult(text, model.model_id, estimate_tokens(request.prompt), estimate_tokens(text))

@@ -162,7 +162,7 @@ class QueryOrchestrator:
         if chat:
             return self._small_talk(claims, question, chat, trace_id, t_start)
         policy = TenantAIPolicy(data_class=DataClass(claims.data_class), model_allowlist=claims.model_allowlist,
-                                max_output_tokens=1200)
+                                max_output_tokens=1200, local_only=claims.local_only)
         doc_request = resolve_document(opts.output, question)
         qclass = "document" if doc_request else classify(question)
         calls_before = len(self.gateway.calls)

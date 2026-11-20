@@ -137,7 +137,8 @@ def _usage(conn: psycopg.Connection, org: uuid.UUID, kind: str, qty: float, ref:
 _VERSION_SQL = """
     SELECT v.*, d.workspace_id, d.status AS doc_status, d.title AS doc_title, o.data_class, o.region_policy, o.model_allowlist,
            p.max_pages_per_doc, p.max_upload_bytes,
-           CASE o.graph_mode WHEN 'on' THEN true WHEN 'off' THEN false ELSE p.graph_enabled END AS graph_enabled
+           CASE o.graph_mode WHEN 'on' THEN true WHEN 'off' THEN false ELSE p.graph_enabled END AS graph_enabled,
+           app.ai_local_only() AS ai_local_only
       FROM document_versions v
       JOIN documents d ON d.id = v.document_id
       JOIN organizations o ON o.id = v.organization_id
@@ -204,7 +205,9 @@ class IngestPipeline:
     def _policy(ver: dict) -> TenantAIPolicy:
         return TenantAIPolicy(data_class=DataClass(ver["data_class"]),
                               model_allowlist=tuple(ver["model_allowlist"] or ()),
-                              approved_regions=(ver["region_policy"],))
+                              approved_regions=(ver["region_policy"],),
+                              # «Solo IA privada»: ni la visión de figuras ni el OCR/transcripción en la nube.
+                              local_only=bool(ver.get("ai_local_only")))
 
     def _extract(self, ctx: SecurityContext, ver: dict, policy: TenantAIPolicy, on_status=None,
                  known_descriptions: dict[str, tuple] | None = None) -> Extraction:

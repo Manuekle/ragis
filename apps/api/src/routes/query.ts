@@ -182,8 +182,11 @@ export async function runRagQuery(
   let pub: { c: string | null; w: boolean; n: number; o: string | null } | undefined;
   let pubDenied: "off" | "limit" | "restricted" | undefined;
   let scope!: Awaited<ReturnType<typeof resolveScope>>;
+  let localOnly = false;
   await tx(pool, t, async (db) => {
     scope = await resolveScope(db, t, ws, body.scope);
+    // «Solo IA privada» del onboarding (o despliegue en servidores propios): la misma regla que lee el ingest-worker.
+    localOnly = (await db.query("SELECT app.ai_local_only() AS lo")).rows[0].lo === true;
     const r = await db.query(
       "SELECT coalesce(sum(quantity), 0)::int AS n FROM usage_events WHERE kind='query' AND created_at >= date_trunc('month', now())",
     );
@@ -217,6 +220,7 @@ export async function runRagQuery(
     ...(pub ? { pub } : {}),
     wss: scope.wss,
     sc: scope.sc,
+    localOnly,
   });
   const send = (carrier?: Record<string, string>) =>
     rag.query(token, { question: body.question, as_of: body.as_of, top_k: body.top_k, graph_mode: body.mode, output: body.output }, carrier);

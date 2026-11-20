@@ -38,6 +38,10 @@ What to do when a leak is suspected: [incident-cross-tenant.md](../ops/runbooks/
 - **Model policy by data classification:** `restricted` never calls external APIs and there is no silent fallback to the
   cloud. OCR (Textract) and transcription (Transcribe) are registered models and go through the same check, so a
   restricted tenant cannot send a scan or a recording to them.
+- **"Private AI only":** an organization that chose `llm_policy = local_only` in onboarding, or the on-premises
+  deployment, gets the same model rule as `restricted` in Ask, agents and ingestion, whatever its data classification.
+  The rule is `app.ai_local_only()` (migration 0025); the API signs it into the internal token (`lo`) and the
+  ingest-worker reads it with the document version. Answers then come from the local extractive engine.
 - **AI-written text is labelled:** figure descriptions, table summaries, equation analyses and transcripts carry
   `ai_generated` or a notice in the source card, and numbers that are not in the source are removed from AI summaries.
 - **PII:** redaction during ingestion and JSON logs with redaction. `query_runs` stores questions only as SHA-256. Ask

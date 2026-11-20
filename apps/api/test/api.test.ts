@@ -376,6 +376,26 @@ describe("consulta", () => {
     expect((await call(own, "POST", url, { question: "¿quién aprueba?", mode: "everything" })).statusCode).toBe(400);
   });
 
+  it("«Solo IA privada» (o «En tus servidores») firma `lo` para que Preguntar no use modelos en la nube", async () => {
+    const own = await login("private-ai@corp.test");
+    const o = (await call(own, "POST", "/v1/organizations", { name: "Private AI Corp" })).json();
+    const url = `/v1/organizations/${o.id}/workspaces/${o.default_workspace_id}/query`;
+    const profile = (body: object) => call(own, "PUT", `/v1/organizations/${o.id}/onboarding/profile`, body);
+    const ask = async () => {
+      expect((await call(own, "POST", url, { question: "¿Cuál es el plazo?" })).statusCode).toBe(200);
+      return rag.lastClaims?.lo;
+    };
+
+    expect(await ask()).toBeUndefined();
+    expect((await profile({ llm_policy: "local_only" })).statusCode).toBe(200);
+    expect(await ask()).toBe(true);
+    expect((await profile({ llm_policy: "cloud_allowed" })).statusCode).toBe(200);
+    expect(await ask()).toBeUndefined();
+    // «Runs on your own infrastructure. Nothing leaves it.»: la misma regla que ya usan los agentes.
+    expect((await profile({ deployment_preference: "on_prem" })).statusCode).toBe(200);
+    expect(await ask()).toBe(true);
+  });
+
   it("aplica rate limit por plan", async () => {
     const u = await login("rate@corp.test");
     const o = (await call(u, "POST", "/v1/organizations", { name: "Rate" })).json();

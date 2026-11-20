@@ -40,6 +40,8 @@ class InternalClaims:
     # `workspace_id`); `scope`: {"kind": space|matter|folder|documents|all, "matter_id"?, "folder_id"?, "document_ids"?}.
     workspace_ids: tuple[uuid.UUID, ...] = ()
     scope: dict | None = None
+    # «Solo IA privada» (llm_policy=local_only o despliegue on_prem), resuelto por la API: ningún modelo en la nube.
+    local_only: bool = False
 
     def security_context(self) -> SecurityContext:
         return SecurityContext(self.organization_id, self.user_id, self.principals)
@@ -82,6 +84,7 @@ def verify_internal_token(token: str) -> InternalClaims:
             public_sources=_public_claim(payload.get("pub")),
             workspace_ids=_workspaces_claim(payload.get("wss")),
             scope=_scope_claim(payload.get("sc")),
+            local_only=payload.get("lo") is True,
         )
     except (ValueError, KeyError, TypeError) as exc:
         raise InternalAuthError(f"claims inválidos: {exc}") from exc
@@ -159,6 +162,7 @@ def issue_internal_token(claims: InternalClaims, ttl: int = 60, secret: str | No
             "graph": claims.graph_enabled,
             **({"wss": [str(w) for w in claims.workspace_ids]} if claims.workspace_ids else {}),
             **({"sc": _scope_payload(claims.scope)} if claims.scope else {}),
+            **({"lo": True} if claims.local_only else {}),
             **({"pub": {"c": claims.public_sources.get("country"), "w": bool(claims.public_sources.get("web")),
                         "n": int(claims.public_sources.get("max_calls", 0)),
                         "o": claims.public_sources.get("override")}} if claims.public_sources else {}),

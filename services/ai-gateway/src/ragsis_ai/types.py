@@ -91,3 +91,6 @@ class TenantAIPolicy:
     approved_regions: tuple[str, ...] = ("us-east-1",)
     max_output_tokens: int = 1200
     extra: dict = field(default_factory=dict)
+    # «Solo IA privada» elegida en el onboarding (o despliegue en servidores propios): ningún modelo en la nube,
+    # sea cual sea la clasificación de los datos.
+    local_only: bool = False

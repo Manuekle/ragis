@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ragsis_ai.types import Evidence
-from ragsis_core.text import fold
+from ragsis_core.text import fold, looks_spanish  # en ragsis_core: el motor extractivo local usa la misma heurística
 
 SYSTEM_PROMPT = """You are ragsis's document assistant. Answer in the language of the user's question (English by default), \
 using EXCLUSIVELY the evidence provided between <fuente> tags. Mandatory rules:
@@ -39,16 +39,6 @@ _NUMERIC = re.compile(r"\b(cu[aá]nto|cu[aá]ntos|cu[aá]ntas|monto|valor|saldo|
                       r"tarifa|precio|cantidad)\b", re.I)
 _COMPARE = re.compile(r"\b(diferencia|compar|versus|vs\.?|cambi[oó]|entre .* y )\b", re.I)
 _EXACT = re.compile(r"\"[^\"]{3,}\"|\b[A-Z]{2,}[-_]?\d{2,}\b|\b(art[ií]culo|cl[aá]usula|numeral)\s+\d+", re.I)
-
-
-_ES_CHARS = re.compile(r"[¿¡áéíóúñ]", re.I)
-_ES_WORDS = re.compile(r"\b(el|la|los|las|de|del|que|cu[aá]l(?:es)?|qu[eé]|qui[eé]n(?:es)?|c[oó]mo|d[oó]nde|cu[aá]ndo|"
-                       r"para|por|con|una|es|son|se|en|su|sus)\b", re.I)
-
-
-def looks_spanish(question: str) -> bool:
-    """Heurística barata: los modelos pequeños contestan en inglés si solo el prompt está en inglés."""
-    return bool(_ES_CHARS.search(question)) or len(_ES_WORDS.findall(question)) >= 2
 
 
 # Señales léxicas de modalidad (ADR-029): la pregunta nombra el tipo de contenido donde espera la respuesta.
