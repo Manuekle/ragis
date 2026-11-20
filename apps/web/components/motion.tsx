@@ -1,7 +1,7 @@
 "use client";
 
 // Small React wrappers around the transitions.dev recipes in globals.css.
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes } from "react";
 import { CheckMark, IconCheck } from "./icons";
 
 const DROPDOWN_CLOSE_MS = 150;
@@ -119,47 +119,6 @@ export function ThinkingStates({ states, hold = 1800 }: { states: string[]; hold
         {states[i]}
       </span>
     </span>
-  );
-}
-
-/**
- * t-stream: resolves words one by one through a soft cross-blur.
- * Citation markers [n] become clickable chips. Total reveal is capped so long answers don't drag.
- */
-export function StreamText({ text, animate, onCite }: { text: string; animate: boolean; onCite: (n: number) => void }) {
-  const [on, setOn] = useState(!animate);
-  useEffect(() => {
-    if (!animate) return;
-    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setOn(true)));
-    return () => cancelAnimationFrame(raf);
-  }, [animate]);
-
-  const tokens = text.split(/(\[\d{1,2}\]|\s+)/g).filter((t) => t !== "");
-  const words = tokens.filter((t) => !/^\s+$/.test(t)).length || 1;
-  const gap = Math.min(28, 1400 / words);
-  let w = 0;
-
-  return (
-    <div className={`answer${on ? " is-in" : ""}`}>
-      {tokens.map((tok, k) => {
-        if (/^\s+$/.test(tok)) return <Fragment key={k}>{tok}</Fragment>;
-        const delay = animate ? `${Math.round(w++ * gap)}ms` : "0ms";
-        const m = tok.match(/^\[(\d{1,2})\]$/);
-        if (m) {
-          const n = Number(m[1]);
-          return (
-            <button key={k} type="button" className="cite-ref t-stream-w" style={{ transitionDelay: delay }} onClick={() => onCite(n)} aria-label={`View source ${n}`}>
-              {n}
-            </button>
-          );
-        }
-        return (
-          <span key={k} className="t-stream-w" style={{ transitionDelay: delay }}>
-            {tok}
-          </span>
-        );
-      })}
-    </div>
   );
 }
 

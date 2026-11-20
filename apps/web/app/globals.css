@@ -1525,7 +1525,28 @@ tbody tr { transition: background-color var(--duration-quick, 150ms) ease; }
 .doc-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .doc-chip .svg-icon { color: var(--accent); }
 
-.answer { font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.answer { font-size: 15.5px; line-height: 1.7; overflow-wrap: anywhere; color: var(--text); }
+/* Markdown in an answer (AnswerText): headings come in as h3–h6 */
+.answer > :first-child { margin-top: 0; }
+.answer > :last-child { margin-bottom: 0; }
+.answer p, .answer ul, .answer ol, .answer blockquote { margin: 0 0 0.8em; }
+.answer ul, .answer ol { padding-left: 1.4em; }
+.answer ul { list-style: disc; }
+.answer ul ul { list-style: circle; }
+.answer ol { list-style: decimal; }
+.answer li { padding-left: 0.15em; }
+.answer li + li { margin-top: 0.3em; }
+.answer li::marker { color: var(--muted); }
+.answer li > p { margin: 0; }
+.answer li > p + p { margin-top: 0.4em; }
+.answer li > ul, .answer li > ol { margin: 0.3em 0 0; }
+.answer h3, .answer h4, .answer h5, .answer h6 { margin: 1.2em 0 0.35em; line-height: 1.35; font-weight: 600; color: var(--text); text-wrap: balance; }
+.answer h3 { font-size: 17px; }
+.answer h4 { font-size: 16px; }
+.answer h5, .answer h6 { font-size: 15.5px; }
+.answer strong { font-weight: 600; }
+.answer blockquote { padding: 1px 0 1px 14px; border-left: 3px solid var(--border-strong); color: var(--text-2); }
+.answer hr { border: 0; border-top: 1px solid var(--border); margin: 1.2em 0; }
 .cite-ref {
   display: inline-grid; place-items: center;
   min-width: 18px; height: 18px; padding: 0 4px; margin: 0 2px;
@@ -1545,7 +1566,7 @@ tbody tr { transition: background-color var(--duration-quick, 150ms) ease; }
   filter: blur(var(--stream-blur));
   transition: opacity var(--stream-fade) var(--stream-ease), filter var(--stream-fade) var(--stream-ease);
 }
-.t-stream-w.is-in, .is-in > .t-stream-w { opacity: 1; filter: blur(0); }
+.t-stream-w.is-in, .is-in > .t-stream-w, .answer.is-in .t-stream-w { opacity: 1; filter: blur(0); }
 @media (prefers-reduced-motion: reduce) {
   .t-stream-w { transition: opacity 200ms ease !important; filter: none !important; transition-delay: 0ms !important; }
 }
