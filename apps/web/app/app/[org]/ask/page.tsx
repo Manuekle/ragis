@@ -275,6 +275,8 @@ function TurnView({ t, fresh, orgId, onFeedback, onOpen, onPreview, onWiden }: {
                   ? tr("Link documents to it from the library, or search somewhere wider.")
                   : r.scope?.type === "matter"
                     ? tr("This expediente's documents don't answer it. Ask using the terms the documents use, or search all your spaces.")
+                    : r.scope?.type === "folder" || r.scope?.type === "documents"
+                      ? tr("The documents you limited the question to don't answer it. Ask using the terms they use, or search all your spaces.")
                     : r.scope?.type === "all"
                       ? tr("None of your spaces has a document that answers it, or you don't have access to it. Ask using the terms the document uses.")
                       : tr("Check that the document is uploaded to this workspace and that you have access, or ask using the terms the document uses.")}
@@ -533,13 +535,21 @@ export default function AskPage() {
     if (id) void openConversation(id);
   }, [openConversation]);
 
-  // ADR-037: /ask?scope=matter:<id> (from Expedientes), folder:<id> or documents:<id>,… (from the library).
+  // ADR-037: /ask?scope=matter:<id> (from Expedientes), folder:<id> or documents:<id>,… (from the library). The parsed
+  // link lives in a ref until it is applied: the URL loses `scope` at once, and a re-run of this effect (React's strict
+  // mode runs it twice) still has it.
+  const linkedScope = useRef<ReturnType<typeof parseScopeParam> | undefined>(undefined);
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const want = parseScopeParam(url.searchParams.get("scope"));
+    if (linkedScope.current === undefined) {
+      const url = new URL(window.location.href);
+      linkedScope.current = parseScopeParam(url.searchParams.get("scope"));
+      if (url.searchParams.has("scope")) {
+        url.searchParams.delete("scope");
+        window.history.replaceState(window.history.state, "", url);
+      }
+    }
+    const want = linkedScope.current;
     if (!want) return;
-    url.searchParams.delete("scope");
-    window.history.replaceState(window.history.state, "", url);
     let alive = true;
     const [first] = want.ids;
     (async () => {
@@ -559,7 +569,11 @@ export default function AskPage() {
         return;
       }
       setScope({ type: "folder", id: first, label: tNow("Folder") });
-    })().catch(() => undefined);
+    })()
+      .then(() => {
+        if (alive) linkedScope.current = null;
+      })
+      .catch(() => undefined);
     return () => {
       alive = false;
     };

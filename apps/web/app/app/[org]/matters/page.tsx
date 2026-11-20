@@ -14,7 +14,7 @@ import { Sheet } from "@/components/Sheet";
 import { Skel, SkeletonStatus, SkeletonTable } from "@/components/skeletons";
 import { useConfirm } from "@/components/ui";
 import { useT } from "@/lib/use-t";
-import { MatterDialog, StatusPill, askInMatterHref, matterSubtitle, useMatters, type Matter, type MatterDetail, type MatterStatus, type Person } from "./shared";
+import { MatterDialog, STATUS_LABEL, StatusPill, askInMatterHref, matterSubtitle, useMatters, type Matter, type MatterDetail, type MatterStatus, type Person } from "./shared";
 import "./matters.css";
 
 type StatusView = MatterStatus | "all";
@@ -114,7 +114,7 @@ export default function MattersPage() {
               <Seg role="group" aria-label={t("Filter by status")}>
                 {(["active", "on_hold", "closed", "archived", "all"] as const).map((k) => (
                   <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)}>
-                    {k === "all" ? t("All") : t({ active: "Active", on_hold: "On hold", closed: "Closed", archived: "Archived" }[k])}
+                    {k === "all" ? t("All matters") : STATUS_LABEL()[k]}
                     <span className="count">{counts[k]}</span>
                   </button>
                 ))}
@@ -167,6 +167,7 @@ export default function MattersPage() {
                                 {m.title}
                               </button>
                               {m.counterparty && <div className="mono">{t("vs. {name}", { name: m.counterparty })}</div>}
+                              {(m.case_number || m.stage) && <div className="mono matter-compact">{[m.case_number, m.stage].filter(Boolean).join(" · ")}</div>}
                             </td>
                             <td className="mono hide-sm nowrap">{m.case_number ?? "—"}</td>
                             <td className="muted hide-md">{m.court ?? "—"}</td>

@@ -1752,6 +1752,13 @@ export const ES: Record<string, string> = {
  "1 human check": "1 revisión humana",
  "{checks} human checks": "{checks} revisiones humanas",
  // Expedientes (ADR-037): page, library, Ask scope.
+ "1 document": "1 documento",
+ "1 document, with its subfolders": "1 documento, con sus subcarpetas",
+ "Use 1 document": "Usar 1 documento",
+ "The documents you limited the question to don't answer it. Ask using the terms they use, or search all your spaces.": "Los documentos a los que limitaste la pregunta no la responden. Pregunta con los términos que usan o busca en todos tus espacios.",
+ "Ongoing": "Activo",
+ "Concluded": "Terminado",
+ "All matters": "Todos",
  "Matters": "Expedientes",
  "Expediente": "Expediente",
  "New expediente": "Nuevo expediente",

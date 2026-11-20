@@ -69,3 +69,20 @@
 .library-matter-tools .select-trigger { max-width: 260px; }
 button.ghost.is-on { background: var(--accent-soft); color: var(--accent-text); }
 .library-group-row a { color: inherit; }
+
+/* A long expediente name must never push the send button out of the composer: the value truncates and, if the
+   chips still don't fit, they wrap onto a second row with send kept at the end. */
+.composer-bar { flex-wrap: wrap; row-gap: 6px; }
+.composer-bar .send { flex: none; }
+.scope-chip { min-width: 0; max-width: 100%; }
+.scope-chip .date-trigger { min-width: 0; }
+.scope-chip .date-value { min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-chip .date-trigger > .svg-icon { flex: none; }
+
+/* When the table hides its columns (globals.css: .hide-sm at 860px), the same facts move under the title. */
+.matter-compact, .matter-inline { display: none; }
+@media (max-width: 860px) {
+  .matter-compact { display: block; }
+  .matter-inline { display: inline-flex; margin-top: 2px; font-size: 12.5px; }
+}
+.doc-pick input[type="checkbox"] { appearance: auto; flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; border-radius: 4px; box-shadow: none; accent-color: var(--accent); cursor: pointer; }

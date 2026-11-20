@@ -885,6 +885,12 @@ export default function LibraryPage() {
                                       <button type="button" className="link subtle" onClick={() => dismissSuggestion(d)}>{tr("No thanks")}</button>
                                     </div>
                                   )}
+                                  {d.matter_id && (
+                                    <Link href={`/app/${orgId}/matters?open=${d.matter_id}`} className="matter-tag matter-inline">
+                                      <IconBriefcase size={13} />
+                                      <span className="ellipsis">{d.matter_title}</span>
+                                    </Link>
+                                  )}
                                   {d.error_code && (
                                     <span className="badge err doc-error">
                                       {docError(d.error_code, d.filename)}

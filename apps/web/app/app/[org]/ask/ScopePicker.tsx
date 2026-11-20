@@ -24,6 +24,9 @@ export type AskScope =
 
 export const SPACE_SCOPE: AskScope = { type: "space" };
 const MAX_DOCUMENTS = 50;
+
+/** "1 document" / "12 documents" (Spanish has its own keys for both). */
+const docCount = (n: number) => (n === 1 ? tNow("1 document") : tNow("{count} documents", { count: n }));
 const MENU_ITEMS = 8;
 
 /** The `scope` field of POST …/query. */
@@ -67,7 +70,7 @@ export function scopeLabel(s: AskScope, wsName?: string | null): string {
     case "folder":
       return tNow("Folder {name}", { name: s.label });
     case "documents":
-      return s.ids.length === 1 ? s.label : tNow("{count} documents", { count: s.ids.length });
+      return s.ids.length === 1 ? s.label : docCount(s.ids.length);
     case "all":
       return tNow("All my spaces");
     default:
@@ -173,7 +176,7 @@ export function ScopePicker({ orgId, workspaceId, wsName, value, onChange, disab
                 key={m.id}
                 icon={<IconBriefcase size={16} />}
                 title={m.title}
-                hint={[matterSubtitle(m), t("{count} documents", { count: m.document_count })].filter(Boolean).join(" · ")}
+                hint={[matterSubtitle(m), docCount(m.document_count)].filter(Boolean).join(" · ")}
                 checked={value.type === "matter" && value.id === m.id}
                 onClick={() => pick({ type: "matter", id: m.id, label: m.title, sub: matterSubtitle(m) })}
               />
@@ -183,7 +186,7 @@ export function ScopePicker({ orgId, workspaceId, wsName, value, onChange, disab
         {folderList.length > 0 && (
           <CommandGroup label={t("Folders in {name}", { name: wsName ?? t("this space") })}>
             {folderList.slice(0, MENU_ITEMS).map((f) => (
-              <CommandItem key={f.id} icon={<IconFolder size={16} />} title={f.path} hint={t("{count} documents, with its subfolders", { count: f.document_count })} checked={value.type === "folder" && value.id === f.id} onClick={() => pick({ type: "folder", id: f.id, label: f.name })} />
+              <CommandItem key={f.id} icon={<IconFolder size={16} />} title={f.path} hint={f.document_count === 1 ? t("1 document, with its subfolders") : t("{count} documents, with its subfolders", { count: f.document_count })} checked={value.type === "folder" && value.id === f.id} onClick={() => pick({ type: "folder", id: f.id, label: f.name })} />
             ))}
           </CommandGroup>
         )}
@@ -241,7 +244,7 @@ function DocumentPicker({ orgId, workspaceId, wsName, initial, onClose, onPick }
       title={t("Ask about specific documents")}
       description={t("The answer will only use the documents you pick from {name}.", { name: wsName ?? t("this space") })}
       icon={IconFiles}
-      submitLabel={chosen.size ? t("Use {count} documents", { count: chosen.size }) : t("Pick documents")}
+      submitLabel={chosen.size === 1 ? t("Use 1 document") : chosen.size ? t("Use {count} documents", { count: chosen.size }) : t("Pick documents")}
       disabled={!chosen.size}
       onSubmit={submit}
       onClose={onClose}
@@ -276,7 +279,7 @@ export function AnswerScope({ scope }: { scope: QueryScopeInfo | null | undefine
   return (
     <div className="step answer-scope">
       <ScopeIcon type={s.type} size={17} />
-      <span>{t("Searched in {where}", { where: scopeLabel(s) })}{scope.type !== "documents" && scope.workspaces > 1 ? ` · ${t("{count} spaces", { count: scope.workspaces })}` : ""}</span>
+      <span>{t("Searched in {where}", { where: scopeLabel(s) })}{scope.type === "all" ? ` · ${t("{count} spaces", { count: scope.workspaces })}` : ""}</span>
     </div>
   );
 }

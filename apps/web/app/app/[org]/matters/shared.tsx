@@ -63,10 +63,11 @@ export interface MatterList {
   can_edit: boolean;
 }
 
+// Own keys ("Ongoing", "Concluded"): the generic "Active" / "Closed" are feminine in Spanish and an expediente is not.
 export const STATUS_LABEL = (): Record<MatterStatus, string> => ({
-  active: tNow("Active"),
+  active: tNow("Ongoing"),
   on_hold: tNow("On hold"),
-  closed: tNow("Closed"),
+  closed: tNow("Concluded"),
   archived: tNow("Archived"),
 });
 
