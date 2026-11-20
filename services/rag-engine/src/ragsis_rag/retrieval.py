@@ -62,6 +62,8 @@ class Candidate:
     graph_local_rank: int | None = None
     graph_global_rank: int | None = None
     bridges: list[str] = field(default_factory=list)
+    # Clasificación del documento: decide qué modelos pueden recibir este fragmento (ver orchestrator._for_evidence).
+    classification: str = "internal"
 
     @property
     def page(self) -> int | None:
@@ -111,7 +113,7 @@ WITH sem AS (
 )
 SELECT c.id AS chunk_id, c.document_id, c.version_id, c.section_path, c.page_start, c.page_end, c.text,
        c.kind, c.ordinal, c.token_count, c.bbox, c.asset_key, c.meta,
-       d.title, v.filename, v.version_no, v.effective_from, v.effective_to,
+       d.title, d.classification, v.filename, v.version_no, v.effective_from, v.effective_to,
        sem.sim AS similarity, sem.rnk AS sem_rank, lex.score AS lex_score, lex.rnk AS lex_rank,
        graph.local_rank AS graph_local_rank, graph.global_rank AS graph_global_rank
   FROM chunks c

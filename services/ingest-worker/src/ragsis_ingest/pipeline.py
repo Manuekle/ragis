@@ -36,7 +36,7 @@ from ragsis_ai.gateway import AIGateway
 from ragsis_ai.policy import PolicyViolation, is_allowed, require_allowed
 from ragsis_ai.providers.base import ProviderError
 from ragsis_ai.registry import ModelSpec
-from ragsis_ai.types import DataClass, TenantAIPolicy
+from ragsis_ai.types import TenantAIPolicy, strictest
 from ragsis_core.aws import s3_client
 from ragsis_core.db import SecurityContext, execute, fetch_all, fetch_one, tenant_tx
 from ragsis_core.logging import log
@@ -135,7 +135,8 @@ def _usage(conn: psycopg.Connection, org: uuid.UUID, kind: str, qty: float, ref:
 
 
 _VERSION_SQL = """
-    SELECT v.*, d.workspace_id, d.status AS doc_status, d.title AS doc_title, o.data_class, o.region_policy, o.model_allowlist,
+    SELECT v.*, d.workspace_id, d.status AS doc_status, d.title AS doc_title, d.classification AS doc_classification,
+           o.data_class, o.region_policy, o.model_allowlist,
            p.max_pages_per_doc, p.max_upload_bytes,
            CASE o.graph_mode WHEN 'on' THEN true WHEN 'off' THEN false ELSE p.graph_enabled END AS graph_enabled,
            app.ai_local_only() AS ai_local_only
@@ -203,7 +204,9 @@ class IngestPipeline:
     # ------------------------------------------------------------------ etapas comunes
     @staticmethod
     def _policy(ver: dict) -> TenantAIPolicy:
-        return TenantAIPolicy(data_class=DataClass(ver["data_class"]),
+        # La clasificación más estricta entre la organización y el documento: un documento `restricted` no se describe,
+        # transcribe ni resume con modelos en la nube aunque la organización sea `internal`.
+        return TenantAIPolicy(data_class=strictest(ver["data_class"], ver.get("doc_classification") or "internal"),
                               model_allowlist=tuple(ver["model_allowlist"] or ()),
                               approved_regions=(ver["region_policy"],),
                               # «Solo IA privada»: ni la visión de figuras ni el OCR/transcripción en la nube.

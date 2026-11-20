@@ -20,6 +20,14 @@ class DataClass(StrEnum):
     RESTRICTED = "restricted"
 
 
+_CLASS_ORDER = (DataClass.PUBLIC, DataClass.INTERNAL, DataClass.CONFIDENTIAL, DataClass.RESTRICTED)
+
+
+def strictest(*classes: str) -> DataClass:
+    """La clasificación más estricta (la organización y los documentos que se envían a un modelo). Nunca relaja."""
+    return max((DataClass(c) for c in classes), key=_CLASS_ORDER.index)
+
+
 @dataclass(frozen=True)
 class Evidence:
     """Fragmento autorizado entregado al generador. `n` es el índice citable [n]."""

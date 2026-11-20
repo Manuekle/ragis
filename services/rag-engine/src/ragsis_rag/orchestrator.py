@@ -47,7 +47,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from ragsis_ai.gateway import AIGateway
 from ragsis_ai.policy import is_allowed
 from ragsis_ai.providers.local import lexical_score
-from ragsis_ai.types import DataClass, Evidence, GenerationRequest, ImageInput, TenantAIPolicy
+from ragsis_ai.types import DataClass, Evidence, GenerationRequest, ImageInput, TenantAIPolicy, strictest
 from ragsis_core.aws import s3_client
 from ragsis_core.db import execute, tenant_tx
 from ragsis_core.internal_auth import InternalClaims
@@ -137,6 +137,13 @@ DOCUMENT_ABSTAIN_TEXT = ("I couldn't find enough evidence in the authorized docu
                          "Try naming the topic with the words your documents use.")
 
 
+def _for_evidence(policy: TenantAIPolicy, cands: list[Candidate]) -> TenantAIPolicy:
+    """Política para enviar estos fragmentos a un modelo: la clasificación más estricta entre la organización y sus
+    documentos. Un documento `restricted` en una organización `internal` nunca sale a la nube."""
+    data_class = strictest(policy.data_class, *(c.classification for c in cands))
+    return policy if data_class == policy.data_class else replace(policy, data_class=data_class)
+
+
 def _top_ranked(c: Candidate) -> bool:
     return any(r is not None and r <= TOP_RANK for r in (c.lex_rank, c.graph_local_rank))
 
@@ -182,6 +189,7 @@ class QueryOrchestrator:
                                  "ragsis.public_lookups": public.lookups if public else 0,
                                  "ragsis.cited": len(cited_ns), "ragsis.abstained": abstain_reason is not None,
                                  "ragsis.strategy": strategy, "gen_ai.request.model": gen_model or "none",
+                                 "ragsis.data_class": info.get("data_class", claims.data_class),
                                  "ragsis.embedding_model": emb.model_id})
         abstained = abstain_reason is not None
         if abstained:
@@ -286,7 +294,8 @@ class QueryOrchestrator:
             strategy = "hybrid"
             if claims.rerank_enabled and strong:
                 with stage("rag.rerank", timings, **{"ragsis.rerank_inputs": len(strong[:CANDIDATE_K])}):
-                    rr = self.gateway.rerank(question, [c.text for c in strong[:CANDIDATE_K]], policy)
+                    rr = self.gateway.rerank(question, [c.text for c in strong[:CANDIDATE_K]],
+                                             _for_evidence(policy, strong[:CANDIDATE_K]))
                     for c, s in zip(strong, rr.scores, strict=False):
                         c.rerank = s
                     strong.sort(key=lambda c: c.rerank or 0.0, reverse=True)
@@ -311,6 +320,9 @@ class QueryOrchestrator:
         abstain_reason = None
         answer = ""
         hints = hints if selected else ()
+        # Desde aquí el texto de la evidencia (y sus figuras) va a un modelo: manda el documento más sensible.
+        policy = _for_evidence(policy, selected)
+        info["data_class"] = str(policy.data_class)
         cited_ns: list[int] = []
         gen_model = None
         if not selected and not external:
