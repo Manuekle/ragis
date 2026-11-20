@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconSpinner, IconX, type IconProps } from "./icons";
+import { useT } from "@/lib/use-t";
 
 /**
  * Form in a dialog, on the same surface as the confirm dialog. Esc, the close button or a click outside cancel.
@@ -31,6 +32,7 @@ export function FormDialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const t = useT();
   const [shown, setShown] = useState(false);
   const boxRef = useRef<HTMLFormElement>(null);
   const id = useId();
@@ -81,7 +83,7 @@ export function FormDialog({
           if (!busy && !disabled) onSubmit();
         }}
       >
-        <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
+        <button type="button" className="dialog-close" aria-label={t("Close")} onClick={onClose}>
           <IconX size={16} />
         </button>
         <span className="dialog-icon">
@@ -91,9 +93,7 @@ export function FormDialog({
         {description && <p className="dialog-desc">{description}</p>}
         {children}
         <div className="dialog-actions">
-          <button type="button" className="ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="ghost" onClick={onClose}>{t("Cancel")}</button>
           <button type="submit" className="primary" disabled={busy || disabled} aria-busy={busy}>
             {busy && <IconSpinner size={15} />}
             {submitLabel}

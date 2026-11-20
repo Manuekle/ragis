@@ -70,3 +70,14 @@ export function usdFor(locale: Locale) {
 
 /** Picks the words of a language out of a `{ en, es }` pair. */
 export const pick = <T,>(locale: Locale, copy: Record<Locale, T>): T => copy[locale];
+
+// The language of the page being rendered, for code that formats dates, numbers and short phrases
+// outside a component (helpers, tables). LocaleProvider sets it while it renders; the workspace is
+// client-rendered after its data arrives, so one value per tab is right. Components use useT/useLocale.
+let current: Locale = "en";
+export const setCurrentLocale = (locale: Locale) => {
+  current = locale;
+};
+export const currentLocale = (): Locale => current;
+/** BCP 47 tag for Intl and toLocale*: "es-ES" or "en-US". */
+export const dateLocale = (): string => (current === "es" ? "es-ES" : "en-US");

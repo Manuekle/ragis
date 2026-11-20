@@ -299,6 +299,9 @@ p.sub { color: var(--muted); margin-top: 6px; max-width: 62ch; }
 
 .brand { display: inline-flex; align-items: center; gap: 8px; font-family: var(--serif); font-weight: 400; font-size: 17px; letter-spacing: var(--tracking-tight); color: var(--text); }
 .brand-mark { flex: none; width: 22px; height: 22px; color: var(--text); }
+/* brand as a link (sign-in header): same quiet hover as the public pages' .pub-home, no underline or link color */
+.brand-link { display: inline-flex; color: inherit; }
+@media (hover: hover) { .brand-link:hover { text-decoration: none; opacity: 0.8; } }
 
 /* org identity + actions */
 .side-org { display: flex; align-items: center; gap: 10px; padding: 4px 4px 12px; }

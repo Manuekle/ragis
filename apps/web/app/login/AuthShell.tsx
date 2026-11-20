@@ -30,7 +30,7 @@ export function AuthShell({
       <DitherField className="gate-dither" pattern="horizon" intensity={0.7} speed={0.6} interactive={false} color={["var(--dither-low)", "var(--dither-mid)", "var(--dither-high)"]} />
       <header className="gate-top">
         {linkBrandToHome ? (
-          <Link href="/" aria-label={home} style={{ display: "inline-flex" }}>
+          <Link href="/" aria-label={home} className="brand-link">
             <Brand />
           </Link>
         ) : (

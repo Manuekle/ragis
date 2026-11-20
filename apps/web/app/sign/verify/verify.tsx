@@ -5,8 +5,10 @@ import { IconSignature } from "@/components/icons";
 import { TextField } from "@/components/ui";
 import { fileSha256 } from "@/lib/signature-proof";
 import { SoftText } from "@/components/motion";
+import { useT } from "@/lib/use-t";
 
 export function VerifySignature() {
+  const t = useT();
   const [id, setId] = useState("");
   const [pdf, setPdf] = useState<File | null>(null);
   const [certificate, setCertificate] = useState<File | null>(null);
@@ -34,20 +36,20 @@ export function VerifySignature() {
 
   return (
     <main className="stack" style={{ maxWidth: 680, margin: "0 auto", padding: "clamp(20px, 5vw, 56px)" }}>
-      <span className="row muted"><IconSignature size={18} /> Ragsis Sign</span>
-      <h1>Verify a signed PDF</h1>
-      <p className="muted">Use the request ID shown on the signature page. Your files never leave your browser.</p>
+      <span className="row muted"><IconSignature size={18} />{" "}{t("Ragsis Sign")}</span>
+      <h1>{t("Verify a signed PDF")}</h1>
+      <p className="muted">{t("Use the request ID shown on the signature page. Your files never leave your browser.")}</p>
       <form className="card stack" onSubmit={verify}>
-        <TextField label="Request ID" required value={id} onChange={(event) => { setId(event.target.value); setResult(null); }} />
+        <TextField label={t("Request ID")} required value={id} onChange={(event) => { setId(event.target.value); setResult(null); }} />
         <div className="stack" style={{ gap: 6 }}>
-          <label htmlFor="verify-pdf">Signed PDF</label>
+          <label htmlFor="verify-pdf">{t("Signed PDF")}</label>
           <input id="verify-pdf" type="file" required accept="application/pdf,.pdf" onChange={(event) => { setPdf(event.target.files?.[0] ?? null); setResult(null); }} />
         </div>
         <div className="stack" style={{ gap: 6 }}>
-          <label htmlFor="verify-certificate">Certificate (optional)</label>
+          <label htmlFor="verify-certificate">{t("Certificate (optional)")}</label>
           <input id="verify-certificate" type="file" accept="application/json,.json" onChange={(event) => { setCertificate(event.target.files?.[0] ?? null); setResult(null); }} />
         </div>
-        <div><button type="submit" className="primary" disabled={busy || !id.trim() || !pdf}><SoftText text={busy ? "Checking…" : "Verify files"} /></button></div>
+        <div><button type="submit" className="primary" disabled={busy || !id.trim() || !pdf}><SoftText text={busy ? t("Checking…") : t("Verify files")} /></button></div>
       </form>
       {result && <p className={result.ok ? "notice" : "alert"} role="status">{result.message}</p>}
     </main>

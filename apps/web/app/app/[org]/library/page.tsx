@@ -15,7 +15,9 @@ import { FileTile } from "@/components/FileTile";
 import { DocViewer, type ViewerDoc } from "@/components/DocViewer";
 import { Seg, SoftText } from "@/components/motion";
 import { docError } from "@/lib/plain";
+import { tNow, useT } from "@/lib/use-t";
 
+import { dateLocale } from "@/lib/i18n";
 interface Doc {
   id: string;
   title: string;
@@ -51,7 +53,7 @@ interface Suggestion {
 /** Which documents the list shows: everything, the ones without a folder, or one folder. */
 type FolderView = "all" | "none" | string;
 
-const SOURCE_NAMES = { gmail: "Gmail", slack: "Slack", clickup: "ClickUp" } as const;
+const SOURCE_NAMES = () => ({ gmail: tNow("Gmail"), slack: tNow("Slack"), clickup: tNow("ClickUp") } as const);
 
 const TYPES: Record<string, string> = {
   pdf: "application/pdf",
@@ -75,43 +77,41 @@ const TYPES: Record<string, string> = {
 };
 const PENDING = new Set(["pending_upload", "uploaded", "quarantined", "validated", "parsing", "enriched", "embedding"]);
 // Everything between upload and "ready" is one step for people: the file is being prepared.
-const STATUS_LABEL: Record<string, string> = {
-  pending_upload: "Upload not finished",
-  uploaded: "Processing",
-  quarantined: "Safety check",
-  validated: "Processing",
-  parsing: "Reading text",
-  enriched: "Processing",
-  embedding: "Almost ready",
-};
+const STATUS_LABEL = (): Record<string, string> => ({
+  pending_upload: tNow("Upload not finished"),
+  uploaded: tNow("Processing"),
+  quarantined: tNow("Safety check"),
+  validated: tNow("Processing"),
+  parsing: tNow("Reading text"),
+  enriched: tNow("Processing"),
+  embedding: tNow("Almost ready"),
+});
 
 function statusBadge(s: string) {
   if (s === "indexed")
     return (
       <span className="badge ok">
-        <span className="dot" />
-        Ready
-      </span>
+        <span className="dot" />{tNow("Ready")}</span>
     );
   if (s === "rejected" || s === "failed")
     return (
       <span className="badge err">
         <span className="dot" />
-        {s === "rejected" ? "Not accepted" : "Failed"}
+        {s === "rejected" ? tNow("Not accepted") : tNow("Failed")}
       </span>
     );
   return (
     <span className="badge warn">
       <span className="dot" />
-      {STATUS_LABEL[s] ?? s}
+      {STATUS_LABEL()[s] ?? s}
     </span>
   );
 }
 
 const ext = (filename: string) => filename.split(".").pop()?.toLowerCase() ?? "";
 
-const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 function ago(iso: string) {
+  const rtf = new Intl.RelativeTimeFormat(dateLocale(), { numeric: "auto" });
   const s = (new Date(iso).getTime() - Date.now()) / 1000;
   if (!Number.isFinite(s)) return "—";
   const steps: [number, Intl.RelativeTimeFormatUnit][] = [
@@ -122,7 +122,7 @@ function ago(iso: string) {
     [2629800, "week"],
     [31557600, "month"],
   ];
-  if (Math.abs(s) < 45) return "just now";
+  if (Math.abs(s) < 45) return tNow("just now");
   let prev = 1;
   for (const [limit, unit] of steps) {
     if (Math.abs(s) < limit) return rtf.format(Math.round(s / prev), unit);
@@ -165,6 +165,7 @@ const pathLabel = (folders: Folder[], id: string | null) => folderPath(folders, 
 
 /** Small form dialog (same surface as the confirm dialog). Esc or a click outside cancels. */
 function FormDialog({ title, description, submitLabel, busy, onSubmit, onClose, children }: { title: string; description?: string; submitLabel: string; busy: boolean; onSubmit: () => void; onClose: () => void; children: React.ReactNode }) {
+  const tr = useT();
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setShown(true));
@@ -188,7 +189,7 @@ function FormDialog({ title, description, submitLabel, busy, onSubmit, onClose, 
           onSubmit();
         }}
       >
-        <button type="button" className="dialog-close" aria-label="Close" onClick={onClose}>
+        <button type="button" className="dialog-close" aria-label={tr("Close")} onClick={onClose}>
           <IconX size={16} />
         </button>
         <span className="dialog-icon">
@@ -198,9 +199,7 @@ function FormDialog({ title, description, submitLabel, busy, onSubmit, onClose, 
         {description && <p className="dialog-desc">{description}</p>}
         {children}
         <div className="dialog-actions">
-          <button type="button" className="ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button type="submit" className="primary" disabled={busy} aria-busy={busy}>
             {submitLabel}
           </button>
@@ -209,16 +208,19 @@ function FormDialog({ title, description, submitLabel, busy, onSubmit, onClose, 
     </div>
   );
 }
-const DOCUMENT_COLUMNS = ["", "", "hide-sm", "num hide-sm", "num hide-sm", "hide-md", ""];
+const DOCUMENT_COLUMNS = () => { const tr = useT(); return (["", "", "hide-sm", tr("num hide-sm"), tr("num hide-sm"), "hide-md", ""]); };
 
 function LibrarySkeleton({ hasDocuments }: { hasDocuments: boolean | undefined }) {
+  const tr = useT();
+  // Los hooks van siempre antes de cualquier return; DOCUMENT_COLUMNS usa useT().
+  const documentColumns = DOCUMENT_COLUMNS();
   if (hasDocuments === undefined) {
-    return <SkeletonStatus label="Loading documents…">{null}</SkeletonStatus>;
+    return <SkeletonStatus label={tr("Loading documents…")}>{null}</SkeletonStatus>;
   }
 
   if (hasDocuments) {
     return (
-      <SkeletonStatus label="Loading documents…" className="stack library-list-skeleton">
+      <SkeletonStatus label={tr("Loading documents…")} className="stack library-list-skeleton">
         <div className="drop compact library-skeleton">
           <Skel w={34} h={34} r={999} />
           <span className="drop-text" style={{ minWidth: 0 }}>
@@ -235,14 +237,14 @@ function LibrarySkeleton({ hasDocuments }: { hasDocuments: boolean | undefined }
               <Skel h={38} r={999} />
             </div>
           </div>
-          <SkeletonTable rows={5} columns={DOCUMENT_COLUMNS} leading="file" />
+          <SkeletonTable rows={5} columns={documentColumns} leading="file" />
         </div>
       </SkeletonStatus>
     );
   }
 
   return (
-    <SkeletonStatus label="Loading documents…" className="drop hero library-skeleton">
+    <SkeletonStatus label={tr("Loading documents…")} className="drop hero library-skeleton">
       <Skel w={196} h={119} r={16} />
       <Skel w={284} h={17} style={{ marginBlock: 4 }} />
       <Skel w={410} h={13} style={{ marginBlock: 4 }} />
@@ -261,6 +263,8 @@ function LibrarySkeleton({ hasDocuments }: { hasDocuments: boolean | undefined }
 }
 
 export default function LibraryPage() {
+  const tr = useT();
+  const documentColumns = DOCUMENT_COLUMNS();
   const { org: orgId } = useParams<{ org: string }>();
   const { loading: loadingOrg, workspaceId, workspaces, setWorkspaceHasDocuments } = useOrg();
   const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -348,7 +352,7 @@ export default function LibraryPage() {
 
   async function uploadOne(file: File, key: string) {
     const contentType = TYPES[ext(file.name)];
-    if (!contentType) throw new Error("This file type isn't supported");
+    if (!contentType) throw new Error(tr("This file type isn't supported"));
     const start = await api<{ document_id: string; version_id: string; upload: { url: string; headers: Record<string, string> } }>(
       `organizations/${orgId}/documents/uploads`,
       { method: "POST", body: { workspace_id: workspaceId, filename: file.name, content_type: contentType, size_bytes: file.size, title: file.name.replace(/\.[^.]+$/, ""), ...(currentFolder ? { folder_id: currentFolder.id } : {}) } },
@@ -360,8 +364,8 @@ export default function LibraryPage() {
       xhr.open("PUT", start.upload.url);
       for (const [k, v] of Object.entries(start.upload.headers)) xhr.setRequestHeader(k, v);
       xhr.upload.onprogress = (e) => e.lengthComputable && patchUpload(key, { progress: e.loaded / e.total });
-      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed — check your connection and try again")));
-      xhr.onerror = () => reject(new Error("Upload failed — check your connection and try again"));
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(tr("Upload failed — check your connection and try again"))));
+      xhr.onerror = () => reject(new Error(tr("Upload failed — check your connection and try again")));
       xhr.send(file);
     });
     await api(`organizations/${orgId}/documents/${start.document_id}/versions/${start.version_id}/complete`, { method: "POST" });
@@ -428,8 +432,8 @@ export default function LibraryPage() {
     if (!it.docId) return dismissUpload(it.key);
     const ok = await confirm({
       title: `Delete "${it.name}"?`,
-      body: "It couldn't be added, so it isn't used in answers. This removes it from the library.",
-      confirmLabel: "Delete",
+      body: tr("It couldn't be added, so it isn't used in answers. This removes it from the library."),
+      confirmLabel: tr("Delete"),
       tone: "danger",
     });
     if (!ok) return;
@@ -448,8 +452,8 @@ export default function LibraryPage() {
   async function remove(d: Doc) {
     const ok = await confirm({
       title: `Delete "${d.title}"?`,
-      body: "It will no longer be used in answers. This can't be undone.",
-      confirmLabel: "Delete",
+      body: tr("It will no longer be used in answers. This can't be undone."),
+      confirmLabel: tr("Delete"),
       tone: "danger",
     });
     if (!ok) return;
@@ -467,7 +471,7 @@ export default function LibraryPage() {
   async function saveFolderName() {
     if (!naming || !workspaceId) return;
     const name = naming.value.trim();
-    if (!name) return setNaming({ ...naming, error: "Give the folder a name." });
+    if (!name) return setNaming({ ...naming, error: tr("Give the folder a name.") });
     setBusy(true);
     try {
       if (naming.mode === "create") {
@@ -487,8 +491,8 @@ export default function LibraryPage() {
   async function removeFolder(f: Folder) {
     const ok = await confirm({
       title: `Delete the folder "${f.name}"?`,
-      body: "Folders inside it are deleted too. No document is deleted: they go back to “No folder”.",
-      confirmLabel: "Delete folder",
+      body: tr("Folders inside it are deleted too. No document is deleted: they go back to “No folder”."),
+      confirmLabel: tr("Delete folder"),
       tone: "danger",
     });
     if (!ok) return;
@@ -527,7 +531,7 @@ export default function LibraryPage() {
   const trail = folderPath(folders, currentFolder?.id ?? null);
   const childFolders = folders.filter((f) => (currentFolder ? f.parent_id === currentFolder.id : f.parent_id === null));
   const folderOptions = [
-    { value: "none", label: "No folder" },
+    { value: "none", label: tr("No folder") },
     ...folders.map((f) => ({ value: f.id, label: pathLabel(folders, f.id) })).sort((a, b) => a.label.localeCompare(b.label)),
   ];
 
@@ -590,23 +594,21 @@ export default function LibraryPage() {
   return (
     <div className="page" {...dragProps}>
       <header className="page-bar">
-        <PageBreadcrumbs section="Library" context={wsName} icon={IconFolder} />
+        <PageBreadcrumbs section={tr("Library")} context={wsName} icon={IconFolder} />
         {loadingLayout && loadingHasDocuments && (
           <Skel className="library-skeleton-upload" w="var(--library-upload-width, 115px)" h={30} r={12} />
         )}
         {workspaceId && !blank && !errorKind && (!loadingDocs || hasListing) && (
           <button type="button" className="primary small" onClick={browse}>
-            <IconUpload size={15} />
-            Upload files
-          </button>
+            <IconUpload size={15} />{tr("Upload files")}</button>
         )}
       </header>
 
       <div className="main">
         <header className="page-head">
           <div>
-            <h1>Library</h1>
-            <p className="sub">Documents are used in answers once they show as Ready.</p>
+            <h1>{tr("Library")}</h1>
+            <p className="sub">{tr("Documents are used in answers once they show as Ready.")}</p>
           </div>
         </header>
 
@@ -618,22 +620,17 @@ export default function LibraryPage() {
             <div className={`drop hero${over ? " over" : ""}`}>
               <span className="drop-glow" aria-hidden="true" />
               <FolderDrop size={96} open={over} />
-              <span className="lead">{over ? "Drop to upload" : `Upload your first document${wsName ? ` to ${wsName}` : ""}`}</span>
-              <span>Drag files anywhere on this page or choose them from your computer.</span>
-              <button type="button" className="ghost" onClick={browse} disabled={!workspaceId}>
-                Choose files
-              </button>
-              <span className="formats">PDF · DOCX · PPTX · XLSX · PNG/JPEG · Markdown · TXT · CSV · HTML · Audio (MP3, WAV, M4A)</span>
-              <ol className="pipeline" aria-label="What happens on upload">
+              <span className="lead">{over ? tr("Drop to upload") : (wsName ? tr("Upload your first document to {name}", { name: wsName }) : tr("Upload your first document"))}</span>
+              <span>{tr("Drag files anywhere on this page or choose them from your computer.")}</span>
+              <button type="button" className="ghost" onClick={browse} disabled={!workspaceId}>{tr("Choose files")}</button>
+              <span className="formats">{tr("PDF · DOCX · PPTX · XLSX · PNG/JPEG · Markdown · TXT · CSV · HTML · Audio (MP3, WAV, M4A)")}</span>
+              <ol className="pipeline" aria-label={tr("What happens on upload")}>
                 <li>
-                  <span>1</span>Uploaded and validated
-                </li>
+                  <span>1</span>{tr("Uploaded and validated")}</li>
                 <li>
-                  <span>2</span>We read the text
-                </li>
+                  <span>2</span>{tr("We read the text")}</li>
                 <li>
-                  <span>3</span>Ready to answer questions
-                </li>
+                  <span>3</span>{tr("Ready to answer questions")}</li>
               </ol>
             </div>
           ) : hasListing && (
@@ -643,17 +640,15 @@ export default function LibraryPage() {
               <span className="drop-text">
                 <span className="lead">
                   {over ? (
-                    "Drop to upload"
+                    tr("Drop to upload")
                   ) : (
-                    <>Drop files {currentFolder ? `into ${currentFolder.name}` : "here"}</>
+                    <>{tr("Drop files")}{" "}{currentFolder ? tr("into {name}", { name: currentFolder.name }) : tr("here")}</>
                   )}
                 </span>
-                <span>PDF, DOCX, PPTX, XLSX, PNG/JPEG, Markdown, TXT, CSV, HTML or audio recordings</span>
+                <span>{tr("PDF, DOCX, PPTX, XLSX, PNG/JPEG, Markdown, TXT, CSV, HTML or audio recordings")}</span>
               </span>
               <button type="button" className="ghost small drop-cta" onClick={browse}>
-                <IconUpload size={15} />
-                Choose files
-              </button>
+                <IconUpload size={15} />{tr("Choose files")}</button>
             </div>
           )}
 
@@ -663,22 +658,20 @@ export default function LibraryPage() {
             <div className="alert" role="alert">
               <IconAlert size={16} />
               <span style={{ flex: 1 }}>{alert}</span>
-              <button type="button" className="quiet icon small" onClick={dismissAlert} aria-label="Dismiss">
+              <button type="button" className="quiet icon small" onClick={dismissAlert} aria-label={tr("Dismiss")}>
                 <IconX size={14} />
               </button>
             </div>
           )}
 
           {showToolbar && tree?.workspaceId === workspaceId && (
-            <nav className="folder-bar" aria-label="Folders">
+            <nav className="folder-bar" aria-label={tr("Folders")}>
               <div className="folder-trail">
-                <button type="button" className="folder-crumb" aria-current={folderView === "all" ? "page" : undefined} onClick={() => goFolder("all")}>
-                  All files
-                </button>
+                <button type="button" className="folder-crumb" aria-current={folderView === "all" ? "page" : undefined} onClick={() => goFolder("all")}>{tr("All files")}</button>
                 {folderView === "none" && (
                   <>
                     <IconChevronRight size={14} />
-                    <span className="folder-crumb" aria-current="page">No folder</span>
+                    <span className="folder-crumb" aria-current="page">{tr("No folder")}</span>
                   </>
                 )}
                 {trail.map((f, i) => (
@@ -692,19 +685,17 @@ export default function LibraryPage() {
                 <span className="folder-tools">
                   {currentFolder && (
                     <>
-                      <button type="button" className="quiet icon small" onClick={() => setNaming({ mode: "rename", value: currentFolder.name })} aria-label={`Rename ${currentFolder.name}`} data-tip="Rename folder">
+                      <button type="button" className="quiet icon small" onClick={() => setNaming({ mode: "rename", value: currentFolder.name })} aria-label={tr("Rename {name}", { name: currentFolder.name })} data-tip={tr("Rename folder")}>
                         <IconEdit size={15} />
                       </button>
-                      <button type="button" className="quiet icon small" onClick={() => removeFolder(currentFolder)} aria-label={`Delete ${currentFolder.name}`} data-tip="Delete folder">
+                      <button type="button" className="quiet icon small" onClick={() => removeFolder(currentFolder)} aria-label={tr("Delete {name}", { name: currentFolder.name })} data-tip={tr("Delete folder")}>
                         <IconTrash size={15} />
                       </button>
                     </>
                   )}
                   {folderView !== "none" && (
                     <button type="button" className="ghost small" onClick={() => setNaming({ mode: "create", value: "" })}>
-                      <IconPlus size={14} />
-                      New folder
-                    </button>
+                      <IconPlus size={14} />{tr("New folder")}</button>
                   )}
                 </span>
               </div>
@@ -719,7 +710,7 @@ export default function LibraryPage() {
                   ))}
                   {folderView === "all" && tree.unfiled > 0 && (
                     <button type="button" className="folder-chip plain" onClick={() => goFolder("none")}>
-                      <span className="name">No folder</span>
+                      <span className="name">{tr("No folder")}</span>
                       <span className="count">{tree.unfiled}</span>
                     </button>
                   )}
@@ -731,13 +722,13 @@ export default function LibraryPage() {
           {(showToolbar || errorKind) && (
             <section className="stack" style={{ gap: 12 }}>
               {showToolbar && <div className="toolbar">
-                <Seg role="group" aria-label="Filter by status">
+                <Seg role="group" aria-label={tr("Filter by status")}>
                   {(
                     [
-                      ["all", "All", counts.all],
-                      ["indexed", "Ready", counts.indexed],
-                      ["pending", "Processing", counts.pending],
-                      ["failed", "Errors", counts.failed],
+                      ["all", tr("All"), counts.all],
+                      ["indexed", tr("Ready"), counts.indexed],
+                      ["pending", tr("Processing"), counts.pending],
+                      ["failed", tr("Errors"), counts.failed],
                     ] as const
                   ).map(([k, label, n]) => (
                     <button key={k} type="button" aria-pressed={view === k} onClick={() => setFilters({ ...filters, view: k })} data-kind={k}>
@@ -748,32 +739,32 @@ export default function LibraryPage() {
                 </Seg>
                 <div className={`search${filter ? " has-value" : ""}`}>
                   <IconSearch size={15} />
-                  <input placeholder="Filter by title" value={filter} onChange={(e) => setFilters({ ...filters, title: e.target.value })} aria-label="Filter by title" />
-                  <button type="button" className="quiet icon small clear" onClick={() => setFilters({ ...filters, title: "" })} aria-label="Clear filter" tabIndex={filter ? 0 : -1}>
+                  <input placeholder={tr("Filter by title")} value={filter} onChange={(e) => setFilters({ ...filters, title: e.target.value })} aria-label={tr("Filter by title")} />
+                  <button type="button" className="quiet icon small clear" onClick={() => setFilters({ ...filters, title: "" })} aria-label={tr("Clear filter")} tabIndex={filter ? 0 : -1}>
                     <IconX size={14} />
                   </button>
                 </div>
               </div>}
 
               {errorKind && (
-                <AppErrorState kind={errorKind} backHref={`/app/${orgId}/ask`} backLabel="Back to Ask" onRetry={retryListing} />
+                <AppErrorState kind={errorKind} backHref={`/app/${orgId}/ask`} backLabel={tr("Back to Ask")} onRetry={retryListing} />
               )}
               {loadingDocs && (
-                <SkeletonStatus label="Loading documents…">
-                  <SkeletonTable rows={5} columns={DOCUMENT_COLUMNS} leading="file" />
+                <SkeletonStatus label={tr("Loading documents…")}>
+                  <SkeletonTable rows={5} columns={documentColumns} leading="file" />
                 </SkeletonStatus>
               )}
               {docs != null && <div className="table-card">
                 {shown.length === 0 ? (
                   <div className="empty">
                     <StateIllustration kind="empty" />
-                    <strong>{filter ? "No titles match" : all.length === 0 && folderView !== "all" ? "No documents here yet" : "Nothing in this status"}</strong>
+                    <strong>{filter ? tr("No titles match") : all.length === 0 && folderView !== "all" ? tr("No documents here yet") : tr("Nothing in this status")}</strong>
                     <span>
                       {filter
-                        ? "Try a different word from the title."
+                        ? tr("Try a different word from the title.")
                         : all.length === 0 && folderView !== "all"
-                          ? "Drop files on this page to upload them here, or move documents in from All files."
-                          : "Change the filter to see the rest of the documents."}
+                          ? tr("Drop files on this page to upload them here, or move documents in from All files.")
+                          : tr("Change the filter to see the rest of the documents.")}
                     </span>
                   </div>
                 ) : (
@@ -781,14 +772,14 @@ export default function LibraryPage() {
                     <table>
                       <thead>
                         <tr>
-                          <th>Title</th>
-                          <th>Status</th>
-                          <th className="hide-sm">Version</th>
-                          <th className="num hide-sm">Size</th>
-                          <th className="num hide-sm">Pages</th>
-                          <th className="hide-md">Updated</th>
+                          <th>{tr("Title")}</th>
+                          <th>{tr("Status")}</th>
+                          <th className="hide-sm">{tr("Version")}</th>
+                          <th className="num hide-sm">{tr("Size")}</th>
+                          <th className="num hide-sm">{tr("Pages")}</th>
+                          <th className="hide-md">{tr("Updated")}</th>
                           <th>
-                            <span className="sr-only">Actions</span>
+                            <span className="sr-only">{tr("Actions")}</span>
                           </th>
                         </tr>
                       </thead>
@@ -807,23 +798,18 @@ export default function LibraryPage() {
                                     <strong>{d.title}</strong>
                                   )}
                                   <div className="mono">
-                                    {d.source_provider && <span className="doc-source">From {SOURCE_NAMES[d.source_provider]} · </span>}
+                                    {d.source_provider && <span className="doc-source">{tr("From")}{" "}{tr(SOURCE_NAMES()[d.source_provider])} · </span>}
                                     {d.filename}
                                     {d.duration_seconds != null && ` · ${clock(d.duration_seconds)}`}
-                                    {folderView === "all" && d.folder_id && pathLabel(folders, d.folder_id) && ` · in ${pathLabel(folders, d.folder_id)}`}
+                                    {folderView === "all" && d.folder_id && pathLabel(folders, d.folder_id) && tr(" · in {v1}", { v1: pathLabel(folders, d.folder_id) })}
                                   </div>
                                   {!d.folder_id && suggestions[d.id] && (
                                     <div className="folder-hint">
                                       <IconSparkles size={13} />
-                                      <span>
-                                        Looks like it belongs in <strong>{pathLabel(folders, suggestions[d.id]!.folder_id) || suggestions[d.id]!.folder_name}</strong>
+                                      <span>{tr("Looks like it belongs in")}{" "}<strong>{pathLabel(folders, suggestions[d.id]!.folder_id) || suggestions[d.id]!.folder_name}</strong>
                                       </span>
-                                      <button type="button" className="link" disabled={busy} onClick={() => moveTo([d.id], suggestions[d.id]!.folder_id)}>
-                                        Move there
-                                      </button>
-                                      <button type="button" className="link subtle" onClick={() => dismissSuggestion(d)}>
-                                        No thanks
-                                      </button>
+                                      <button type="button" className="link" disabled={busy} onClick={() => moveTo([d.id], suggestions[d.id]!.folder_id)}>{tr("Move there")}</button>
+                                      <button type="button" className="link subtle" onClick={() => dismissSuggestion(d)}>{tr("No thanks")}</button>
                                     </div>
                                   )}
                                   {d.error_code && (
@@ -841,14 +827,14 @@ export default function LibraryPage() {
                             <td className="muted hide-md nowrap">{ago(d.updated_at)}</td>
                             <td className="actions">
                               {d.latest_status === "indexed" && (
-                                <button type="button" className="quiet icon" onClick={() => openDoc(d)} aria-label={`Open ${d.title}`} data-tip="Open" data-tip-side="end">
+                                <button type="button" className="quiet icon" onClick={() => openDoc(d)} aria-label={tr("Open {title}", { title: d.title })} data-tip={tr("Open")} data-tip-side="end">
                                   <IconEye size={16} />
                                 </button>
                               )}
-                              <button type="button" className="quiet icon" onClick={() => setMoving({ doc: d, target: d.folder_id ?? "none" })} aria-label={`Move ${d.title} to a folder`} data-tip="Move to folder" data-tip-side="end">
+                              <button type="button" className="quiet icon" onClick={() => setMoving({ doc: d, target: d.folder_id ?? "none" })} aria-label={tr("Move {title} to a folder", { title: d.title })} data-tip={tr("Move to folder")} data-tip-side="end">
                                 <IconFolder size={16} />
                               </button>
-                              <button type="button" className="danger icon" onClick={() => remove(d)} aria-label={`Delete ${d.title}`} data-tip="Delete" data-tip-side="end">
+                              <button type="button" className="danger icon" onClick={() => remove(d)} aria-label={tr("Delete {title}", { title: d.title })} data-tip={tr("Delete")} data-tip-side="end">
                                 <IconTrash size={16} />
                               </button>
                             </td>
@@ -865,14 +851,14 @@ export default function LibraryPage() {
       </div>
       <DocViewer doc={viewing} orgId={orgId} onClose={closeDoc} />
       {naming && (
-        <FormDialog title={naming.mode === "create" ? (currentFolder ? `New folder in ${currentFolder.name}` : "New folder") : "Rename folder"} description={naming.mode === "create" ? "Group related documents so they're easier to find." : "Give this folder a name people will recognize."} submitLabel={naming.mode === "create" ? "Create folder" : "Save"} busy={busy} onSubmit={saveFolderName} onClose={() => setNaming(null)}>
-          <TextField label="Name" value={naming.value} maxLength={120} autoFocus error={naming.error} onChange={(e) => setNaming({ mode: naming.mode, value: e.target.value })} />
+        <FormDialog title={naming.mode === "create" ? (currentFolder ? tr("New folder in {name}", { name: currentFolder.name }) : tr("New folder")) : tr("Rename folder")} description={naming.mode === "create" ? tr("Group related documents so they're easier to find.") : tr("Give this folder a name people will recognize.")} submitLabel={naming.mode === "create" ? tr("Create folder") : tr("Save")} busy={busy} onSubmit={saveFolderName} onClose={() => setNaming(null)}>
+          <TextField label={tr("Name")} value={naming.value} maxLength={120} autoFocus error={naming.error} onChange={(e) => setNaming({ mode: naming.mode, value: e.target.value })} />
         </FormDialog>
       )}
       {moving && (
-        <FormDialog title={`Move "${moving.doc.title}"`} submitLabel="Move" busy={busy} onSubmit={() => moveTo([moving.doc.id], moving.target === "none" ? null : moving.target)} onClose={() => setMoving(null)}>
-          <p className="muted">Folders only organize the library. Moving a document doesn't change who can see it.</p>
-          <Select ariaLabel="Folder" value={moving.target} onChange={(target) => setMoving({ doc: moving.doc, target })} options={folderOptions} />
+        <FormDialog title={tr("Move \"{title}\"", { title: moving.doc.title })} submitLabel={tr("Move")} busy={busy} onSubmit={() => moveTo([moving.doc.id], moving.target === "none" ? null : moving.target)} onClose={() => setMoving(null)}>
+          <p className="muted">{tr("Folders only organize the library. Moving a document doesn't change who can see it.")}</p>
+          <Select ariaLabel={tr("Folder")} value={moving.target} onChange={(target) => setMoving({ doc: moving.doc, target })} options={folderOptions} />
         </FormDialog>
       )}
     </div>

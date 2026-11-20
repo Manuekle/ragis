@@ -7,12 +7,15 @@ import { SoftText } from "@/components/motion";
 import { TextField, useFormErrors } from "@/components/ui";
 import { AuthShell, GateChecks } from "./AuthShell";
 import { LOGIN } from "./copy";
+import { useT } from "@/lib/use-t";
 
 type Step = "signin" | "new_password" | "forgot" | "reset";
 
 /** Inicio de sesión dentro de la app. Cognito solo guarda las cuentas; el navegador nunca sale del sitio. */
 export default function PasswordLoginForm() {
   const t = LOGIN[useLocale()];
+  // Server errors arrive in English (lib/cognito.ts friendlyError); messages-es.ts has their Spanish.
+  const tr = useT();
   const [step, setStep] = useState<Step>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,8 +55,8 @@ export default function PasswordLoginForm() {
     const data = (await res.json().catch(() => ({}))) as { next?: string; step?: Step; error?: { message?: string } };
     if (!res.ok) {
       setBusy(false);
-      if (res.status === 410) return go("signin", { error: data.error?.message });
-      setError(data.error?.message ?? t.noComplete);
+      if (res.status === 410) return go("signin", { error: tr(data.error?.message) });
+      setError(tr(data.error?.message) ?? t.noComplete);
       return;
     }
     if (data.next) {
@@ -70,7 +73,7 @@ export default function PasswordLoginForm() {
       <form className="gate-form" onSubmit={submit} noValidate>
         {copy.note && <p className="gate-note">{copy.note}</p>}
         {(step === "signin" || step === "forgot" || step === "reset") && (
-          <TextField label={t.email} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="email" autoFocus={step !== "reset"} {...form.field("email")} />
+          <TextField label={t.email} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.emailPlaceholder} autoComplete="email" autoFocus={step !== "reset"} {...form.field("email")} />
         )}
         {step === "reset" && (
           <TextField label={t.code} required value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus {...form.field("code")} />

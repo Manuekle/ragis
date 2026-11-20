@@ -62,6 +62,7 @@ import {
 } from "@/components/vui/tooltip"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { MoreHorizontalIcon, Moon02Icon, Download01Icon, Upload01Icon, Search01Icon, ArrowLeft01Icon, ArrowRight01Icon, MinusSignCircleIcon, PlusSignCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { useT } from "@/lib/use-t";
 
 export const XLSX_CONTEXT_MENU_CLASS_NAME =
   "origin-(--transform-origin) rounded-lg border bg-popover text-popover-foreground shadow-lg/5 outline-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--vx-radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]"
@@ -481,6 +482,7 @@ function WorkbookFileActionsMenu({
   showNightRenderToggle?: boolean
   showUploadButton: boolean
 }) {
+  const t = useT();
   const showThemeControl = showNightRenderToggle && Boolean(onIsDarkChange)
   const showFileActions = (showDownloadButton && onDownload) || showUploadButton
   if (!showThemeControl && !showFileActions) return null
@@ -492,7 +494,7 @@ function WorkbookFileActionsMenu({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Open workbook actions"
+            aria-label={t("Open workbook actions")}
           >
             <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} className="size-4" />
           </Button>
@@ -510,24 +512,18 @@ function WorkbookFileActionsMenu({
               className={cn("justify-between")}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} className="size-4" />
-                Dark mode
-              </span>
+                <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} className="size-4" />{t("Dark mode")}</span>
             </DropdownMenuCheckboxItem>
             {showFileActions ? <DropdownMenuSeparator /> : null}
           </>
         ) : null}
         {showDownloadButton && onDownload ? (
           <DropdownMenuItem onClick={onDownload}>
-            <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />
-            Download
-          </DropdownMenuItem>
+            <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />{t("Download")}</DropdownMenuItem>
         ) : null}
         {showUploadButton ? (
           <DropdownMenuItem onClick={onUploadClick}>
-            <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-            Upload
-          </DropdownMenuItem>
+            <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload")}</DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -553,6 +549,7 @@ export function WorkbookTableHeaderMenu({
   triggerIcon,
   triggerProps,
 }: XlsxTableHeaderMenuRenderProps) {
+  const t = useT();
   const [open, setOpen] = React.useState(false)
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -564,7 +561,7 @@ export function WorkbookTableHeaderMenu({
             variant="ghost"
             size="icon-sm"
             className={cn("size-6 rounded-sm", triggerProps.className)}
-            aria-label="Column menu"
+            aria-label={t("Column menu")}
           >
             {triggerIcon ? (
               triggerIcon
@@ -589,12 +586,8 @@ export function WorkbookTableHeaderMenu({
             setOpen(false)
           }}
         >
-          <DropdownMenuRadioItem value="ascending">
-            Sort ascending
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="descending">
-            Sort descending
-          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="ascending">{t("Sort ascending")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="descending">{t("Sort descending")}</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -605,6 +598,7 @@ function WorkbookSearchPopover({
 }: {
   viewportRef: React.RefObject<HTMLDivElement | null>
 }) {
+  const t = useT();
   const controller = useXlsxViewer()
   const [searchDraft, setSearchDraft] = React.useState("")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -626,12 +620,12 @@ function WorkbookSearchPopover({
     !controller.sheets.length
   const hasActiveQuery = Boolean(searchQuery.trim())
   const resultLabel = isSearching
-    ? "Searching"
+    ? t("Searching")
     : !hasActiveQuery
-      ? "No search"
+      ? t("No search")
       : searchResults.length
         ? `${activeResultIndex + 1} / ${searchResults.length}`
-        : "No results"
+        : t("No results")
   React.useEffect(() => {
     controllerRef.current = controller
   }, [controller])
@@ -732,14 +726,14 @@ function WorkbookSearchPopover({
   ])
   return (
     <Popover>
-      <ToolbarTooltip label="Search workbook">
+      <ToolbarTooltip label={t("Search workbook")}>
         <PopoverTrigger
           render={
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Search workbook"
+              aria-label={t("Search workbook")}
               disabled={controlsDisabled}
             >
               <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className="size-4" />
@@ -750,7 +744,7 @@ function WorkbookSearchPopover({
       <PopoverContent align="end" className="w-72">
         <div className="space-y-3">
           <Input
-            placeholder="Search workbook"
+            placeholder={t("Search workbook")}
             value={searchDraft}
             onChange={(event) => handleSearchDraftChange(event.target.value)}
             onKeyDown={(event) => {
@@ -790,7 +784,7 @@ function WorkbookSearchPopover({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Previous result"
+                aria-label={t("Previous result")}
                 disabled={isSearching || searchResults.length === 0}
                 onClick={() => goToRelativeResult(-1)}
               >
@@ -800,7 +794,7 @@ function WorkbookSearchPopover({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Next result"
+                aria-label={t("Next result")}
                 disabled={isSearching || searchResults.length === 0}
                 onClick={() => goToRelativeResult(1)}
               >
@@ -814,9 +808,7 @@ function WorkbookSearchPopover({
               variant="outline"
               size="sm"
               onClick={clearSearch}
-            >
-              Clear
-            </Button>
+            >{t("Clear")}</Button>
           </div>
         </div>
       </PopoverContent>
@@ -846,6 +838,7 @@ function WorkbookToolbar({
   viewportRef: React.RefObject<HTMLDivElement | null>
   workbookIdentity: string
 }) {
+  const t = useT();
   const { canZoomIn, canZoomOut, setZoomScale, zoomIn, zoomOut, zoomScale } =
     useXlsxViewerZoom()
   const currentZoom = Math.round(zoomScale)
@@ -858,13 +851,13 @@ function WorkbookToolbar({
       <TooltipProvider>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
           <div className="flex flex-none items-center gap-1">
-            <ToolbarTooltip label="Zoom out">
+            <ToolbarTooltip label={t("Zoom out")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 disabled={!canZoomOut}
-                aria-label="Zoom out"
+                aria-label={t("Zoom out")}
                 onClick={zoomOut}
               >
                 <HugeiconsIcon icon={MinusSignCircleIcon} strokeWidth={2} className="size-4" />
@@ -878,7 +871,7 @@ function WorkbookToolbar({
               <SelectTrigger
                 size="sm"
                 className="w-[84px] min-w-[84px]"
-                aria-label="Zoom level"
+                aria-label={t("Zoom level")}
               >
                 <SelectValue>{currentZoom}%</SelectValue>
               </SelectTrigger>
@@ -894,13 +887,13 @@ function WorkbookToolbar({
                 ))}
               </SelectContent>
             </Select>
-            <ToolbarTooltip label="Zoom in">
+            <ToolbarTooltip label={t("Zoom in")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 disabled={!canZoomIn}
-                aria-label="Zoom in"
+                aria-label={t("Zoom in")}
                 onClick={zoomIn}
               >
                 <HugeiconsIcon icon={PlusSignCircleIcon} strokeWidth={2} className="size-4" />
@@ -1013,6 +1006,7 @@ const WorkbookSheetTabsInner = React.memo(function WorkbookSheetTabsInner({
   onActiveSheetIndexChange,
   sheets,
 }: WorkbookSheetTabsInnerProps) {
+  const t = useT();
   const [visiblePreviewIndex, setVisiblePreviewIndex] = React.useState<
     number | null
   >(null)
@@ -1220,7 +1214,7 @@ const WorkbookSheetTabsInner = React.memo(function WorkbookSheetTabsInner({
                 <img
                   key={`${visiblePreviewIndex}-${previewUrl}`}
                   src={previewUrl}
-                  alt={`${previewSheet.name} preview`}
+                  alt={t("{name} preview", { name: previewSheet.name })}
                   className="absolute inset-0 h-full w-full object-cover object-left-top"
                 />
               </div>
@@ -1260,6 +1254,7 @@ export function XlsxWorkbookSurface({
   toolbarActions?: React.ReactNode
   workbookIdentity: string
 }) {
+  const t = useT();
   const { error, isLoading, sheets, zoomScale, setZoomScale } = useXlsxViewer()
   // The canvas grid leaves its sticky A/B/C and 1/2/3 headers unpainted until something re-lays it out (a click, a zoom).
   // Nudge the zoom once when the workbook is ready, so the headers show without the user having to click first.
@@ -1322,11 +1317,8 @@ export function XlsxWorkbookSurface({
             fileTooLargeState={
               <div className="grid h-full w-full min-w-full place-items-center p-6">
                 <div className="max-w-sm rounded-lg border bg-background p-4 text-sm">
-                  <p className="font-medium">File too large</p>
-                  <p className="mt-1 text-muted-foreground">
-                    This workbook exceeds the display limit. Download it to view
-                    the full file.
-                  </p>
+                  <p className="font-medium">{t("File too large")}</p>
+                  <p className="mt-1 text-muted-foreground">{t("This workbook exceeds the display limit. Download it to view the full file.")}</p>
                 </div>
               </div>
             }
@@ -1334,7 +1326,7 @@ export function XlsxWorkbookSurface({
             renderScroller={renderSearchableScroller}
             errorState={
               <div className="grid h-full w-full min-w-full place-items-center p-6 text-sm text-destructive">
-                {error?.message ?? "Unable to display workbook."}
+                {error?.message ?? t("Unable to display workbook.")}
               </div>
             }
             contextMenuClassName={XLSX_CONTEXT_MENU_CLASS_NAME}
@@ -1408,6 +1400,7 @@ function XlsxViewerContent({
   toolbarActions?: React.ReactNode
   url?: string
 }) {
+  const t = useT();
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [uploadedWorkbook, setUploadedWorkbook] =
     React.useState<UploadedWorkbook | null>(null)
@@ -1492,10 +1485,8 @@ function XlsxViewerContent({
         />
         <div className="grid min-h-0 flex-1 place-items-center bg-muted/30 p-4">
           <div className="max-w-md rounded-lg border bg-background p-4 text-center text-sm shadow-xs">
-            <p className="font-medium">Upload a workbook to preview</p>
-            <p className="mt-1 text-muted-foreground">
-              Pass an XLSX URL with the <code>src</code> prop or upload a file.
-            </p>
+            <p className="font-medium">{t("Upload a workbook to preview")}</p>
+            <p className="mt-1 text-muted-foreground">{t("Pass an XLSX URL with the")}{" "}<code>src</code>{" "}{t("prop or upload a file.")}</p>
             <Button
               type="button"
               variant="outline"
@@ -1503,9 +1494,7 @@ function XlsxViewerContent({
               className="mt-4"
               onClick={() => fileInputRef.current?.click()}
             >
-              <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-              Upload XLSX
-            </Button>
+              <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload XLSX")}</Button>
           </div>
         </div>
       </div>
@@ -1533,7 +1522,7 @@ function XlsxViewerContent({
         />
         <div className="grid min-h-0 flex-1 place-items-center bg-muted/30 p-4">
           <div className="max-w-md rounded-lg border bg-background p-4 text-sm">
-            <p className="font-medium">Unable to display workbook</p>
+            <p className="font-medium">{t("Unable to display workbook")}</p>
             <p className="mt-1 text-muted-foreground">{loadError}</p>
             <Button
               type="button"
@@ -1542,9 +1531,7 @@ function XlsxViewerContent({
               className="mt-4"
               onClick={() => fileInputRef.current?.click()}
             >
-              <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-              Upload XLSX
-            </Button>
+              <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload XLSX")}</Button>
           </div>
         </div>
       </div>
@@ -1772,8 +1759,9 @@ function InlineComposeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
   }
 }
 function InlineSpinner({ className, ...props }: InlineRegistryIconProps) {
+  const t = useT();
   return (
-    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
+    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label={t("Loading")} className={cn("size-4 animate-spin", className)} {...props} />
   )
 }
 type InlineRegistryIconProps = Omit<

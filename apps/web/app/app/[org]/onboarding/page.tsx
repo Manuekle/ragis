@@ -12,6 +12,7 @@ import { Checkbox, Seg, SoftText, Toast } from "@/components/motion";
 import { Select, TextField } from "@/components/ui";
 import { duration } from "@/lib/plain";
 import { AUTONOMY_COPY } from "../agents/shared";
+import { useT, tNow } from "@/lib/use-t";
 
 /* ───────────── API shapes ───────────── */
 interface Step { n: number; key: string; title: string; skippable: boolean }
@@ -20,7 +21,7 @@ interface Recommendation {
   sector: string;
   knowledge_spaces: string[];
   rag_profile: string;
-  suggested_agents: { template: string; name: string; reason: string; blocked: string | null }[];
+  suggested_agents: { template: string; name: string; purpose?: string; reason: string; blocked: string | null }[];
   approval_policy: string;
   model_policy: string;
   guardrails: string[];
@@ -54,72 +55,81 @@ interface Onboarding {
 }
 
 /* ───────────── copy ───────────── */
-const SECTOR_HINT: Record<string, string> = {
-  legal: "Case files, contracts, regulations",
-  consulting: "Clients, projects, methodologies",
-  industry: "Manuals, maintenance, quality",
-  accounting: "Tax, supports, policies",
-  insurance: "Policies, claims, incidents",
-  construction: "Contracts, drawings, site records",
-  logistics: "Shipments, carriers, customs, operations",
-  education: "Regulations, registrar, quality",
-  other: "Describe your activity — we keep defaults minimal",
+const SECTOR_HINT = (): Record<string, string> => ({
+  legal: tNow("Case files, contracts, regulations"),
+  consulting: tNow("Clients, projects, methodologies"),
+  industry: tNow("Manuals, maintenance, quality"),
+  accounting: tNow("Tax, supports, policies"),
+  insurance: tNow("Policies, claims, incidents"),
+  construction: tNow("Contracts, drawings, site records"),
+  logistics: tNow("Shipments, carriers, customs, operations"),
+  education: tNow("Regulations, registrar, quality"),
+  other: tNow("Describe your activity — we keep defaults minimal"),
+});
+const GOAL_COPY = (): Record<string, [string, string]> => ({
+  ask: [tNow("Ask"), tNow("Answers with citations from your documents")],
+  audit: [tNow("Audit"), tNow("Findings with severity and evidence")],
+  compare: [tNow("Compare"), tNow("Changes between versions by clause or page")],
+  review: [tNow("Review"), tNow("Comments and proposed drafts")],
+  approve: [tNow("Approve"), tNow("Route decisions to named people")],
+  sign: [tNow("Sign"), tNow("Prepare documents for signature — a person always signs")],
+  share: [tNow("Share"), tNow("Send documents outside with links that expire")],
+});
+/** Why Setup suggests an agent, as the API words it ("Goal: ask", "Legal preset", "Default"), in the page's language. */
+const reasonLabel = (reason: string): string => {
+  if (reason.startsWith("Goal: ")) {
+    const goal = reason.slice(6);
+    return tNow("Goal: {goal}", { goal: GOAL_COPY()[goal]?.[0] ?? goal });
+  }
+  if (reason.endsWith(" preset")) return tNow("Suggested for {sector}", { sector: tNow(reason.slice(0, -7)) });
+  return tNow(reason);
 };
-const GOAL_COPY: Record<string, [string, string]> = {
-  ask: ["Ask", "Answers with citations from your documents"],
-  audit: ["Audit", "Findings with severity and evidence"],
-  compare: ["Compare", "Changes between versions by clause or page"],
-  review: ["Review", "Comments and proposed drafts"],
-  approve: ["Approve", "Route decisions to named people"],
-  sign: ["Sign", "Prepare documents for signature — a person always signs"],
-  share: ["Share", "Send documents outside with links that expire"],
-};
-const DOC_COPY: Record<string, string> = {
-  contracts: "Contracts", policies: "Policies & procedures", manuals: "Manuals", reports: "Reports",
-  spreadsheets: "Spreadsheets", scanned: "Scanned PDFs", drawings: "Drawings & plans", presentations: "Presentations",
-  emails: "Emails", other: "Other",
-};
+const DOC_COPY = (): Record<string, string> => ({
+  contracts: tNow("Contracts"), policies: tNow("Policies & procedures"), manuals: tNow("Manuals"), reports: tNow("Reports"),
+  spreadsheets: tNow("Spreadsheets"), scanned: tNow("Scanned PDFs"), drawings: tNow("Drawings & plans"), presentations: tNow("Presentations"),
+  emails: tNow("Emails"), other: tNow("Other"),
+});
 const TEAM = ["1-14", "15-50", "51-150", "151-500", "500+"];
-const CLASSES: [string, string, string][] = [
-  ["public", "Public", "Can be shared openly"],
-  ["internal", "Internal", "Employees only"],
-  ["confidential", "Confidential", "Need-to-know; client or financial data"],
-  ["restricted", "Restricted", "Must not leave your environment"],
-];
-const DEPLOY: [string, string, string][] = [
-  ["cloud", "Cloud", "We host it for you. Your data is kept separate from other companies."],
-  ["private_cloud", "Private cloud", "A private environment just for your company."],
-  ["on_prem", "On your servers", "Runs on your own infrastructure. Nothing leaves it."],
-];
-const LLM: [string, string, string][] = [
-  ["cloud_allowed", "Trusted cloud AI", "Uses approved AI providers in the region you choose."],
-  ["local_only", "Private AI only", "Your documents are never sent to an outside AI service."],
-  ["ask", "Decide later", "Agents use private AI until you decide."],
-];
-const LANGS = [
-  { value: "es", label: "Español" },
-  { value: "es-CO", label: "Español (Colombia)" },
-  { value: "es-MX", label: "Español (México)" },
-  { value: "en", label: "English" },
-  { value: "pt-BR", label: "Português (Brasil)" },
-];
-const REGIONS = [
-  { value: "us-east-1", label: "US East (N. Virginia)" },
-  { value: "sa-east-1", label: "South America (São Paulo)" },
-  { value: "eu-west-1", label: "Europe (Ireland)" },
-  { value: "eu-central-1", label: "Europe (Frankfurt)" },
-];
-const ZONES = ["America/Bogota", "America/Mexico_City", "America/Lima", "America/Santiago", "America/Argentina/Buenos_Aires", "America/Sao_Paulo", "America/New_York", "Europe/Madrid", "UTC"];
-const RAG_COPY: Record<string, string> = {
-  hybrid_with_citations: "Smart search, every answer with its source",
-  multimodal_with_citations: "Reads tables, drawings and scans, every answer with its source",
-  basic_with_citations: "Simple search, every answer with its source",
-};
-const MODEL_COPY: Record<string, string> = {
-  local_only: "Private AI only",
-  region_and_provider_approved: "Trusted cloud AI in your region",
-  confirm_before_cloud: "Private AI until you approve cloud AI",
-};
+const CLASSES = (): [string, string, string][] => ([
+  ["public", tNow("Public"), tNow("Can be shared openly")],
+  ["internal", tNow("Internal"), tNow("Employees only")],
+  ["confidential", tNow("Confidential"), tNow("Need-to-know; client or financial data")],
+  ["restricted", tNow("Restricted"), tNow("Must not leave your environment")],
+]);
+const DEPLOY = (): [string, string, string][] => ([
+  ["cloud", tNow("Cloud"), tNow("We host it for you. Your data is kept separate from other companies.")],
+  ["private_cloud", tNow("Private cloud"), tNow("A private environment just for your company.")],
+  ["on_prem", tNow("On your servers"), tNow("Runs on your own infrastructure. Nothing leaves it.")],
+]);
+const LLM = (): [string, string, string][] => ([
+  ["cloud_allowed", tNow("Trusted cloud AI"), tNow("Uses approved AI providers in the region you choose.")],
+  ["local_only", tNow("Private AI only"), tNow("Your documents are never sent to an outside AI service.")],
+  ["ask", tNow("Decide later"), tNow("Agents use private AI until you decide.")],
+]);
+const LANGS = () => ([
+  { value: "es", label: tNow("Español") },
+  { value: "es-CO", label: tNow("Español (Colombia)") },
+  { value: "es-MX", label: tNow("Español (México)") },
+  { value: "en", label: tNow("English") },
+  { value: "pt-BR", label: tNow("Português (Brasil)") },
+]);
+const REGIONS = () => ([
+  { value: "us-east-1", label: tNow("US East (N. Virginia)") },
+  { value: "sa-east-1", label: tNow("South America (São Paulo)") },
+  { value: "eu-west-1", label: tNow("Europe (Ireland)") },
+  { value: "eu-central-1", label: tNow("Europe (Frankfurt)") },
+]);
+const ZONES = () => ([tNow("America/Bogota"), tNow("America/Mexico_City"), tNow("America/Lima"), tNow("America/Santiago"), tNow("America/Argentina/Buenos_Aires"), tNow("America/Sao_Paulo"), tNow("America/New_York"), tNow("Europe/Madrid"), "UTC"]);
+const RAG_COPY = (): Record<string, string> => ({
+  hybrid_with_citations: tNow("Smart search, every answer with its source"),
+  multimodal_with_citations: tNow("Reads tables, drawings and scans, every answer with its source"),
+  basic_with_citations: tNow("Simple search, every answer with its source"),
+});
+const MODEL_COPY = (): Record<string, string> => ({
+  local_only: tNow("Private AI only"),
+  region_and_provider_approved: tNow("Trusted cloud AI in your region"),
+  confirm_before_cloud: tNow("Private AI until you approve cloud AI"),
+});
 
 type Form = {
   country: string; timezone: string; legal_id: string;
@@ -136,6 +146,7 @@ const toggle = (list: string[], v: string, max = Infinity) => (list.includes(v) 
 const clean = <T extends Record<string, unknown>>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== "" && v !== null && v !== undefined)) as Partial<T>;
 
 export default function OnboardingPage() {
+  const tr = useT();
   const { org } = useParams<{ org: string }>();
   const router = useRouter();
   const { org: orgInfo, workspaces, workspaceId } = useOrg();
@@ -171,7 +182,7 @@ export default function OnboardingPage() {
       llm_policy: p.llm_policy ?? "",
       region: p.region ?? "us-east-1",
       // Selecciones de pasos 6/7: se conservan si el usuario ya las tocó; si no, parten de la recomendación.
-      spaces: f?.spaces.length ? f.spaces : rec?.knowledge_spaces ?? [],
+      spaces: f?.spaces.length ? f.spaces : (rec?.knowledge_spaces ?? []).map((s) => tNow(s)),
       newSpace: "",
       agents: f?.agents.length ? f.agents : (rec?.suggested_agents ?? []).filter((a) => !a.blocked).map((a) => a.template),
       ack: f?.ack ?? false,
@@ -216,18 +227,29 @@ export default function OnboardingPage() {
       case 4: return clean({ doc_types: form.doc_types });
       case 5: return clean({ data_classification: form.data_classification, deployment_preference: form.deployment_preference, llm_policy: form.llm_policy, region: form.region });
       case 6: return { spaces: form.spaces };
-      case 7: return { agents: form.agents };
+      case 7: {
+        // Drafts are saved with the name and purpose the person reads (the API's templates are in English).
+        const catalog = new Map(data.catalog.agent_templates.map((t) => [t.code, t]));
+        const copy = Object.fromEntries(
+          form.agents.flatMap((code) => {
+            const name = catalog.get(code)?.name ?? data.recommendation?.suggested_agents.find((a) => a.template === code)?.name;
+            const purpose = catalog.get(code)?.purpose ?? data.recommendation?.suggested_agents.find((a) => a.template === code)?.purpose;
+            return name && purpose ? [[code, { name: tr(name), purpose: tr(purpose) }]] : [];
+          }),
+        );
+        return { agents: form.agents, copy };
+      }
       default: return {};
     }
   };
 
   const invalid = (): string | null => {
-    if (step === 2 && (!form.sector_primary || !form.team_size)) return "Choose your main sector and team size.";
-    if (step === 2 && form.sector_primary === "other" && !form.activity_description.trim()) return "Describe your activity in a sentence.";
-    if (step === 3 && (form.goals.length < 1 || form.goals.length > 3)) return "Choose between one and three goals.";
-    if (step === 5 && (!form.data_classification || !form.deployment_preference || !form.llm_policy)) return "Complete the three privacy choices.";
-    if (step === 5 && restricted && form.llm_policy === "cloud_allowed") return "Restricted data cannot use cloud models.";
-    if (step === 9 && !form.ack) return "Confirm you reviewed what activation does.";
+    if (step === 2 && (!form.sector_primary || !form.team_size)) return tr("Choose your main sector and team size.");
+    if (step === 2 && form.sector_primary === "other" && !form.activity_description.trim()) return tr("Describe your activity in a sentence.");
+    if (step === 3 && (form.goals.length < 1 || form.goals.length > 3)) return tr("Choose between one and three goals.");
+    if (step === 5 && (!form.data_classification || !form.deployment_preference || !form.llm_policy)) return tr("Complete the three privacy choices.");
+    if (step === 5 && restricted && form.llm_policy === "cloud_allowed") return tr("Restricted data cannot use cloud models.");
+    if (step === 9 && !form.ack) return tr("Confirm you reviewed what activation does.");
     return null;
   };
 
@@ -242,11 +264,11 @@ export default function OnboardingPage() {
       const d = await api<Onboarding>(`organizations/${org}/onboarding/steps/${step}`, { method: "PUT", body: { action, data: action === "skip" ? {} : payload() } });
       if (step === 6 && d.result?.spaces) {
         const c = d.result.spaces.created.length;
-        setNotice(c ? `${c} space${c > 1 ? "s" : ""} created` : "Spaces kept as they were");
+        setNotice(c ? tr("{c} space{v2} created", { c: c, v2: c > 1 ? "s" : "" }) : tr("Spaces kept as they were"));
       }
       if (step === 7 && d.result?.agents) {
         const c = d.result.agents.created.length;
-        setNotice(c ? `${c} agent draft${c > 1 ? "s" : ""} created` : "No new drafts — existing agents were kept");
+        setNotice(c ? tr("{c} agent draft{v2} created", { c: c, v2: c > 1 ? "s" : "" }) : tr("No new drafts — existing agents were kept"));
       }
       if (step === 9) {
         confetti({ origin: from });
@@ -285,7 +307,9 @@ export default function OnboardingPage() {
 
   const rec = data.recommendation;
   const existing = new Map(workspaces.map((w) => [w.name.toLowerCase(), w]));
-  const spaceOptions = [...new Set([...(rec?.knowledge_spaces ?? []), ...form.spaces])];
+  // Suggested names in the reader's language: the spaces are created with the names shown here.
+  const suggestedSpaces = (rec?.knowledge_spaces ?? []).map((s) => tr(s));
+  const spaceOptions = [...new Set([...suggestedSpaces, ...form.spaces])];
   const templates = new Map(data.catalog.agent_templates.map((t) => [t.code, t]));
   const suggested = rec?.suggested_agents ?? [];
   const progress = Math.round((done.size / 9) * 100);
@@ -294,25 +318,23 @@ export default function OnboardingPage() {
     <div className="page">
       <header className="page-bar">
         <div className="crumbs">
-          <strong>Setup</strong>
+          <strong>{tr("Setup")}</strong>
           <span className="crumb-sep" aria-hidden="true">/</span>
-          <span className="crumb-ws">{orgInfo?.name ?? "Organization"}</span>
+          <span className="crumb-ws">{orgInfo?.name ?? tr("Organization")}</span>
         </div>
         {data.status !== "COMPLETED" && data.can_edit && (
-          <button type="button" className="quiet small" onClick={pause}>
-            Finish later
-          </button>
+          <button type="button" className="quiet small" onClick={pause}>{tr("Finish later")}</button>
         )}
       </header>
 
       <div className="main">
         <div className="ob">
-          <nav className="ob-rail" aria-label="Setup steps">
+          <nav className="ob-rail" aria-label={tr("Setup steps")}>
             <div className="ob-rail-head">
-              <strong>Set up {orgInfo?.name ?? "your workspace"}</strong>
+              <strong>{tr("Set up")}{" "}{orgInfo?.name ?? tr("your workspace")}</strong>
               <div>
                 <small>
-                  {data.status === "COMPLETED" ? "Active · edit anytime" : data.status === "NEEDS_REVIEW" ? "Profile changed · review suggestions" : `${progress}% · about ${Math.max(1, 9 - done.size)} min left`}
+                  {data.status === "COMPLETED" ? tr("Active · edit anytime") : data.status === "NEEDS_REVIEW" ? tr("Profile changed · review suggestions") : tr("{progress}% · about {v2} min left", { progress: progress, v2: Math.max(1, 9 - done.size) })}
                 </small>
               </div>
               <div className="ob-progress" aria-hidden="true">
@@ -335,8 +357,8 @@ export default function OnboardingPage() {
                   disabled={s.n === 1 && !data.can_edit}
                 >
                   <span className="n">{state === "done" ? <IconCheck size={12} /> : s.n}</span>
-                  <span className="label">{s.title}</span>
-                  {state === "skipped" && <span className="tag">Skipped</span>}
+                  <span className="label">{tr(s.title)}</span>
+                  {state === "skipped" && <span className="tag">{tr("Skipped")}</span>}
                 </button>
               );
             })}
@@ -344,34 +366,32 @@ export default function OnboardingPage() {
 
           <section className="card ob-card" aria-labelledby="ob-title" key={step}>
             <header>
-              <div className="eyebrow">Step {step} of 9</div>
+              <div className="eyebrow">{tr("Step")}{" "}{step}{" "}{tr("of 9")}</div>
               <h2 id="ob-title">{stepTitle(step, sector?.label)}</h2>
               <p>{stepLead(step, sector?.docs_question)}</p>
             </header>
 
             {readOnly && (
               <div className="notice info">
-                <IconLock size={16} />
-                Only owners and admins can change the setup. You can browse it.
-              </div>
+                <IconLock size={16} />{tr("Only owners and admins can change the setup. You can browse it.")}</div>
             )}
 
             {step === 1 && (
               <div className="ob-fields">
-                <TextField label="Country" placeholder="Colombia" value={form.country} onChange={(e) => set("country", e.target.value)} disabled={readOnly} />
+                <TextField label={tr("Country")} placeholder={tr("Colombia")} value={form.country} onChange={(e) => set("country", e.target.value)} disabled={readOnly} />
                 <div className="field">
-                  <label>Time zone</label>
-                  <Select value={form.timezone} onChange={(v) => set("timezone", v)} ariaLabel="Time zone" options={[...new Set([form.timezone, ...ZONES])].filter(Boolean).map((z) => ({ value: z, label: z.replace(/_/g, " ") }))} />
+                  <label>{tr("Time zone")}</label>
+                  <Select value={form.timezone} onChange={(v) => set("timezone", v)} ariaLabel={tr("Time zone")} options={[...new Set([form.timezone, ...ZONES()])].filter(Boolean).map((z) => ({ value: z, label: z.replace(/_/g, " ") }))} />
                 </div>
-                <TextField label="Business ID (optional)" placeholder="NIT / VAT / EIN" value={form.legal_id} onChange={(e) => set("legal_id", e.target.value)} disabled={readOnly} />
+                <TextField label={tr("Business ID (optional)")} placeholder={tr("NIT / VAT / EIN")} value={form.legal_id} onChange={(e) => set("legal_id", e.target.value)} disabled={readOnly} />
               </div>
             )}
 
             {step === 2 && (
               <>
                 <div className="ob-group">
-                  <span className="label">Main sector</span>
-                  <div className="choices" role="group" aria-label="Main sector">
+                  <span className="label">{tr("Main sector")}</span>
+                  <div className="choices" role="group" aria-label={tr("Main sector")}>
                     {data.catalog.sectors.map((s) => (
                       <button
                         key={s.code}
@@ -381,8 +401,8 @@ export default function OnboardingPage() {
                         disabled={readOnly}
                         onClick={() => setForm((f) => (f ? { ...f, sector_primary: s.code, sector_secondary: f.sector_secondary.filter((x) => x !== s.code) } : f))}
                       >
-                        {s.label}
-                        <small>{SECTOR_HINT[s.code]}</small>
+                        {tr(s.label)}
+                        <small>{tr(SECTOR_HINT()[s.code])}</small>
                       </button>
                     ))}
                   </div>
@@ -391,34 +411,33 @@ export default function OnboardingPage() {
                   <div className="notice info" role="status">
                     <IconArrowRight size={16} />
                     <span>
-                      <strong>Recommended for {sector.label.toLowerCase()}:</strong>{" "}
-                      {sector.approach.map((a) => (a.planned ? `${a.label} (coming soon)` : a.label)).join(" + ")}, with the source of every answer. <strong>Usually hosted in:</strong> {sector.deployment.label}.
+                      <strong>{tr("Recommended for")}{" "}{sector.label.toLowerCase()}:</strong>{" "}
+                      {sector.approach.map((a) => (a.planned ? tr("{label} (coming soon)", { label: tr(a.label) }) : tr(a.label))).join(" + ")}{tr(", with the source of every answer.")}{" "}<strong>{tr("Usually hosted in:")}</strong> {tr(sector.deployment.label)}.
                     </span>
                   </div>
                 )}
                 {form.sector_primary === "other" && (
                   <div className="field">
-                    <label htmlFor="activity">What does your organization do?</label>
-                    <textarea id="activity" rows={2} maxLength={500} placeholder="e.g. We manage real-estate assets for family offices" value={form.activity_description} onChange={(e) => set("activity_description", e.target.value)} disabled={readOnly} />
+                    <label htmlFor="activity">{tr("What does your organization do?")}</label>
+                    <textarea id="activity" rows={2} maxLength={500} placeholder={tr("e.g. We manage real-estate assets for family offices")} value={form.activity_description} onChange={(e) => set("activity_description", e.target.value)} disabled={readOnly} />
                   </div>
                 )}
                 <div className="ob-group">
-                  <span className="label">
-                    Secondary sectors <small>optional · up to 3</small>
+                  <span className="label">{tr("Secondary sectors")}{" "}<small>{tr("optional · up to 3")}</small>
                   </span>
                   <div className="chips">
                     {data.catalog.sectors
                       .filter((s) => s.code !== form.sector_primary && s.code !== "other")
                       .map((s) => (
                         <button key={s.code} type="button" className="chip" aria-pressed={form.sector_secondary.includes(s.code)} disabled={readOnly} onClick={() => set("sector_secondary", toggle(form.sector_secondary, s.code, 3))}>
-                          {s.label}
+                          {tr(s.label)}
                         </button>
                       ))}
                   </div>
                 </div>
                 <div className="ob-group">
-                  <span className="label">Team size</span>
-                  <Seg role="group" aria-label="Team size">
+                  <span className="label">{tr("Team size")}</span>
+                  <Seg role="group" aria-label={tr("Team size")}>
                     {TEAM.map((t) => (
                       <button key={t} type="button" aria-pressed={form.team_size === t} disabled={readOnly} onClick={() => set("team_size", t)}>
                         {t}
@@ -428,30 +447,28 @@ export default function OnboardingPage() {
                 </div>
                 <div className="ob-fields">
                   <div className="field">
-                    <label>Working language</label>
-                    <Select value={form.language} onChange={(v) => set("language", v)} options={LANGS} ariaLabel="Working language" />
+                    <label>{tr("Working language")}</label>
+                    <Select value={form.language} onChange={(v) => set("language", v)} options={LANGS()} ariaLabel={tr("Working language")} />
                   </div>
-                  <TextField label="First team or area (optional)" placeholder="e.g. Corporate law" value={form.initial_area} onChange={(e) => set("initial_area", e.target.value)} disabled={readOnly} />
+                  <TextField label={tr("First team or area (optional)")} placeholder={tr("e.g. Corporate law")} value={form.initial_area} onChange={(e) => set("initial_area", e.target.value)} disabled={readOnly} />
                 </div>
               </>
             )}
 
             {step === 3 && (
               <>
-                <div className="choices" role="group" aria-label="Goals">
+                <div className="choices" role="group" aria-label={tr("Goals")}>
                   {data.catalog.goals.map((g) => (
                     <button key={g} type="button" className="choice" aria-pressed={form.goals.includes(g)} disabled={readOnly || (!form.goals.includes(g) && form.goals.length >= 3)} onClick={() => set("goals", toggle(form.goals, g, 3))}>
-                      {GOAL_COPY[g]?.[0] ?? g}
-                      <small>{GOAL_COPY[g]?.[1]}</small>
+                      {GOAL_COPY()[g]?.[0] ?? g}
+                      <small>{GOAL_COPY()[g]?.[1]}</small>
                     </button>
                   ))}
                 </div>
                 {(form.goals.includes("sign") || form.goals.includes("share")) && (
                   <div className="notice">
                     <IconShield size={16} />
-                    <span>
-                      Agents can prepare documents for signature and share links. A person approves before anything is sent, and each signer signs in Ragsis.
-                    </span>
+                    <span>{tr("Agents can prepare documents for signature and share links. A person approves before anything is sent, and each signer signs in Ragsis.")}</span>
                   </div>
                 )}
               </>
@@ -460,18 +477,18 @@ export default function OnboardingPage() {
             {step === 4 && (
               <>
                 <div className="ob-group">
-                  <span className="label">Document types</span>
+                  <span className="label">{tr("Document types")}</span>
                   <div className="chips">
                     {data.catalog.doc_types.map((d) => (
                       <button key={d} type="button" className="chip" aria-pressed={form.doc_types.includes(d)} disabled={readOnly} onClick={() => set("doc_types", toggle(form.doc_types, d))}>
-                        {DOC_COPY[d] ?? d}
+                        {tr(DOC_COPY()[d]) ?? d}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="notice info">
                   <IconArrowRight size={16} />
-                  <span>You'll upload a few sample files in step 8. Connections to Drive, SharePoint and email are coming later, and only with your permission.</span>
+                  <span>{tr("You'll upload a few sample files in step 8. Connections to Drive, SharePoint and email are coming later, and only with your permission.")}</span>
                 </div>
               </>
             )}
@@ -479,9 +496,9 @@ export default function OnboardingPage() {
             {step === 5 && (
               <>
                 <div className="ob-group">
-                  <span className="label">Most sensitive data you'll upload</span>
-                  <div className="choices" role="group" aria-label="Data classification">
-                    {CLASSES.map(([v, l, h]) => (
+                  <span className="label">{tr("Most sensitive data you'll upload")}</span>
+                  <div className="choices" role="group" aria-label={tr("Data classification")}>
+                    {CLASSES().map(([v, l, h]) => (
                       <button key={v} type="button" className="choice" aria-pressed={form.data_classification === v} disabled={readOnly} onClick={() => setForm((f) => (f ? { ...f, data_classification: v, llm_policy: v === "restricted" && f.llm_policy === "cloud_allowed" ? "local_only" : f.llm_policy } : f))}>
                         {l}
                         <small>{h}</small>
@@ -490,13 +507,13 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                 <div className="ob-group">
-                  <span className="label">Where it runs</span>
-                  <div className="choices" role="group" aria-label="Where it runs">
-                    {DEPLOY.map(([v, l, h]) => (
+                  <span className="label">{tr("Where it runs")}</span>
+                  <div className="choices" role="group" aria-label={tr("Where it runs")}>
+                    {DEPLOY().map(([v, l, h]) => (
                       <button key={v} type="button" className="choice" aria-pressed={form.deployment_preference === v} disabled={readOnly} onClick={() => set("deployment_preference", v)}>
                         <span className="choice-top">
                           {l}
-                          {sector?.deployment.default === v && sector.code !== "other" && <span className="badge">Suggested for {sector.label.toLowerCase()}</span>}
+                          {sector?.deployment.default === v && sector.code !== "other" && <span className="badge">{tr("Suggested for")}{" "}{sector.label.toLowerCase()}</span>}
                         </span>
                         <small>{h}</small>
                       </button>
@@ -504,27 +521,25 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                 <div className="ob-group">
-                  <span className="label">Which AI can read your documents</span>
-                  <div className="choices" role="group" aria-label="Which AI can read your documents">
-                    {LLM.map(([v, l, h]) => (
+                  <span className="label">{tr("Which AI can read your documents")}</span>
+                  <div className="choices" role="group" aria-label={tr("Which AI can read your documents")}>
+                    {LLM().map(([v, l, h]) => (
                       <button key={v} type="button" className="choice" aria-pressed={form.llm_policy === v} disabled={readOnly || (restricted && v === "cloud_allowed")} onClick={() => set("llm_policy", v)}>
                         {l}
-                        <small>{restricted && v === "cloud_allowed" ? "Not available for restricted data" : h}</small>
+                        <small>{restricted && v === "cloud_allowed" ? tr("Not available for restricted data") : h}</small>
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="ob-fields">
                   <div className="field">
-                    <label>Where your data is stored</label>
-                    <Select value={form.region} onChange={(v) => set("region", v)} options={REGIONS} ariaLabel="Where your data is stored" />
+                    <label>{tr("Where your data is stored")}</label>
+                    <Select value={form.region} onChange={(v) => set("region", v)} options={REGIONS()} ariaLabel={tr("Where your data is stored")} />
                   </div>
                 </div>
                 {restricted && (
                   <div className="notice">
-                    <IconLock size={16} />
-                    Restricted data never goes to an outside AI service. Agents will only use private AI.
-                  </div>
+                    <IconLock size={16} />{tr("Restricted data never goes to an outside AI service. Agents will only use private AI.")}</div>
                 )}
               </>
             )}
@@ -539,9 +554,9 @@ export default function OnboardingPage() {
                         <Checkbox checked={form.spaces.includes(name)} onChange={() => !readOnly && set("spaces", toggle(form.spaces, name))} label={<span className="sr-only">{name}</span>} />
                         <span className="meta">
                           <strong>{name}</strong>
-                          <small>{ex ? "Already exists — we'll keep it as is" : rec?.knowledge_spaces.includes(name) ? `Suggested for ${sector?.label ?? "your sector"}` : "Added by you"}</small>
+                          <small>{ex ? tr("Already exists — we'll keep it as is") : suggestedSpaces.includes(name) ? tr("Suggested for {v1}", { v1: tr(sector?.label) ?? tr("your sector") }) : tr("Added by you")}</small>
                         </span>
-                        {ex && <span className="badge">Exists</span>}
+                        {ex && <span className="badge">{tr("Exists")}</span>}
                       </div>
                     );
                   })}
@@ -554,14 +569,10 @@ export default function OnboardingPage() {
                     if (n && !form.spaces.includes(n)) setForm((f) => (f ? { ...f, spaces: [...f.spaces, n], newSpace: "" } : f));
                   }}
                 >
-                  <TextField placeholder="Add another space, e.g. Labor" value={form.newSpace} onChange={(e) => set("newSpace", e.target.value)} aria-label="New space name" maxLength={120} disabled={readOnly} />
-                  <button type="submit" className="ghost" disabled={readOnly || !form.newSpace.trim()}>
-                    Add
-                  </button>
+                  <TextField placeholder={tr("Add another space, e.g. Labor")} value={form.newSpace} onChange={(e) => set("newSpace", e.target.value)} aria-label={tr("New space name")} maxLength={120} disabled={readOnly} />
+                  <button type="submit" className="ghost" disabled={readOnly || !form.newSpace.trim()}>{tr("Add")}</button>
                 </form>
-                <p className="muted" style={{ fontSize: 13.5 }}>
-                  You can edit the new spaces. Invite your team and choose who can read or edit in <Link href={`/app/${org}/admin`}>Governance</Link>. Agents never see documents the person using them can't open.
-                </p>
+                <p className="muted" style={{ fontSize: 13.5 }}>{tr("You can edit the new spaces. Invite your team and choose who can read or edit in")}{" "}<Link href={`/app/${org}/admin`}>{tr("Governance")}</Link>{tr(". Agents never see documents the person using them can't open.")}</p>
               </>
             )}
 
@@ -574,14 +585,14 @@ export default function OnboardingPage() {
                       <div className="check-item" key={s.template} data-locked={s.blocked ? "" : undefined}>
                         {s.blocked ? <IconLock size={18} /> : <Checkbox checked={form.agents.includes(s.template)} onChange={() => !readOnly && set("agents", toggle(form.agents, s.template))} label={<span className="sr-only">{s.name}</span>} />}
                         <span className="meta">
-                          <strong>{s.name}</strong>
-                          <small>{t?.purpose}</small>
+                          <strong>{tr(s.name)}</strong>
+                          <small>{tr(t?.purpose ?? s.purpose)}</small>
                           <span className="tools">
-                            <span className="badge">{s.reason}</span>
-                            {t?.autonomy && <span className="badge">{AUTONOMY_COPY[t.autonomy] ?? t.autonomy}</span>}
-                            {!!t?.tools.length && <span className="badge">{t.tools.length} {t.tools.length === 1 ? "action" : "actions"}</span>}
+                            <span className="badge">{reasonLabel(s.reason)}</span>
+                            {t?.autonomy && <span className="badge">{AUTONOMY_COPY()[t.autonomy] ?? t.autonomy}</span>}
+                            {!!t?.tools.length && <span className="badge">{t.tools.length === 1 ? tr("1 action") : tr("{n} actions", { n: t.tools.length })}</span>}
                           </span>
-                          {s.blocked && <small>{s.blocked}. Shown so you can plan; it can't be activated yet.</small>}
+                          {s.blocked && <small>{s.blocked}{tr(". Shown so you can plan; it can't be activated yet.")}</small>}
                         </span>
                       </div>
                     );
@@ -589,7 +600,7 @@ export default function OnboardingPage() {
                 </div>
                 <div className="notice info">
                   <IconShield size={16} />
-                  <span>Agents are created as drafts for your new spaces. Nothing runs until you test and publish each one in Agent Studio. Existing agents are never changed.</span>
+                  <span>{tr("Agents are created as drafts for your new spaces. Nothing runs until you test and publish each one in Agent Studio. Existing agents are never changed.")}</span>
                 </div>
               </>
             )}
@@ -598,41 +609,35 @@ export default function OnboardingPage() {
               <>
                 <div className="summary">
                   <div className="tile">
-                    <h3>Documents ready</h3>
+                    <h3>{tr("Documents ready")}</h3>
                     <div className="row spread">
                       <strong style={{ fontSize: 22 }}>{data.pilot.documents_indexed}</strong>
-                      <button type="button" className="ghost small" onClick={() => router.push(`/app/${org}/library`)}>
-                        Upload samples
-                      </button>
+                      <button type="button" className="ghost small" onClick={() => router.push(`/app/${org}/library`)}>{tr("Upload samples")}</button>
                     </div>
                   </div>
                   <div className="tile">
-                    <h3>Agent drafts</h3>
+                    <h3>{tr("Agent drafts")}</h3>
                     <div className="row spread">
                       <strong style={{ fontSize: 22 }}>{data.pilot.agents}</strong>
-                      <button type="button" className="ghost small" onClick={() => router.push(`/app/${org}/agents`)}>
-                        Open Studio
-                      </button>
+                      <button type="button" className="ghost small" onClick={() => router.push(`/app/${org}/agents`)}>{tr("Open Studio")}</button>
                     </div>
                   </div>
                   <div className="tile">
-                    <h3>Successful agent tests</h3>
+                    <h3>{tr("Successful agent tests")}</h3>
                     <strong style={{ fontSize: 22 }}>{data.pilot.passed_tests}</strong>
                   </div>
                 </div>
                 <form className="ob-group" onSubmit={tryQuestion}>
-                  <span className="label">Try a question in {workspaces.find((w) => w.id === workspaceId)?.name ?? "this workspace"}</span>
+                  <span className="label">{tr("Try a question in")}{" "}{workspaces.find((w) => w.id === workspaceId)?.name ?? tr("this workspace")}</span>
                   <div className="inline-form">
-                    <TextField placeholder="e.g. What is the notice period in our standard contract?" value={trial} onChange={(e) => setTrial(e.target.value)} aria-label="Test question" />
+                    <TextField placeholder={tr("e.g. What is the notice period in our standard contract?")} value={trial} onChange={(e) => setTrial(e.target.value)} aria-label={tr("Test question")} />
                     <button type="submit" className="primary" disabled={trialBusy || trial.trim().length < 2}>
-                      {trialBusy ? <IconSpinner size={14} /> : null}
-                      Ask
-                    </button>
+                      {trialBusy ? <IconSpinner size={14} /> : null}{tr("Ask")}</button>
                   </div>
                   {trialRes && (
                     <div className="run-answer">
-                      {trialRes.abstained ? <span className="muted">Not enough information in this workspace yet — upload documents and try again.</span> : trialRes.answer}
-                      {!trialRes.abstained && <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>{trialRes.citations.length} {trialRes.citations.length === 1 ? "source" : "sources"} · answered in {duration(trialRes.latency_ms)}</div>}
+                      {trialRes.abstained ? <span className="muted">{tr("Not enough information in this workspace yet — upload documents and try again.")}</span> : trialRes.answer}
+                      {!trialRes.abstained && <div className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>{trialRes.citations.length} {trialRes.citations.length === 1 ? "source" : "sources"}{" "}{tr("· answered in")}{" "}{duration(trialRes.latency_ms)}</div>}
                     </div>
                   )}
                 </form>
@@ -643,26 +648,26 @@ export default function OnboardingPage() {
               <>
                 <div className="summary">
                   <div className="tile">
-                    <h3>Profile</h3>
+                    <h3>{tr("Profile")}</h3>
                     <ul>
-                      <li>{sector?.label ?? "Sector not set"}{form.team_size ? ` · ${form.team_size} people` : ""}</li>
-                      <li>Goals: {form.goals.map((g) => GOAL_COPY[g]?.[0] ?? g).join(", ") || "—"}</li>
-                      <li>Data: {CLASSES.find(([v]) => v === form.data_classification)?.[1] ?? "—"} · {DEPLOY.find(([v]) => v === form.deployment_preference)?.[1] ?? "—"}</li>
+                      <li>{tr(sector?.label) ?? tr("Sector not set")}{form.team_size ? tr(" · {team_size} people", { team_size: form.team_size }) : ""}</li>
+                      <li>{tr("Goals:")}{" "}{form.goals.map((g) => GOAL_COPY()[g]?.[0] ?? g).join(", ") || "—"}</li>
+                      <li>{tr("Data:")}{" "}{CLASSES().find(([v]) => v === form.data_classification)?.[1] ?? "—"} · {DEPLOY().find(([v]) => v === form.deployment_preference)?.[1] ?? "—"}</li>
                     </ul>
                   </div>
                   <div className="tile">
-                    <h3>Search & AI</h3>
+                    <h3>{tr("Search & AI")}</h3>
                     <ul>
-                      <li>{rec ? RAG_COPY[rec.rag_profile] : "—"}</li>
-                      <li>{rec ? MODEL_COPY[rec.model_policy] : "—"}</li>
-                      <li>{data.provisioned.spaces.length} space(s) · {data.provisioned.agents.length} agent draft(s)</li>
+                      <li>{rec ? tr(RAG_COPY()[rec.rag_profile]) : "—"}</li>
+                      <li>{rec ? tr(MODEL_COPY()[rec.model_policy]) : "—"}</li>
+                      <li>{data.provisioned.spaces.length}{" "}{tr("space(s) ·")}{" "}{data.provisioned.agents.length}{" "}{tr("agent draft(s)")}</li>
                     </ul>
                   </div>
                   <div className="tile">
-                    <h3>Safety rules</h3>
+                    <h3>{tr("Safety rules")}</h3>
                     <ul>
                       {(rec?.guardrails ?? []).map((g) => (
-                        <li key={g}>{g}</li>
+                        <li key={g}>{tr(g)}</li>
                       ))}
                     </ul>
                   </div>
@@ -670,21 +675,19 @@ export default function OnboardingPage() {
                 {(rec?.warnings ?? []).map((w) => (
                   <div className="notice" key={w}>
                     <IconAlert size={16} />
-                    {w}
+                    {tr(w)}
                   </div>
                 ))}
                 {!readOnly && data.status !== "COMPLETED" && (
                   <Checkbox
                     checked={form.ack}
                     onChange={(v) => set("ack", v)}
-                    label="I understand that activating doesn't publish any agent or send anything outside (email, sharing, signatures). Each agent must be tested and published on its own."
+                    label={tr("I understand that activating doesn't publish any agent or send anything outside (email, sharing, signatures). Each agent must be tested and published on its own.")}
                   />
                 )}
                 {data.status === "COMPLETED" && (
                   <div className="notice info">
-                    <IconCheck size={16} />
-                    Setup is active. Change any step and it's saved; sector changes propose new suggestions without touching existing spaces or agents.
-                  </div>
+                    <IconCheck size={16} />{tr("Setup is active. Change any step and it's saved; sector changes propose new suggestions without touching existing spaces or agents.")}</div>
                 )}
               </>
             )}
@@ -693,7 +696,7 @@ export default function OnboardingPage() {
               <div className="alert">
                 <IconAlert size={16} />
                 <span style={{ flex: 1 }}>{error}</span>
-                <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label="Dismiss">
+                <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label={tr("Dismiss")}>
                   <IconX size={14} />
                 </button>
               </div>
@@ -701,25 +704,19 @@ export default function OnboardingPage() {
 
             <footer className="ob-foot">
               <button type="button" className="quiet" disabled={step <= 1 || busy} onClick={() => setStep(step - 1)}>
-                <IconChevronLeft size={16} />
-                Back
-              </button>
+                <IconChevronLeft size={16} />{tr("Back")}</button>
               <span className="grow" />
               {meta.skippable && !readOnly && (
-                <button type="button" className="quiet" disabled={busy} onClick={() => submit("skip")}>
-                  Skip for now
-                </button>
+                <button type="button" className="quiet" disabled={busy} onClick={() => submit("skip")}>{tr("Skip for now")}</button>
               )}
               {!readOnly && (
                 <button type="button" className="primary" disabled={busy || (step === 9 && data.status === "COMPLETED")} onClick={(e) => submit("complete", e.currentTarget)}>
                   {busy ? <IconSpinner size={14} /> : step === 9 ? <IconRocket size={16} /> : null}
-                  <SoftText text={step === 9 ? (data.status === "COMPLETED" ? "Active" : "Activate") : step === 6 ? "Create spaces & continue" : step === 7 ? "Create drafts & continue" : "Save and continue"} />
+                  <SoftText text={step === 9 ? (data.status === "COMPLETED" ? tr("Active") : tr("Activate")) : step === 6 ? tr("Create spaces & continue") : step === 7 ? tr("Create drafts & continue") : tr("Save and continue")} />
                 </button>
               )}
               {readOnly && step < 9 && (
-                <button type="button" className="ghost" onClick={() => setStep(step + 1)}>
-                  Next
-                </button>
+                <button type="button" className="ghost" onClick={() => setStep(step + 1)}>{tr("Next")}</button>
               )}
             </footer>
           </section>
@@ -733,29 +730,29 @@ export default function OnboardingPage() {
 function stepTitle(n: number, sectorLabel?: string) {
   return [
     "",
-    "Your organization",
-    "What does your organization do?",
-    "What should the platform help with?",
-    sectorLabel ? `Your ${sectorLabel.toLowerCase()} documents` : "Your documents",
-    "Privacy and where your data lives",
-    "Knowledge spaces",
-    "Suggested agents",
-    "Try it out",
-    "Review and activate",
+    tNow("Your organization"),
+    tNow("What does your organization do?"),
+    tNow("What should the platform help with?"),
+    sectorLabel ? tNow("Your {v1} documents", { v1: sectorLabel.toLowerCase() }) : tNow("Your documents"),
+    tNow("Privacy and where your data lives"),
+    tNow("Knowledge spaces"),
+    tNow("Suggested agents"),
+    tNow("Try it out"),
+    tNow("Review and activate"),
   ][n];
 }
 
 function stepLead(n: number, docsQuestion?: string) {
   return [
     "",
-    "Basic details for invoices, dates and audit timestamps.",
-    "We tailor spaces and agents to your sector. Nothing is inferred from your company name.",
-    "Pick one to three. We'll suggest agents for each — all editable.",
-    docsQuestion ?? "Which documents does your team work with?",
-    "These choices decide which AI models can touch your data. We never loosen them automatically.",
-    "Spaces separate documents and permissions. Pick the suggested ones or add your own.",
-    "Ready-made agents for your goals and sector. Pick the ones you want; they start as drafts.",
-    "Upload a few documents, ask a question and try an agent before going live.",
-    "Check what's configured. You can change everything later from Setup.",
+    tNow("Basic details for invoices, dates and audit timestamps."),
+    tNow("We tailor spaces and agents to your sector. Nothing is inferred from your company name."),
+    tNow("Pick one to three. We'll suggest agents for each — all editable."),
+    tNow(docsQuestion ?? "Which documents does your team work with?"),
+    tNow("These choices decide which AI models can touch your data. We never loosen them automatically."),
+    tNow("Spaces separate documents and permissions. Pick the suggested ones or add your own."),
+    tNow("Ready-made agents for your goals and sector. Pick the ones you want; they start as drafts."),
+    tNow("Upload a few documents, ask a question and try an agent before going live."),
+    tNow("Check what's configured. You can change everything later from Setup."),
   ][n];
 }

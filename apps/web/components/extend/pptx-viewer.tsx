@@ -54,6 +54,7 @@ import { ViewerLead } from "@/components/extend/viewer-chrome"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { MoreHorizontalIcon, Download01Icon, Upload01Icon, SidebarLeftIcon, ArrowLeft01Icon, ArrowRight01Icon, MinusSignCircleIcon, PlusSignCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { useT, tNow } from "@/lib/use-t";
 
 const PPTX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -69,13 +70,12 @@ const PPTX_SCROLL_TOP_EPSILON_PX = 24
 const PPTX_INSTANT_NAVIGATION_TIMEOUT_MS = 250
 const PPTX_SMOOTH_NAVIGATION_TIMEOUT_MS = 1000
 const ZOOM_OPTIONS = [25, 50, 75, 100, 125, 150, 175, 200, 300, 400] as const
-const ZOOM_MODE_LABELS = {
-  "fit-page": "Fit page",
-  "fit-width": "Fit width",
-  automatic: "Automatic",
-} satisfies Record<Exclude<ViewerZoomLevel, number>, string>
-const PPTX_THUMBNAIL_FOCUS_RING_CLASS =
-  "group-focus-visible/pptx-thumbnail-sidebar:ring-2 group-focus-visible/pptx-thumbnail-sidebar:ring-ring group-focus-visible/pptx-thumbnail-sidebar:ring-offset-1 group-focus-visible/pptx-thumbnail-sidebar:ring-offset-background"
+const ZOOM_MODE_LABELS = () => ({
+  "fit-page": tNow("Fit page"),
+  "fit-width": tNow("Fit width"),
+  automatic: tNow("Automatic"),
+} satisfies Record<Exclude<ViewerZoomLevel, number>, string>)
+const PPTX_THUMBNAIL_FOCUS_RING_CLASS = "group-focus-visible/pptx-thumbnail-sidebar:ring-2 group-focus-visible/pptx-thumbnail-sidebar:ring-ring group-focus-visible/pptx-thumbnail-sidebar:ring-offset-1 group-focus-visible/pptx-thumbnail-sidebar:ring-offset-background"
 type UploadedPresentation = {
   file: File
   identity: string
@@ -148,7 +148,7 @@ function getNextZoom(currentZoom: number, direction: 1 | -1) {
   return currentZoom
 }
 function isZoomMode(value: string): value is Exclude<ViewerZoomLevel, number> {
-  return value in ZOOM_MODE_LABELS
+  return value in ZOOM_MODE_LABELS()
 }
 function useDelayedLoadingIndicator(isLoading: boolean, delayMs: number) {
   const [showSpinner, setShowSpinner] = React.useState(false)
@@ -218,6 +218,7 @@ function PptxFileActionsMenu({
   showDownloadButton: boolean
   showUploadButton: boolean
 }) {
+  const t = useT();
   if (!showDownloadButton && !showUploadButton) return null
   return (
     <DropdownMenu>
@@ -227,7 +228,7 @@ function PptxFileActionsMenu({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Open PowerPoint actions"
+            aria-label={t("Open PowerPoint actions")}
           >
             <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} className="size-4" />
           </Button>
@@ -240,15 +241,11 @@ function PptxFileActionsMenu({
               <InlineSpinner className="size-4" />
             ) : (
               <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />
-            )}
-            Download
-          </DropdownMenuItem>
+            )}{t("Download")}</DropdownMenuItem>
         ) : null}
         {showUploadButton ? (
           <DropdownMenuItem disabled={controlsDisabled} onClick={onUploadClick}>
-            <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-            Upload
-          </DropdownMenuItem>
+            <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload")}</DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -265,6 +262,7 @@ function PptxSlideNumberControl({
   onSlideChange: (slideIndex: number) => void
   slideCount: number
 }) {
+  const t = useT();
   const inputRef = React.useRef<HTMLInputElement>(null)
   const displaySlide = slideCount ? activeSlideIndex + 1 : 1
   const [isEditing, setIsEditing] = React.useState(false)
@@ -288,11 +286,11 @@ function PptxSlideNumberControl({
   )
   return (
     <div className="flex items-center text-sm whitespace-nowrap text-primary">
-      <span>Slide</span>
+      <span>{t("Slide")}</span>
       {isEditing ? (
         <Input
           ref={inputRef}
-          aria-label="Slide number"
+          aria-label={t("Slide number")}
           inputMode="numeric"
           pattern="[0-9]*"
           value={draftSlide}
@@ -317,7 +315,7 @@ function PptxSlideNumberControl({
           variant="ghost"
           size="sm"
           className="font-normal"
-          aria-label={`Current slide ${displaySlide}. Edit slide number`}
+          aria-label={t("Current slide {displaySlide}. Edit slide number", { displaySlide: displaySlide })}
           disabled={controlsDisabled || !slideCount}
           onClick={() => {
             setDraftSlide(String(displaySlide))
@@ -327,7 +325,7 @@ function PptxSlideNumberControl({
           {displaySlide}
         </Button>
       )}
-      <span>of {slideCount || "-"}</span>
+      <span>{t("of")}{" "}{slideCount || "-"}</span>
     </div>
   )
 }
@@ -362,6 +360,7 @@ function PptxToolbar({
   toolbarActions?: React.ReactNode
   zoomLevel: ViewerZoomLevel
 }) {
+  const t = useT();
   const canGoPrevious = !controlsDisabled && activeSlideIndex > 0
   const canGoNext =
     !controlsDisabled && slideCount > 0 && activeSlideIndex < slideCount - 1
@@ -381,12 +380,12 @@ function PptxToolbar({
       <TooltipProvider>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ViewerLead />
-          <ToolbarTooltip label="Toggle thumbnails">
+          <ToolbarTooltip label={t("Toggle thumbnails")}>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Toggle thumbnails"
+              aria-label={t("Toggle thumbnails")}
               disabled={controlsDisabled}
               onClick={onToggleSidebar}
             >
@@ -394,12 +393,12 @@ function PptxToolbar({
             </Button>
           </ToolbarTooltip>
           <Separator orientation="vertical" className="mx-1 h-4 self-center" />
-          <ToolbarTooltip label="Previous slide">
+          <ToolbarTooltip label={t("Previous slide")}>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Previous slide"
+              aria-label={t("Previous slide")}
               disabled={!canGoPrevious}
               onClick={() => onSlideChange(activeSlideIndex - 1)}
             >
@@ -412,12 +411,12 @@ function PptxToolbar({
             onSlideChange={onSlideChange}
             slideCount={slideCount}
           />
-          <ToolbarTooltip label="Next slide">
+          <ToolbarTooltip label={t("Next slide")}>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Next slide"
+              aria-label={t("Next slide")}
               disabled={!canGoNext}
               onClick={() => onSlideChange(activeSlideIndex + 1)}
             >
@@ -427,12 +426,12 @@ function PptxToolbar({
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
           <div className="flex flex-none items-center gap-1">
-            <ToolbarTooltip label="Zoom out">
+            <ToolbarTooltip label={t("Zoom out")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Zoom out"
+                aria-label={t("Zoom out")}
                 disabled={!canZoomOut}
                 onClick={() => onZoomChange(getNextZoom(resolvedZoom, -1))}
               >
@@ -451,12 +450,12 @@ function PptxToolbar({
               <SelectTrigger
                 size="sm"
                 className="w-[104px] min-w-[104px]"
-                aria-label="Zoom level"
+                aria-label={t("Zoom level")}
               >
                 <SelectValue>{Math.round(resolvedZoom)}%</SelectValue>
               </SelectTrigger>
               <SelectContent align="end" alignItemWithTrigger={false}>
-                {Object.entries(ZOOM_MODE_LABELS).map(([value, label]) => (
+                {Object.entries(ZOOM_MODE_LABELS()).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
                   </SelectItem>
@@ -468,12 +467,12 @@ function PptxToolbar({
                 ))}
               </SelectContent>
             </Select>
-            <ToolbarTooltip label="Zoom in">
+            <ToolbarTooltip label={t("Zoom in")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Zoom in"
+                aria-label={t("Zoom in")}
                 disabled={!canZoomIn}
                 onClick={() => onZoomChange(getNextZoom(resolvedZoom, 1))}
               >
@@ -567,6 +566,7 @@ function PptxThumbnailSidebarList({
   slideCount: number
   thumbnails: PptxSlideThumbnailItem[]
 }) {
+  const t = useT();
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
   const thumbnailListboxId = React.useId()
   const visibleThumbnails = React.useMemo(
@@ -719,7 +719,7 @@ function PptxThumbnailSidebarList({
                   id={`${thumbnailListboxId}-slide-${thumbnail.slideNumber}`}
                   role="option"
                   aria-current={isActive ? "page" : undefined}
-                  aria-label={`Slide ${thumbnail.slideNumber}`}
+                  aria-label={t("Slide {slideNumber}", { slideNumber: thumbnail.slideNumber })}
                   aria-posinset={thumbnail.slideNumber}
                   aria-selected={isActive}
                   aria-setsize={slideCount}
@@ -838,6 +838,7 @@ export function PptxViewerPreview({
   src,
   toolbarActions,
 }: PptxViewerPreviewProps) {
+  const t = useT();
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [viewerShellRef, viewerShellWidth] = useElementWidth<HTMLDivElement>()
   const requestedInitialSlideIndex = Math.max(0, Math.round(initialSlide) - 1)
@@ -1203,13 +1204,8 @@ export function PptxViewerPreview({
           {!source ? (
             <div className="grid h-full min-h-96 place-items-center p-6 text-center">
               <div className="max-w-md rounded-lg border bg-background p-4 text-sm shadow-xs">
-                <div className="font-medium">
-                  Upload a PowerPoint presentation to preview
-                </div>
-                <div className="mt-1 text-muted-foreground">
-                  Pass a PPTX URL with the <code>src</code> prop or upload a
-                  PPTX or legacy PPT file.
-                </div>
+                <div className="font-medium">{t("Upload a PowerPoint presentation to preview")}</div>
+                <div className="mt-1 text-muted-foreground">{t("Pass a PPTX URL with the")}{" "}<code>src</code>{" "}{t("prop or upload a PPTX or legacy PPT file.")}</div>
                 <Button
                   type="button"
                   variant="outline"
@@ -1217,9 +1213,7 @@ export function PptxViewerPreview({
                   className="mt-4"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-                  Upload PowerPoint
-                </Button>
+                  <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload PowerPoint")}</Button>
               </div>
             </div>
           ) : (
@@ -1242,9 +1236,7 @@ export function PptxViewerPreview({
               renderError={(error) => (
                 <div className="grid h-full min-h-96 place-items-center p-6 text-center">
                   <div className="max-w-md rounded-lg border bg-background p-4 text-sm text-destructive shadow-xs">
-                    <div className="font-medium">
-                      Unable to display PowerPoint
-                    </div>
+                    <div className="font-medium">{t("Unable to display PowerPoint")}</div>
                     <div className="mt-1 text-muted-foreground">
                       {error.message}
                     </div>
@@ -1252,9 +1244,7 @@ export function PptxViewerPreview({
                 </div>
               )}
               emptyState={
-                <div className="text-sm text-muted-foreground">
-                  This presentation has no slides.
-                </div>
+                <div className="text-sm text-muted-foreground">{t("This presentation has no slides.")}</div>
               }
               onLoad={handleLoad}
               onReady={handleReady}
@@ -1371,8 +1361,9 @@ function InlineComposeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
   }
 }
 function InlineSpinner({ className, ...props }: InlineRegistryIconProps) {
+  const t = useT();
   return (
-    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
+    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label={t("Loading")} className={cn("size-4 animate-spin", className)} {...props} />
   )
 }
 type InlineRegistryIconProps = Omit<

@@ -38,7 +38,7 @@ export default function DevLoginForm() {
     <AuthShell title={t.ssoTitle} lead={t.devLead} home={t.home} aside={<span className="gate-tag">AUTH_MODE=dev</span>} linkBrandToHome>
       <form className="gate-form" onSubmit={submit} noValidate>
         <p className="gate-note">{t.devNote}</p>
-        <TextField label={t.email} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="email" autoFocus {...form.field("email")} />
+        <TextField label={t.email} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.emailPlaceholder} autoComplete="email" autoFocus {...form.field("email")} />
         <TextField label={t.name} value={name} onChange={(e) => setName(e.target.value)} placeholder={t.optional} autoComplete="name" />
         {error && (
           <div className="alert">

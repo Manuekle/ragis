@@ -242,6 +242,23 @@ describe("workflows con aprobación humana", () => {
     expect(me.functional_roles.sort()).toEqual(["approver", "reviewer"]);
   });
 
+  it("crear desde plantilla con nombre, descripción y etiquetas en el idioma de quien lee; los pasos no cambian", async () => {
+    const r = await call(ana, "POST", `/v1/organizations/${org}/workflows`, {
+      template: "contract_review",
+      name: "Revisión de contratos",
+      description: "El auditor marca diferencias y una persona aprueba.",
+      labels: { audit: "Auditar cláusulas", approve: "El revisor aprueba la versión exacta", nope: "ignorada" },
+    });
+    expect(r.statusCode, r.body).toBe(201);
+    const w = (await call(ana, "GET", `/v1/organizations/${org}/workflows/${r.json().id}`)).json();
+    expect(w).toMatchObject({ name: "Revisión de contratos", description: "El auditor marca diferencias y una persona aprueba." });
+    const byId = Object.fromEntries(w.draft.nodes.map((n: { id: string; label?: string; type: string }) => [n.id, n]));
+    expect(byId.audit).toMatchObject({ type: "AGENT_TASK", label: "Auditar cláusulas", agent: "contract-auditor" });
+    expect(byId.approve).toMatchObject({ type: "HUMAN_REVIEW", label: "El revisor aprueba la versión exacta", role: "reviewer" });
+    expect(byId.review.label).toBe("Propose comments");
+    expect(byId.nope).toBeUndefined();
+  });
+
   it("publicar fija la versión de cada agente; correr exige Idempotency-Key y es idempotente", async () => {
     const w = (await call(ana, "POST", `/v1/organizations/${org}/workflows`, { template: "answer_with_approval" })).json();
     wf = w.id;

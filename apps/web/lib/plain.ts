@@ -15,6 +15,9 @@ export function duration(ms: number): string {
 
 export const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
+/** Organization role or plan code ("owner", "team") as an English word to pass through the translator. */
+export const roleWord = (role: string) => ({ owner: "Owner", admin: "Admin", member: "Member", viewer: "Viewer" })[role] ?? cap(role);
+
 /** Why a document couldn't be processed, from the ingest worker's error codes. */
 const DOC_ERRORS: Record<string, string> = {
   too_large: "File is larger than your plan allows",

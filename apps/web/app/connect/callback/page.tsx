@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { IconAlert, IconSpinner } from "@/components/icons";
+import { useT } from "@/lib/use-t";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -14,6 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
  * esta página para completar la conexión con la misma persona que la inició.
  */
 function Callback() {
+  const t = useT();
   const params = useSearchParams();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ function Callback() {
     const code = params.get("code");
     const denied = params.get("error");
     if (denied || !code || !state) {
-      setError(denied === "access_denied" ? "You cancelled the connection. Nothing was connected." : "The app didn't finish connecting. Please try again.");
+      setError(denied === "access_denied" ? t("You cancelled the connection. Nothing was connected.") : t("The app didn't finish connecting. Please try again."));
       return;
     }
     api<{ organization_id: string; connector_id: string }>("connectors/oauth/complete", { method: "POST", body: { state, code } })
@@ -44,17 +46,15 @@ function Callback() {
             <span className="dialog-icon danger">
               <IconAlert size={20} />
             </span>
-            <h1 style={{ fontSize: 18, fontWeight: 500 }}>Couldn&apos;t connect</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 500 }}>{t("Couldn't connect")}</h1>
             <p className="muted">{error}</p>
-            <Link className="btn primary" href={back} style={{ padding: "0 14px", height: 34, display: "inline-flex", alignItems: "center", borderRadius: 10 }}>
-              Back to connected apps
-            </Link>
+            <Link className="btn primary" href={back} style={{ padding: "0 14px", height: 34, display: "inline-flex", alignItems: "center", borderRadius: 10 }}>{t("Back to connected apps")}</Link>
           </>
         ) : (
           <>
             <IconSpinner size={20} />
-            <h1 style={{ fontSize: 18, fontWeight: 500 }}>Finishing the connection…</h1>
-            <p className="muted">This only takes a moment.</p>
+            <h1 style={{ fontSize: 18, fontWeight: 500 }}>{t("Finishing the connection…")}</h1>
+            <p className="muted">{t("This only takes a moment.")}</p>
           </>
         )}
       </div>

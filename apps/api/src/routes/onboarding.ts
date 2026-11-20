@@ -74,7 +74,9 @@ const Step5 = z
     path: ["llm_policy"],
   });
 const Step6 = z.object({ spaces: z.array(z.string().trim().min(1).max(120)).max(10).default([]) }).strict();
-const Step7 = z.object({ agents: z.array(z.string().min(1).max(64)).max(12).default([]) }).strict();
+// copy: each template's name and purpose in the reader's language (the web translates them), so drafts are saved in it.
+const AgentCopy = z.object({ name: z.string().trim().min(2).max(80), purpose: z.string().trim().min(10).max(400) }).strict();
+const Step7 = z.object({ agents: z.array(z.string().min(1).max(64)).max(12).default([]), copy: z.record(z.string().max(64), AgentCopy).optional() }).strict();
 const Empty = z.object({}).strict();
 
 const STEP_SCHEMAS: Record<number, z.ZodType> = { 1: Step1, 2: Step2, 3: Step3, 4: Step4, 5: Step5, 6: Step6, 7: Step7, 8: Empty, 9: Empty };
@@ -223,7 +225,7 @@ async function provisionSpaces(db: Db, t: TenantContext, names: string[]) {
   return { created, kept };
 }
 
-async function provisionAgents(db: Db, t: TenantContext, codes: string[], spaceIds: string[], localOnly: boolean) {
+async function provisionAgents(db: Db, t: TenantContext, codes: string[], spaceIds: string[], localOnly: boolean, copy: Record<string, z.infer<typeof AgentCopy>> = {}) {
   const created: { id: string; slug: string; template: string }[] = [];
   const skipped: { template: string; reason: string }[] = [];
   for (const code of [...new Set(codes)]) {
@@ -243,6 +245,7 @@ async function provisionAgents(db: Db, t: TenantContext, codes: string[], spaceI
       continue;
     }
     const cfg = configFromTemplate(tpl, spaceIds, localOnly);
+    if (copy[code]) Object.assign(cfg, copy[code]);
     const id = randomUUID();
     await db.query(
       `INSERT INTO agents (id, organization_id, slug, name, template_code, owner_id, draft_config, draft_hash)
@@ -320,7 +323,7 @@ export async function onboardingRoutes(app: FastifyInstance, deps: Deps) {
           let spaceIds = session.provisioned.spaces.filter((id) => t.workspaces.has(id));
           if (!spaceIds.length) spaceIds = [...t.workspaces.keys()].slice(0, 5);
           const localOnly = t.dataClass === "restricted" || profile.llm_policy === "local_only" || profile.data_classification === "restricted";
-          const r = await provisionAgents(db, t, data.agents as string[], spaceIds, localOnly);
+          const r = await provisionAgents(db, t, data.agents as string[], spaceIds, localOnly, (data.copy ?? {}) as Record<string, z.infer<typeof AgentCopy>>);
           session.provisioned.agents = [...new Set([...session.provisioned.agents, ...r.created.map((a) => a.id)])];
           result.agents = r;
         }

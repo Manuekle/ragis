@@ -21,11 +21,13 @@ const LABEL: Record<Locale, { short: string; name: string }> = {
 export function LanguageSwitch() {
   const locale = useLocale();
   const { path } = splitLocale(usePathname());
+  // The workspace and sign-in pages have one URL for both languages: the cookie decides, so switching reloads in place.
+  const inPlace = /^\/(app|login|sign|connect|s)(\/|$)/.test(path);
 
   return (
     <div className="lang-toggle" role="group" aria-label={locale === "es" ? "Idioma" : "Language"}>
       {LOCALES.map((l) => {
-        const href = localePath(l, path);
+        const href = inPlace ? path : localePath(l, path);
         return (
           <a
             key={l}
@@ -41,6 +43,7 @@ export function LanguageSwitch() {
               // The choice sticks: proxy.ts won't send this browser to the other language on its next visit.
               document.cookie = `${LOCALE_COOKIE}=${l}; path=/; max-age=31536000; samesite=lax`;
               if (l === locale) return;
+              if (inPlace) return window.location.reload();
               const { search, hash } = window.location;
               window.location.assign(`${href}${search}${hash}`);
             }}

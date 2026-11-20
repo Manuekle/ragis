@@ -19,7 +19,9 @@ import {
 import { Blobatar } from "@blobatar/react";
 import { createPortal } from "react-dom";
 import { IconAlert, IconCalendar, IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight, IconX, type IconProps } from "./icons";
+import { useT, tNow } from "@/lib/use-t";
 
+import { dateLocale } from "@/lib/i18n";
 const CLOSE_MS = 150;
 
 /** FNV-1a hash of a name/title: one number drives both the bg gradient and the blob colour. */
@@ -245,6 +247,7 @@ export function Select({
   /** Lets a visible <label htmlFor> name the trigger as well. */
   id?: string;
 }) {
+  const tr = useT();
   const pop = usePopover();
   const autoId = useId();
   const listId = `${autoId}-list`;
@@ -271,7 +274,7 @@ export function Select({
   function onKeyDown(e: React.KeyboardEvent) {
     const cur = options.findIndex((o) => o.value === value);
     if (!pop.isOpen) {
-      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+      if (["ArrowDown", tr("ArrowUp"), tr("Enter"), " "].includes(e.key)) {
         e.preventDefault();
         openAt(cur >= 0 ? cur : e.key === "ArrowUp" ? options.length - 1 : 0);
       }
@@ -329,7 +332,7 @@ export function Select({
           style={pop.style}
           inert={!pop.isOpen}
         >
-          {options.length === 0 && <div className="menu-empty" role="presentation">No options</div>}
+          {options.length === 0 && <div className="menu-empty" role="presentation">{tr("No options")}</div>}
           {options.map((o, i) => (
             <div
               key={o.value}
@@ -370,10 +373,10 @@ const addMonths = (d: Date, n: number) => {
   return new Date(t.getFullYear(), t.getMonth(), Math.min(d.getDate(), new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate()));
 };
 const monthLabel = (d: Date) => {
-  const s = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const s = d.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
-export const formatDate = (s: string) => fromIso(s).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+export const formatDate = (s: string) => fromIso(s).toLocaleDateString(dateLocale(), { day: "numeric", month: "short", year: "numeric" });
 
 export function DatePicker({
   value,
@@ -393,6 +396,7 @@ export function DatePicker({
   /** Shown when no date is picked ("today" for an as-of date, "none" for an optional due date). */
   emptyText?: string;
 }) {
+  const tr = useT();
   const pop = usePopover();
   const id = useId();
   const today = useMemo(() => new Date(), []);
@@ -462,10 +466,10 @@ export function DatePicker({
       >
         <Icon size={15} variant={value ? "duotone" : "stroke"} />
         {label}
-        <span className="date-value">{value ? formatDate(value) : emptyText}</span>
+        <span className="date-value">{value ? formatDate(value) : tr(emptyText)}</span>
       </button>
       {value && (
-        <button type="button" className="date-clear" aria-label="Clear date" onClick={() => onChange("")}>
+        <button type="button" className="date-clear" aria-label={tr("Clear date")} onClick={() => onChange("")}>
           <IconX size={12} strokeWidth={2.2} />
         </button>
       )}
@@ -483,13 +487,13 @@ export function DatePicker({
           onKeyDown={(e) => e.key === "Tab" && pop.close(true)}
         >
           <div className="cal-head">
-            <button type="button" className="quiet icon small" aria-label="Previous month" onClick={() => setFocus(addMonths(focus, -1))}>
+            <button type="button" className="quiet icon small" aria-label={tr("Previous month")} onClick={() => setFocus(addMonths(focus, -1))}>
               <IconChevronLeft size={16} />
             </button>
             <span className="cal-title" aria-live="polite">
               {monthLabel(focus)}
             </span>
-            <button type="button" className="quiet icon small" aria-label="Next month" onClick={() => setFocus(addMonths(focus, 1))}>
+            <button type="button" className="quiet icon small" aria-label={tr("Next month")} onClick={() => setFocus(addMonths(focus, 1))}>
               <IconChevronRight size={16} />
             </button>
           </div>
@@ -514,7 +518,7 @@ export function DatePicker({
                       tabIndex={isFocus ? 0 : -1}
                       aria-selected={iso === value}
                       aria-current={iso === todayIso ? "date" : undefined}
-                      aria-label={d.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                      aria-label={d.toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                       className={`cal-day${d.getMonth() !== focus.getMonth() ? " is-out" : ""}`}
                       onClick={() => choose(d)}
                     >
@@ -526,9 +530,7 @@ export function DatePicker({
             ))}
           </div>
           <div className="cal-foot">
-            <button type="button" className="quiet small" onClick={() => choose(new Date())}>
-              Today
-            </button>
+            <button type="button" className="quiet small" onClick={() => choose(new Date())}>{tr("Today")}</button>
             {value && (
               <button
                 type="button"
@@ -537,9 +539,7 @@ export function DatePicker({
                   onChange("");
                   pop.close(true);
                 }}
-              >
-                Clear date
-              </button>
+              >{tr("Clear date")}</button>
             )}
           </div>
         </div>,
@@ -562,6 +562,7 @@ const ConfirmCtx = createContext<ConfirmFn>(async () => false);
 export const useConfirm = () => useContext(ConfirmCtx);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const tr = useT();
   const [req, setReq] = useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(null);
   const [shown, setShown] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -619,7 +620,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         createPortal(
           <div className={`dialog-layer${shown ? " is-open" : ""}`} onPointerDown={(e) => e.target === e.currentTarget && settle(false)}>
             <div ref={boxRef} className="dialog" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={req.body ? `${id}-b` : undefined}>
-              <button type="button" className="dialog-close" aria-label="Close" onClick={() => settle(false)}>
+              <button type="button" className="dialog-close" aria-label={tr("Close")} onClick={() => settle(false)}>
                 <IconX size={16} />
               </button>
               <span className={`dialog-icon${req.tone === "danger" ? " danger" : ""}`}>
@@ -633,10 +634,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               )}
               <div className="dialog-actions">
                 <button type="button" className="ghost" data-autofocus onClick={() => settle(false)}>
-                  {req.cancelLabel ?? "Cancel"}
+                  {req.cancelLabel ?? tr("Cancel")}
                 </button>
                 <button type="button" className={req.tone === "danger" ? "destructive" : "primary"} onClick={() => settle(true)}>
-                  {req.confirmLabel ?? "Confirm"}
+                  {req.confirmLabel ?? tr("Confirm")}
                 </button>
               </div>
             </div>
@@ -651,11 +652,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
 function message(el: HTMLInputElement) {
   const v = el.validity;
-  if (v.valueMissing) return el.type === "email" ? "Enter an email." : "This field is required.";
-  if (v.typeMismatch && el.type === "email") return "Enter a valid email, like name@company.com.";
-  if (v.tooShort) return `Use at least ${el.minLength} characters.`;
-  if (v.tooLong) return `Use at most ${el.maxLength} characters.`;
-  return "Check this field.";
+  if (v.valueMissing) return el.type === "email" ? tNow("Enter an email.") : tNow("This field is required.");
+  if (v.typeMismatch && el.type === "email") return tNow("Enter a valid email, like name@company.com.");
+  if (v.tooShort) return tNow("Use at least {minLength} characters.", { minLength: el.minLength });
+  if (v.tooLong) return tNow("Use at most {maxLength} characters.", { maxLength: el.maxLength });
+  return tNow("Check this field.");
 }
 
 /** Forms set noValidate; call validate(form) on submit and spread field(name) into each TextField. */

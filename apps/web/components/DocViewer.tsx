@@ -10,6 +10,7 @@ import { Button } from "./vui/button";
 import { TooltipProvider } from "./vui/tooltip";
 import { ViewerBarFallback, ViewerChromeContext } from "./extend/viewer-chrome";
 import "@/app/viewer.css";
+import { useT, tNow } from "@/lib/use-t";
 
 // Extend UI viewers (shadcn, themed with the app tokens in app/viewer.css). Browser-only and heavy: loaded per file type, on demand.
 const Loading = () => (
@@ -97,7 +98,8 @@ const isBodyKind = (k: Kind) => k === "csv" || k === "text" || k === "md" || k =
  * navigation or same-origin access) and a CSP that blocks every network load (remote images, fonts, CSS), so
  * opening a document can never run code or call home. Inline styles and data: images still render.
  */
-const HTML_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:";
+const HTML_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:"
+;
 const htmlDoc = (source: string) =>
   `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HTML_CSP}"><base target="_blank">` +
   // Readable defaults for unstyled files; the document's own CSS comes later and wins.
@@ -107,6 +109,7 @@ const CLOSE_MS = 180;
 
 /** Full-screen document viewer. The file is shown inline from a short-lived presigned URL; it is never downloaded unless the user asks. */
 export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgId: string; onClose: () => void }) {
+  const tr = useT();
   const [current, setCurrent] = useState<ViewerDoc | null>(null);
   const [shown, setShown] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -216,10 +219,8 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
   const actions = (
     <>
       <Button type="button" variant="outline" size="sm" onClick={download} disabled={downloading}>
-        {downloading ? <IconSpinner size={14} /> : null}
-        Download
-      </Button>
-      <Button type="button" variant="ghost" size="icon-sm" className="order-last ml-1" data-autofocus onClick={onClose} aria-label="Close preview">
+        {downloading ? <IconSpinner size={14} /> : null}{tr("Download")}</Button>
+      <Button type="button" variant="ghost" size="icon-sm" className="order-last ml-1" data-autofocus onClick={onClose} aria-label={tr("Close preview")}>
         <IconX size={18} />
       </Button>
     </>
@@ -233,14 +234,14 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
           {error ? (
             <Stage>
               <IconAlert size={20} />
-              <strong>Couldn't open the document</strong>
+              <strong>{tr("Couldn't open the document")}</strong>
               <span>{error}</span>
             </Stage>
           ) : kind === "none" ? (
             <Stage>
               <FileTile ext={ext(current.filename)} size={56} />
-              <strong>No preview for this file type</strong>
-              <span>Download it to open it in its app.</span>
+              <strong>{tr("No preview for this file type")}</strong>
+              <span>{tr("Download it to open it in its app.")}</span>
             </Stage>
           ) : !url || (isBodyKind(kind) && body === null) ? (
             <Stage>

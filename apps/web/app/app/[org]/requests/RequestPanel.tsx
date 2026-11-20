@@ -10,6 +10,7 @@ import { IconAlert, IconArrowRight, IconCheck, IconComment, IconFlag, IconSend, 
 import { ago, when } from "../workflows/shared";
 import { PersonTeams } from "../team-tags";
 import { MOVE_COPY, NOTE_PROMPT, NoteDialog, PRIORITY_COPY, PriorityTag, STATUS_COPY, StatusPill, TeamRoute, DueDate, type Priority, type ReqStatus, type RequestItem } from "./shared";
+import { useT } from "@/lib/use-t";
 
 interface RequestEvent {
   id: string;
@@ -32,6 +33,7 @@ interface Detail extends RequestItem {
  * Every change reloads the panel and tells the Inbox (`onChanged`) so the list or board behind it stays current.
  */
 export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id: string; onClose: () => void; onChanged: () => void }) {
+  const t = useT();
   const [r, setR] = useState<Detail | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
   const waitingOnMe = r?.status === "waiting" && r.my.requester && !r.my.receiver;
 
   return (
-    <Sheet label={r ? `Request #${r.number}: ${r.title}` : "Request"} onClose={onClose}>
+    <Sheet label={r ? t("Request #{number}: {title}", { number: r.number, title: r.title }) : t("Request")} onClose={onClose}>
       {(close) => (
       <>
       <header className="sheet-head">
@@ -111,9 +113,9 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
               <DueDate iso={r.due_on} closed={closed} />
             </>
           ) : (
-            <span className="req-num">Request</span>
+            <span className="req-num">{t("Request")}</span>
           )}
-          <button type="button" className="quiet sheet-close" aria-label="Close" onClick={close}>
+          <button type="button" className="quiet sheet-close" aria-label={t("Close")} onClick={close}>
             <IconX size={16} />
           </button>
         </div>
@@ -132,20 +134,18 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
         {error ? (
           <div className="card empty">
             <StateIllustration kind={error instanceof ApiError && error.status === 404 ? "notFound" : "server"} />
-            <strong>{error instanceof ApiError && error.status === 404 ? "This request isn't available" : "Couldn't load this request"}</strong>
+            <strong>{error instanceof ApiError && error.status === 404 ? t("This request isn't available") : t("Couldn't load this request")}</strong>
             <span>
               {error instanceof ApiError && error.status === 404
-                ? "It doesn't exist, or you are no longer one of the people involved."
+                ? t("It doesn't exist, or you are no longer one of the people involved.")
                 : error.message}
             </span>
             {!(error instanceof ApiError && error.status === 404) && (
-              <button type="button" className="ghost" onClick={load}>
-                Try again
-              </button>
+              <button type="button" className="ghost" onClick={load}>{t("Try again")}</button>
             )}
           </div>
         ) : !r ? (
-          <SkeletonStatus label="Loading request…">
+          <SkeletonStatus label={t("Loading request…")}>
             <div className="stack" aria-hidden="true">
               <Skel w="70%" h={26} />
               <Skel w="45%" h={14} />
@@ -159,9 +159,9 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
               <div className="waiting-note" role="status">
                 <IconAlert size={16} />
                 <div>
-                  <strong>{r.to_team.name} needs something from you</strong>
+                  <strong>{r.to_team.name}{" "}{t("needs something from you")}</strong>
                   {lastAsk?.body && <p>“{lastAsk.body}”</p>}
-                  <p>Reply below and the request goes back to them.</p>
+                  <p>{t("Reply below and the request goes back to them.")}</p>
                 </div>
               </div>
             )}
@@ -173,7 +173,7 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
             )}
 
             {r.my.transitions.length > 0 && (
-              <div className="move-actions" role="group" aria-label="Move it forward">
+              <div className="move-actions" role="group" aria-label={t("Move it forward")}>
                 {r.my.transitions.map((s) => (
                   <button
                     key={s}
@@ -185,85 +185,81 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
                     onClick={() => (NOTE_PROMPT[s] ? setNoteFor(s) : void patch({ status: s }, s))}
                   >
                     {s === "done" ? <IconCheck size={15} /> : s === "waiting" ? <IconComment size={15} /> : s === "in_progress" ? <IconArrowRight size={15} /> : <IconFlag size={15} />}
-                    {closed && s === "open" ? "Reopen" : closed && s === "in_progress" ? "Reopen and keep working" : MOVE_COPY[s]}
+                    {closed && s === "open" ? t("Reopen") : closed && s === "in_progress" ? t("Reopen and keep working") : t(MOVE_COPY[s])}
                   </button>
                 ))}
               </div>
             )}
 
             <dl className="req-facts">
-              <dt>Asked by</dt>
+              <dt>{t("Asked by")}</dt>
               <dd>
                 <Avatar name={r.requester.name} size="sm" />
-                <span className="ellipsis">{r.my.requester ? "You" : r.requester.name}</span>
+                <span className="ellipsis">{r.my.requester ? t("You") : r.requester.name}</span>
                 <PersonTeams userId={r.requester.id} />
               </dd>
-              <dt>Assigned</dt>
+              <dt>{t("Assigned")}</dt>
               <dd>
                 {r.my.can_assign ? (
                   <>
                     <Select
                       size="sm"
-                      ariaLabel="Assigned to"
+                      ariaLabel={t("Assigned to")}
                       value={r.assignee?.id ?? ""}
                       onChange={(v) => void patch({ assignee_id: v || null }, "assign")}
-                      options={[{ value: "", label: "Nobody yet" }, ...r.assignees.map((a) => ({ value: a.id, label: a.id === r.viewer_id ? `${a.name} (you)` : a.name, hint: a.lead ? "Team lead" : undefined }))]}
+                      options={[{ value: "", label: t("Nobody yet") }, ...r.assignees.map((a) => ({ value: a.id, label: a.id === r.viewer_id ? `${a.name} (you)` : a.name, hint: a.lead ? "Team lead" : undefined }))]}
                     />
                     {r.assignee?.id !== r.viewer_id && (
                       <button type="button" className="ghost small" disabled={!!busy} aria-busy={busy === "assign"} onClick={() => void patch({ assignee_id: r.viewer_id }, "assign")}>
-                        <IconUser size={14} />
-                        Take it
-                      </button>
+                        <IconUser size={14} />{t("Take it")}</button>
                     )}
                   </>
                 ) : r.assignee ? (
                   <>
                     <Avatar name={r.assignee.name} size="sm" />
-                    <span className="ellipsis">{r.my.assignee ? "You" : r.assignee.name}</span>
+                    <span className="ellipsis">{r.my.assignee ? t("You") : r.assignee.name}</span>
                   </>
                 ) : (
-                  <span className="muted">Nobody yet</span>
+                  <span className="muted">{t("Nobody yet")}</span>
                 )}
               </dd>
-              <dt>Priority</dt>
+              <dt>{t("Priority")}</dt>
               <dd>
                 {r.my.can_edit ? (
                   <Select
                     size="sm"
-                    ariaLabel="Priority"
+                    ariaLabel={t("Priority")}
                     value={r.priority}
                     onChange={(v) => void patch({ priority: v as Priority }, "priority")}
                     options={(["low", "normal", "high", "urgent"] as const).map((p) => ({ value: p, label: PRIORITY_COPY[p] }))}
                   />
                 ) : (
-                  PRIORITY_COPY[r.priority]
+                  t(PRIORITY_COPY[r.priority])
                 )}
               </dd>
-              <dt>Needed by</dt>
+              <dt>{t("Needed by")}</dt>
               <dd>
                 {r.my.can_edit ? (
-                  <DatePicker value={r.due_on ?? ""} onChange={(v) => void patch({ due_on: v || null }, "due")} label="Due" ariaLabel="Needed by" emptyText="no date" />
+                  <DatePicker value={r.due_on ?? ""} onChange={(v) => void patch({ due_on: v || null }, "due")} label={t("Due")} ariaLabel={t("Needed by")} emptyText={t("no date")} />
                 ) : r.due_on ? (
                   formatDate(r.due_on)
                 ) : (
-                  <span className="muted">No date</span>
+                  <span className="muted">{t("No date")}</span>
                 )}
               </dd>
             </dl>
 
-            <p className={`req-body${r.body ? "" : " empty-body"}`}>{r.body || "No details were added."}</p>
+            <p className={`req-body${r.body ? "" : " empty-body"}`}>{r.body || t("No details were added.")}</p>
 
-            <section aria-label="Activity">
-              <h3 className="sheet-section">Activity</h3>
+            <section aria-label={t("Activity")}>
+              <h3 className="sheet-section">{t("Activity")}</h3>
               <ol className="req-tl">
                 {r.events.map((e) => (
                   <TimelineItem key={e.id} e={e} people={r.people} />
                 ))}
               </ol>
             </section>
-            <p className="muted sheet-privacy">
-              Only {r.from_team ? r.from_team.name : r.requester.name}, {r.to_team.name} and the person assigned can see this request.
-            </p>
+            <p className="muted sheet-privacy">{t("Only")}{" "}{r.from_team ? r.from_team.name : r.requester.name}, {r.to_team.name}{" "}{t("and the person assigned can see this request.")}</p>
           </>
         )}
       </div>
@@ -277,9 +273,7 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
             void send();
           }}
         >
-          <label htmlFor="req-comment" className="sr-only">
-            Write a reply
-          </label>
+          <label htmlFor="req-comment" className="sr-only">{t("Write a reply")}</label>
           <textarea
             id="req-comment"
             rows={2}
@@ -289,14 +283,12 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
             }}
-            placeholder={waitingOnMe ? "Answer their question…" : "Write a reply…"}
+            placeholder={waitingOnMe ? t("Answer their question…") : t("Write a reply…")}
           />
           <div className="row">
-            <span className="hint">{waitingOnMe ? `Sending this moves it back to ${r.to_team.name}.` : "Everyone involved can read replies."}</span>
+            <span className="hint">{waitingOnMe ? t("Sending this moves it back to {name}.", { name: r.to_team.name }) : t("Everyone involved can read replies.")}</span>
             <button type="submit" className="primary" disabled={!comment.trim() || busy === "comment"} aria-busy={busy === "comment"}>
-              <IconSend size={15} />
-              Reply
-            </button>
+              <IconSend size={15} />{t("Reply")}</button>
           </div>
         </form>
         </div>
@@ -319,7 +311,8 @@ export function RequestPanel({ org, id, onClose, onChanged }: { org: string; id:
 }
 
 function TimelineItem({ e, people }: { e: RequestEvent; people: Record<string, string> }) {
-  const who = e.actor?.name ?? "Someone";
+  const t = useT();
+  const who = e.actor?.name ?? t("Someone");
   const name = (id?: string | null) => (id ? (people[id] ?? "a former member") : "nobody");
   if (e.kind === "comment") {
     return (
@@ -339,29 +332,29 @@ function TimelineItem({ e, people }: { e: RequestEvent; people: Record<string, s
     );
   }
   let text: React.ReactNode;
-  if (e.kind === "created") text = <><strong>{who}</strong> sent the request</>;
+  if (e.kind === "created") text = <><strong>{who}</strong>{" "}{t("sent the request")}</>;
   else if (e.kind === "status") {
     const to = (e.data.to ?? "open") as ReqStatus;
     text = e.data.auto ? (
-      <>Back to <strong>{STATUS_COPY[to]}</strong> after the requester replied</>
+      <>{t("Back to")}{" "}<strong>{t(STATUS_COPY[to])}</strong>{" "}{t("after the requester replied")}</>
     ) : to === "waiting" ? (
-      <><strong>{who}</strong> asked the requester for info</>
+      <><strong>{who}</strong>{" "}{t("asked the requester for info")}</>
     ) : to === "declined" ? (
-      <><strong>{who}</strong> declined it</>
+      <><strong>{who}</strong>{" "}{t("declined it")}</>
     ) : (
-      <><strong>{who}</strong> moved it to <strong>{STATUS_COPY[to]}</strong></>
+      <><strong>{who}</strong>{" "}{t("moved it to")}{" "}<strong>{t(STATUS_COPY[to])}</strong></>
     );
   } else if (e.kind === "assigned") {
     text =
       e.data.reason === "left_team" ? (
-        <><strong>{name(e.data.from)}</strong> left the team, so it went back to the team’s queue</>
+        <><strong>{name(e.data.from)}</strong>{" "}{t("left the team, so it went back to the team’s queue")}</>
       ) : e.data.to ? (
-        <><strong>{who}</strong> assigned it to <strong>{e.data.to === e.actor?.id ? "themselves" : name(e.data.to)}</strong></>
+        <><strong>{who}</strong>{" "}{t("assigned it to")}{" "}<strong>{e.data.to === e.actor?.id ? "themselves" : name(e.data.to)}</strong></>
       ) : (
-        <><strong>{who}</strong> unassigned it</>
+        <><strong>{who}</strong>{" "}{t("unassigned it")}</>
       );
-  } else if (e.kind === "priority") text = <><strong>{who}</strong> set priority to <strong>{PRIORITY_COPY[(e.data.to ?? "normal") as Priority]}</strong></>;
-  else text = e.data.to ? <><strong>{who}</strong> set the date to <strong>{formatDate(e.data.to)}</strong></> : <><strong>{who}</strong> removed the date</>;
+  } else if (e.kind === "priority") text = <><strong>{who}</strong>{" "}{t("set priority to")}{" "}<strong>{t(PRIORITY_COPY[(e.data.to ?? "normal") as Priority])}</strong></>;
+  else text = e.data.to ? <><strong>{who}</strong>{" "}{t("set the date to")}{" "}<strong>{formatDate(e.data.to)}</strong></> : <><strong>{who}</strong>{" "}{t("removed the date")}</>;
 
   return (
     <>

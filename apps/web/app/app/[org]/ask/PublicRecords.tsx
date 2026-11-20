@@ -4,6 +4,7 @@ import type { Citation, PublicSourcesSettings, PublicSourcesSummary } from "@/li
 import { IconChevronDown, IconGlobalSearch, IconGlobe, IconLandmark, IconLock } from "@/components/icons";
 import { Flag, hasFlag } from "@/components/flags";
 import { CommandGroup, CommandItem, ComposerMenu, useComposerMenu } from "./ComposerMenu";
+import { useT, tNow } from "@/lib/use-t";
 
 /**
  * Public records in Ask (ADR-036). `null` = off (documents only), "default" = the organization's country,
@@ -33,14 +34,15 @@ export function saveChoice(org: string, v: PublicChoice) {
 
 export const usable = (s: PublicSourcesSettings | null): s is PublicSourcesSettings => !!s && s.available && s.enabled;
 
-const countryName = (s: PublicSourcesSettings, code: string | null) => s.countries.find((c) => c.code === code)?.name ?? null;
+// Country names arrive in English from the API; messages-es.ts has the Spanish.
+const countryName = (s: PublicSourcesSettings, code: string | null) => tNow(s.countries.find((c) => c.code === code)?.name ?? null);
 
 /** What the chip says next to "Public records". */
 function valueLabel(s: PublicSourcesSettings, v: PublicChoice): string {
-  if (!v) return "off";
-  if (v === "global") return "worldwide";
-  if (v === "default") return countryName(s, s.country) ?? (s.web ? "web" : "on");
-  return countryName(s, v) ?? "on";
+  if (!v) return tNow("off");
+  if (v === "global") return tNow("worldwide");
+  if (v === "default") return countryName(s, s.country) ?? (s.web ? tNow("web") : tNow("on"));
+  return countryName(s, v) ?? tNow("on");
 }
 
 /** Request fields for the query: nothing when off. */
@@ -51,6 +53,7 @@ export function requestFields(s: PublicSourcesSettings | null, v: PublicChoice):
 }
 
 export function PublicRecordsPicker({ settings, value, onChange, disabled }: { settings: PublicSourcesSettings; value: PublicChoice; onChange: (v: PublicChoice) => void; disabled?: boolean }) {
+  const t = useT();
   const state = useComposerMenu();
   const { menu, onTriggerKey } = state;
   const pick = (v: PublicChoice) => {
@@ -65,39 +68,37 @@ export function PublicRecordsPicker({ settings, value, onChange, disabled }: { s
   const chosen = value === "default" ? home : value && value !== "global" ? value : null;
   return (
     <div className="cmenu-host" ref={menu.ref}>
-      <span className={`date-chip fmt-chip${value ? " is-set" : ""}`} data-tip={value || menu.isOpen ? undefined : "Also check official public records and the web"}>
+      <span className={`date-chip fmt-chip${value ? " is-set" : ""}`} data-tip={value || menu.isOpen ? undefined : t("Also check official public records and the web")}>
         <button type="button" className="date-trigger" aria-haspopup="menu" aria-expanded={menu.isOpen} onClick={menu.toggle} onKeyDown={onTriggerKey} disabled={disabled}>
-          {chosen && hasFlag(chosen) ? <Flag code={chosen} size={16} /> : <IconGlobalSearch size={15} />}
-          Public records
-          <span className="date-value">{valueLabel(settings, value)}</span>
+          {chosen && hasFlag(chosen) ? <Flag code={chosen} size={16} /> : <IconGlobalSearch size={15} />}{t("Public records")}<span className="date-value">{valueLabel(settings, value)}</span>
           <IconChevronDown size={13} />
         </button>
       </span>
       <ComposerMenu
         state={state}
-        label="Public records"
-        footer={out ? "Your organization has used this month's lookups. Answers will use your documents only." : "Names and keywords from your question go to Croma, a public-records service. Your documents never do."}
+        label={t("Public records")}
+        footer={out ? t("Your organization has used this month's lookups. Answers will use your documents only.") : t("Names and keywords from your question go to Croma, a public-records service. Your documents never do.")}
       >
         <CommandGroup>
-          <CommandItem icon={<IconLock size={16} />} title="Off" hint="Answer only from your documents" checked={!value} onClick={() => pick(null)} />
+          <CommandItem icon={<IconLock size={16} />} title={t("Off")} hint={t("Answer only from your documents")} checked={!value} onClick={() => pick(null)} />
           {home && (
             <CommandItem
               bare
               icon={hasFlag(home) ? <Flag code={home} size={26} /> : <IconLandmark size={16} />}
               title={homeName ?? home.toUpperCase()}
-              hint={`Companies, court cases, laws and sanctions${settings.web ? ", plus the web" : ""}`}
+              hint={(settings.web ? t("Companies, court cases, laws and sanctions, plus the web") : t("Companies, court cases, laws and sanctions"))}
               checked={value === "default" || value === home}
               onClick={() => pick("default")}
             />
           )}
           {!home && settings.web && (
-            <CommandItem icon={<IconGlobalSearch size={16} />} title="On" hint="The web and worldwide registries. Name a country in your question to check its records" checked={value === "default"} onClick={() => pick("default")} />
+            <CommandItem icon={<IconGlobalSearch size={16} />} title={t("On")} hint={t("The web and worldwide registries. Name a country in your question to check its records")} checked={value === "default"} onClick={() => pick("default")} />
           )}
-          {settings.web && <CommandItem icon={<IconGlobe size={16} />} title="Worldwide" hint="Web search, news and worldwide company registries" checked={value === "global"} onClick={() => pick("global")} />}
+          {settings.web && <CommandItem icon={<IconGlobe size={16} />} title={t("Worldwide")} hint={t("Web search, news and worldwide company registries")} checked={value === "global"} onClick={() => pick("global")} />}
         </CommandGroup>
-        <CommandGroup label="Another country" grid>
+        <CommandGroup label={t("Another country")} grid>
           {others.map((c) => (
-            <CommandItem key={c.code} bare icon={<Flag code={c.code} size={22} />} title={c.name} checked={value === c.code} onClick={() => pick(c.code)} />
+            <CommandItem key={c.code} bare icon={<Flag code={c.code} size={22} />} title={t(c.name)} checked={value === c.code} onClick={() => pick(c.code)} />
           ))}
         </CommandGroup>
       </ComposerMenu>
@@ -110,24 +111,24 @@ export function publicNotice(p: PublicSourcesSummary | null | undefined, cited: 
   if (!p?.requested) return null;
   switch (p.unavailable) {
     case "off":
-      return "Public records are turned off for your organization, so only your documents were used.";
+      return tNow("Public records are turned off for your organization, so only your documents were used.");
     case "limit":
-      return "Your organization has used this month's public record lookups, so only your documents were used.";
+      return tNow("Your organization has used this month's public record lookups, so only your documents were used.");
     case "restricted":
-      return "Your organization's data is classified as restricted, so nothing is looked up outside. Only your documents were used.";
+      return tNow("Your organization's data is classified as restricted, so nothing is looked up outside. Only your documents were used.");
     case "not_configured":
-      return "Public records aren't set up yet, so only your documents were used.";
+      return tNow("Public records aren't set up yet, so only your documents were used.");
     case "credits_exhausted":
-      return "The public records service has run out of credit for this month, so only your documents were used.";
+      return tNow("The public records service has run out of credit for this month, so only your documents were used.");
     case "rate_limited":
-      return "The public records service is busy right now, so only your documents were used. Try again in a few minutes.";
+      return tNow("The public records service is busy right now, so only your documents were used. Try again in a few minutes.");
     case null:
     case undefined:
-      if (p.lookups === 0) return "No public record search fit this question, so only your documents were used.";
-      if (cited === 0) return "Public records were checked, but none of them helped answer this question.";
+      if (p.lookups === 0) return tNow("No public record search fit this question, so only your documents were used.");
+      if (cited === 0) return tNow("Public records were checked, but none of them helped answer this question.");
       return null;
     default:
-      return "The public records source didn't answer in time, so only your documents were used.";
+      return tNow("The public records source didn't answer in time, so only your documents were used.");
   }
 }
 
@@ -143,22 +144,21 @@ export function externalMeta(c: Citation): string {
 }
 
 export function ExternalBody({ c }: { c: Citation }) {
+  const t = useT();
   return (
     <>
       <blockquote className="pub-snippet">{c.snippet}</blockquote>
-      {c.demo && <p className="faint ai-note">Sample data: public records are in demo mode on this server.</p>}
+      {c.demo && <p className="faint ai-note">{t("Sample data: public records are in demo mode on this server.")}</p>}
       {c.no_match ? (
-        <p className="faint ai-note">The search found nothing in this register. That doesn&apos;t rule out records elsewhere.</p>
+        <p className="faint ai-note">{t("The search found nothing in this register. That doesn't rule out records elsewhere.")}</p>
       ) : (
-        <p className="faint ai-note">{c.kind === "web" ? "A public web page, found at answer time. Check it before relying on it." : "An official public record, looked up at answer time through Croma. Check the source before relying on it."}</p>
+        <p className="faint ai-note">{c.kind === "web" ? t("A public web page, found at answer time. Check it before relying on it.") : t("An official public record, looked up at answer time through Croma. Check the source before relying on it.")}</p>
       )}
       <div className="row spread">
         <span className="mono faint">{c.source}</span>
         {c.url && (
           <a className="btn ghost small" href={c.url} target="_blank" rel="noopener noreferrer">
-            <IconGlobe size={14} />
-            Open source
-          </a>
+            <IconGlobe size={14} />{t("Open source")}</a>
         )}
       </div>
     </>

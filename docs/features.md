@@ -170,7 +170,9 @@ deterministic presets per sector; activating does not publish agents or enable e
 Commercial qualification (sector, size, buyer, initial users, document sources, pain signals and origin channel) is asked
 on the sign-up screen, before entering the app, and produces an internal score that the API does not expose.
 
-**Agent Studio** (`/app/{org}/agents`) creates agents from templates or from scratch, validates the definition against
+**Agent Studio** (`/app/{org}/agents`) lists the templates Setup suggests for the organization's sector first (a law
+firm sees *Case file summary*, *Chronology of facts*, *Case law analyst* and *Due diligence reviewer* before the rest)
+and creates agents from templates or from scratch, validates the definition against
 the tenant's policy, tests it in a sandbox (real search with your ACL, simulated writes) and publishes immutable
 semantic versions.
 

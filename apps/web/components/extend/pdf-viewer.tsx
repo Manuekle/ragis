@@ -103,6 +103,7 @@ import {
 } from "@/components/extend/document-viewer-sidebar"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Search01Icon, MoreHorizontalIcon, Download01Icon, Upload01Icon, ArrowLeft01Icon, ArrowRight01Icon, SidebarLeftIcon, RotateClockwiseIcon, MinusSignCircleIcon, PlusSignCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { useT, tNow } from "@/lib/use-t";
 
 export type PDFViewerPageOverlayProps = {
   pageNumber: number
@@ -182,15 +183,14 @@ const PAGE_BASE_RENDER_MAX_SCALE = 1
 const PAGE_BASE_RENDER_DPR = 1
 const PDF_SEARCH_DEBOUNCE_MS = 300
 const TEXT_SELECTION_BACKGROUND = "rgba(59, 130, 246, 0.14)"
-const THUMBNAIL_FOCUS_RING_CLASS =
-  "group-focus-visible/pdf-thumbnail-sidebar:ring-2 group-focus-visible/pdf-thumbnail-sidebar:ring-ring group-focus-visible/pdf-thumbnail-sidebar:ring-offset-1 group-focus-visible/pdf-thumbnail-sidebar:ring-offset-background"
+const THUMBNAIL_FOCUS_RING_CLASS = "group-focus-visible/pdf-thumbnail-sidebar:ring-2 group-focus-visible/pdf-thumbnail-sidebar:ring-ring group-focus-visible/pdf-thumbnail-sidebar:ring-offset-1 group-focus-visible/pdf-thumbnail-sidebar:ring-offset-background"
 const DEFAULT_SCROLL_AREA_VIEWPORT_SELECTOR =
   '[data-slot="scroll-area-viewport"]'
-const ZOOM_MODE_LABELS: Record<ZoomMode, string> = {
-  [ZoomMode.FitPage]: "Fit page",
-  [ZoomMode.FitWidth]: "Fit width",
-  [ZoomMode.Automatic]: "Automatic",
-}
+const ZOOM_MODE_LABELS = (): Record<ZoomMode, string> => ({
+  [ZoomMode.FitPage]: tNow("Fit page"),
+  [ZoomMode.FitWidth]: tNow("Fit width"),
+  [ZoomMode.Automatic]: tNow("Automatic"),
+})
 function toZoomLevel(level: PDFViewerZoomLevel): ZoomMode | number {
   if (level === "fit-page") return ZoomMode.FitPage
   if (level === "fit-width") return ZoomMode.FitWidth
@@ -480,6 +480,7 @@ function PDFViewerFallbackShell({
   toolbarActions?: React.ReactNode
   onUploadFile?: (file: File) => void
 }) {
+  const t = useT();
   return (
     <div
       data-slot="pdf-viewer"
@@ -498,12 +499,12 @@ function PDFViewerFallbackShell({
           zoomLevel={toZoomLevel(defaultZoom)}
           numPages={0}
           searchControl={
-            <ToolbarTooltip label="Search text">
+            <ToolbarTooltip label={t("Search text")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Search text"
+                aria-label={t("Search text")}
                 disabled
               >
                 <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className="size-4" />
@@ -534,13 +535,8 @@ function PDFViewerFallbackShell({
         {state === "empty" ? (
           <div className="absolute inset-0 z-20 grid place-items-center bg-background p-6 text-center text-sm text-muted-foreground">
             <div className="max-w-sm space-y-3">
-              <div className="font-medium text-foreground">
-                Upload a PDF to preview
-              </div>
-              <div>
-                Pass a PDF URL with the <code>src</code> prop or use the upload
-                control.
-              </div>
+              <div className="font-medium text-foreground">{t("Upload a PDF to preview")}</div>
+              <div>{t("Pass a PDF URL with the")}{" "}<code>src</code>{" "}{t("prop or use the upload control.")}</div>
             </div>
           </div>
         ) : null}
@@ -579,6 +575,7 @@ function PDFViewerFileActionsMenu({
   showDownload?: boolean
   showUpload?: boolean
 }) {
+  const t = useT();
   const inputRef = React.useRef<HTMLInputElement>(null)
   if (!showDownload && !showUpload) return null
   return (
@@ -606,7 +603,7 @@ function PDFViewerFileActionsMenu({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Open PDF actions"
+              aria-label={t("Open PDF actions")}
             >
               <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} className="size-4" />
             </Button>
@@ -619,15 +616,11 @@ function PDFViewerFileActionsMenu({
                 <InlineSpinner className="size-4" />
               ) : (
                 <HugeiconsIcon icon={Download01Icon} strokeWidth={2} className="size-4" />
-              )}
-              Download
-            </DropdownMenuItem>
+              )}{t("Download")}</DropdownMenuItem>
           ) : null}
           {showUpload && onUploadFile ? (
             <DropdownMenuItem onClick={() => inputRef.current?.click()}>
-              <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />
-              Upload
-            </DropdownMenuItem>
+              <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} className="size-4" />{t("Upload")}</DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -645,6 +638,7 @@ function PDFViewerPageNumberControl({
   numPages: number
   onPageChange: (pageNumber: number) => void
 }) {
+  const t = useT();
   const inputRef = React.useRef<HTMLInputElement>(null)
   const displayPage = numPages ? activePage : 1
   const [isEditing, setIsEditing] = React.useState(false)
@@ -666,11 +660,11 @@ function PDFViewerPageNumberControl({
   )
   return (
     <div className="flex items-center text-sm whitespace-nowrap text-primary">
-      <span>Page</span>
+      <span>{t("Page")}</span>
       {isEditing ? (
         <Input
           ref={inputRef}
-          aria-label="Page number"
+          aria-label={t("Page number")}
           inputMode="numeric"
           pattern="[0-9]*"
           value={draftPage}
@@ -696,7 +690,7 @@ function PDFViewerPageNumberControl({
           variant="ghost"
           size="sm"
           className="font-normal"
-          aria-label={`Current page ${displayPage}. Edit page number`}
+          aria-label={t("Current page {displayPage}. Edit page number", { displayPage: displayPage })}
           disabled={controlsDisabled || !numPages}
           onClick={() => {
             setDraftPage(String(displayPage))
@@ -706,7 +700,7 @@ function PDFViewerPageNumberControl({
           {displayPage}
         </Button>
       )}
-      <span>of {numPages || "–"}</span>
+      <span>{t("of")}{" "}{numPages || "–"}</span>
     </div>
   )
 }
@@ -717,6 +711,7 @@ function PDFViewerSearchControl({
   documentId: string
   controlsDisabled: boolean
 }) {
+  const t = useT();
   const { state, provides } = useSearch(documentId)
   const { provides: scroll } = useScroll(documentId)
   const [searchDraft, setSearchDraft] = React.useState("")
@@ -727,12 +722,12 @@ function PDFViewerSearchControl({
   const searchRequestIdRef = React.useRef(0)
   const hasActiveQuery = Boolean(searchQuery.trim())
   const resultLabel = isSearching
-    ? "Searching"
+    ? t("Searching")
     : !hasActiveQuery
-      ? "No search"
+      ? t("No search")
       : state.total
         ? `${state.activeResultIndex + 1} / ${state.total}`
-        : "No results"
+        : t("No results")
   const scrollToResult = React.useCallback(
     (index: number) => {
       const result = state.results[index]
@@ -845,14 +840,14 @@ function PDFViewerSearchControl({
   )
   return (
     <Popover>
-      <ToolbarTooltip label="Search text">
+      <ToolbarTooltip label={t("Search text")}>
         <PopoverTrigger
           render={
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Search text"
+              aria-label={t("Search text")}
               disabled={controlsDisabled}
             >
               <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className="size-4" />
@@ -863,7 +858,7 @@ function PDFViewerSearchControl({
       <PopoverContent align="end" className="w-72">
         <div className="space-y-3">
           <Input
-            placeholder="Search text"
+            placeholder={t("Search text")}
             value={searchDraft}
             onChange={handleSearchDraftChange}
             onKeyDown={(event) => {
@@ -898,7 +893,7 @@ function PDFViewerSearchControl({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Previous result"
+                aria-label={t("Previous result")}
                 disabled={isSearching || state.total === 0}
                 onClick={() => navigate(-1)}
               >
@@ -908,7 +903,7 @@ function PDFViewerSearchControl({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                aria-label="Next result"
+                aria-label={t("Next result")}
                 disabled={isSearching || state.total === 0}
                 onClick={() => navigate(1)}
               >
@@ -922,9 +917,7 @@ function PDFViewerSearchControl({
               variant="outline"
               size="sm"
               onClick={clearSearch}
-            >
-              Clear
-            </Button>
+            >{t("Clear")}</Button>
           </div>
         </div>
       </PopoverContent>
@@ -972,6 +965,7 @@ function PDFViewerToolbar({
   onZoomChange: (zoomLevel: ZoomMode | number) => void
   zoomLevel: ZoomMode | number
 }) {
+  const t = useT();
   const selectValue = isZoomMode(zoomLevel)
     ? zoomLevel
     : String(Number(currentZoomLevel.toFixed(2)))
@@ -985,12 +979,12 @@ function PDFViewerToolbar({
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <TooltipProvider>
           <ViewerLead />
-          <ToolbarTooltip label="Pages sidebar">
+          <ToolbarTooltip label={t("Pages sidebar")}>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Pages sidebar"
+              aria-label={t("Pages sidebar")}
               aria-pressed={sidebarOpen}
               data-active={sidebarOpen ? "" : undefined}
               className={cn(
@@ -1016,24 +1010,24 @@ function PDFViewerToolbar({
           {showRotateControls ? (
             <>
               <div className="flex flex-none items-center gap-1">
-                <ToolbarTooltip label="Rotate counterclockwise">
+                <ToolbarTooltip label={t("Rotate counterclockwise")}>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Rotate counterclockwise"
+                    aria-label={t("Rotate counterclockwise")}
                     disabled={controlsDisabled}
                     onClick={() => onRotate(-1)}
                   >
                     <HugeiconsIcon icon={RotateClockwiseIcon} strokeWidth={2} className="size-4" />
                   </Button>
                 </ToolbarTooltip>
-                <ToolbarTooltip label="Rotate clockwise">
+                <ToolbarTooltip label={t("Rotate clockwise")}>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Rotate clockwise"
+                    aria-label={t("Rotate clockwise")}
                     disabled={controlsDisabled}
                     onClick={() => onRotate(1)}
                   >
@@ -1048,12 +1042,12 @@ function PDFViewerToolbar({
             </>
           ) : null}
           <div className="flex flex-none items-center gap-1">
-            <ToolbarTooltip label="Zoom out">
+            <ToolbarTooltip label={t("Zoom out")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Zoom out"
+                aria-label={t("Zoom out")}
                 disabled={
                   controlsDisabled || currentZoomLevel <= ZOOM_OPTIONS[0]
                 }
@@ -1079,16 +1073,16 @@ function PDFViewerToolbar({
               <SelectTrigger
                 size="sm"
                 className="w-[104px] min-w-[104px]"
-                aria-label="Zoom level"
+                aria-label={t("Zoom level")}
               >
-                <SelectValue placeholder="Zoom">
+                <SelectValue placeholder={t("Zoom")}>
                   {Math.round(currentZoomLevel * 100)}%
                 </SelectValue>
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>
-                {(Object.keys(ZOOM_MODE_LABELS) as ZoomMode[]).map((mode) => (
+                {(Object.keys(ZOOM_MODE_LABELS()) as ZoomMode[]).map((mode) => (
                   <SelectItem key={mode} value={mode}>
-                    {ZOOM_MODE_LABELS[mode]}
+                    {t(ZOOM_MODE_LABELS()[mode])}
                   </SelectItem>
                 ))}
                 {zoomOptions.map((option) => (
@@ -1098,12 +1092,12 @@ function PDFViewerToolbar({
                 ))}
               </SelectContent>
             </Select>
-            <ToolbarTooltip label="Zoom in">
+            <ToolbarTooltip label={t("Zoom in")}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Zoom in"
+                aria-label={t("Zoom in")}
                 disabled={
                   controlsDisabled ||
                   currentZoomLevel >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
@@ -1240,6 +1234,7 @@ function PDFViewerThumbnails({
   selectedPageIndexes: Set<number>
   onSelectPage: (pageNumber: number, mode: ThumbnailSelectionMode) => void
 }) {
+  const t = useT();
   const thumbnailListboxId = React.useId()
   const activeDescendantId =
     activePage > 0 ? `${thumbnailListboxId}-page-${activePage}` : undefined
@@ -1312,7 +1307,7 @@ function PDFViewerThumbnails({
               role="option"
               data-pdf-viewer-thumbnail-option={pageNumber}
               aria-current={isActive ? "page" : undefined}
-              aria-label={`Page ${pageNumber}`}
+              aria-label={t("Page {pageNumber}", { pageNumber: pageNumber })}
               aria-posinset={pageNumber}
               aria-selected={isSelected}
               aria-setsize={pageCount}
@@ -2695,8 +2690,9 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
   }
 )
 function InlineSpinner({ className, ...props }: InlineRegistryIconProps) {
+  const t = useT();
   return (
-    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
+    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} role="status" aria-label={t("Loading")} className={cn("size-4 animate-spin", className)} {...props} />
   )
 }
 type InlineRegistryIconProps = Omit<

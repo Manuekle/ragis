@@ -9,7 +9,9 @@ import { Avatar, DatePicker, Select, TextField } from "@/components/ui";
 import { IconArrowRight, IconCalendar, IconComment, IconSend } from "@/components/icons";
 import { useOrg, type TeamDir } from "../layout";
 import { TeamChip, type TeamRef } from "../team-tags";
+import { useT, tNow } from "@/lib/use-t";
 
+import { dateLocale } from "@/lib/i18n";
 export { TeamChip, type TeamRef };
 
 /* ───────────── types (API: routes/teams.ts) ───────────── */
@@ -90,8 +92,9 @@ export const BOARD_COLUMNS: { key: ReqStatus; label: string; hint: string; statu
  * goes to the same place, so only who asked is shown.
  */
 export function TeamRoute({ r }: { r: Pick<RequestItem, "from_team" | "to_team" | "requester" | "my"> }) {
+  const tr = useT();
   const { showTeamTags } = useOrg();
-  if (!showTeamTags) return <span className="team-route">from {r.my.requester ? "you" : r.requester.name}</span>;
+  if (!showTeamTags) return <span className="team-route">{tr("from")}{" "}{r.my.requester ? "you" : r.requester.name}</span>;
   return (
     <span className="team-route">
       {r.from_team ? <TeamChip team={r.from_team} /> : <span>{r.requester.name}</span>}
@@ -102,25 +105,27 @@ export function TeamRoute({ r }: { r: Pick<RequestItem, "from_team" | "to_team" 
 }
 
 export function StatusPill({ status }: { status: ReqStatus }) {
+  const tr = useT();
   return (
     <span className="req-status" data-s={status}>
       <span className="dot" aria-hidden="true" />
-      {STATUS_COPY[status]}
+      {tr(STATUS_COPY[status])}
     </span>
   );
 }
 
 export function PriorityTag({ priority, quiet = true }: { priority: Priority; quiet?: boolean }) {
+  const tr = useT();
   if (quiet && priority === "normal") return null;
   const on = { low: 1, normal: 2, high: 3, urgent: 3 }[priority];
   return (
-    <span className="prio" data-p={priority} title={`${PRIORITY_COPY[priority]} priority`}>
+    <span className="prio" data-p={priority} title={tr("{priority} priority", { priority: tr(PRIORITY_COPY[priority]) })}>
       <span className="bars" aria-hidden="true">
         {[1, 2, 3].map((i) => (
           <i key={i} className={i <= on ? "on" : ""} />
         ))}
       </span>
-      {PRIORITY_COPY[priority]}
+      {tr(PRIORITY_COPY[priority])}
     </span>
   );
 }
@@ -134,25 +139,26 @@ const dayDiff = (iso: string) => {
 };
 const shortDate = (iso: string) => {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(y, m - 1, d).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" });
 };
 export const dueLabel = (iso: string) => {
   const n = dayDiff(iso);
-  if (n === 0) return "Due today";
-  if (n === 1) return "Due tomorrow";
-  if (n === -1) return "1 day late";
-  if (n < 0) return `${-n} days late`;
-  if (n < 7) return `Due in ${n} days`;
-  return `Due ${shortDate(iso)}`;
+  if (n === 0) return tNow("Due today");
+  if (n === 1) return tNow("Due tomorrow");
+  if (n === -1) return tNow("1 day late");
+  if (n < 0) return tNow("{v1} days late", { v1: -n });
+  if (n < 7) return tNow("Due in {n} days", { n: n });
+  return tNow("Due {v1}", { v1: shortDate(iso) });
 };
 
 export function DueDate({ iso, closed }: { iso: string | null; closed: boolean }) {
+  const tr = useT();
   if (!iso) return null;
   const late = !closed && dayDiff(iso) < 0;
   return (
     <span className={`due${late ? " late" : ""}`}>
       <IconCalendar size={12} />
-      {closed ? `Due ${shortDate(iso)}` : dueLabel(iso)}
+      {closed ? tr("Due {v1}", { v1: shortDate(iso) }) : dueLabel(iso)}
     </span>
   );
 }
@@ -165,14 +171,15 @@ export function DueDate({ iso, closed }: { iso: string | null; closed: boolean }
  * and titles stay aligned too.
  */
 export function RequestRow({ org, r }: { org: string; r: RequestItem }) {
-  const who = r.assignee ? (r.my.assignee ? "You" : r.assignee.name) : null;
+  const tr = useT();
+  const who = r.assignee ? (r.my.assignee ? tr("You") : r.assignee.name) : null;
   return (
     <Link href={requestHref(org, r.id)} scroll={false} className={`req-row${r.my.attention ? " attention" : ""}`}>
-      {r.my.attention && <span className="attn-dot" role="img" aria-label="Needs you" />}
+      {r.my.attention && <span className="attn-dot" role="img" aria-label={tr("Needs you")} />}
       <span className="req-main">
         <span className="title">
           <span className="req-num">#{r.number}</span>
-          <strong>{r.title}</strong>
+          <strong>{tr(r.title)}</strong>
         </span>
         <span className="sub">
           <TeamRoute r={r} />
@@ -190,9 +197,9 @@ export function RequestRow({ org, r }: { org: string; r: RequestItem }) {
       <span className="cell due-cell">
         <DueDate iso={r.due_on} closed={!!r.closed_at} />
       </span>
-      <span className="cell who-cell" data-tip={who ? `With ${who}` : "Not assigned yet"}>
+      <span className="cell who-cell" data-tip={who ? tr("With {who}", { who: who }) : tr("Not assigned yet")}>
         {r.assignee ? <Avatar name={r.assignee.name} size="sm" /> : <span className="nobody" aria-hidden="true" />}
-        <span className="sr-only">{who ? `Assigned to ${who}` : "Not assigned yet"}</span>
+        <span className="sr-only">{who ? tr("Assigned to {who}", { who: who }) : tr("Not assigned yet")}</span>
       </span>
       <span className="cell status-cell">
         <StatusPill status={r.status} />
@@ -203,15 +210,16 @@ export function RequestRow({ org, r }: { org: string; r: RequestItem }) {
 
 /** List: what needs you first, then everything else. */
 export function RequestList({ org, items }: { org: string; items: RequestItem[] }) {
+  const tr = useT();
   const mine = items.filter((r) => r.my.attention);
   const rest = items.filter((r) => !r.my.attention);
   return (
     <div className="card req-list">
-      {mine.length > 0 && rest.length > 0 && <div className="req-group-label">Needs you</div>}
+      {mine.length > 0 && rest.length > 0 && <div className="req-group-label">{tr("Needs you")}</div>}
       {mine.map((r) => (
         <RequestRow key={r.id} org={org} r={r} />
       ))}
-      {mine.length > 0 && rest.length > 0 && <div className="req-group-label">Everything else</div>}
+      {mine.length > 0 && rest.length > 0 && <div className="req-group-label">{tr("Everything else")}</div>}
       {rest.map((r) => (
         <RequestRow key={r.id} org={org} r={r} />
       ))}
@@ -220,6 +228,7 @@ export function RequestList({ org, items }: { org: string; items: RequestItem[] 
 }
 
 function RequestCard({ org, r, onDragStart, onDragEnd, dragging }: { org: string; r: RequestItem; onDragStart: () => void; onDragEnd: () => void; dragging: boolean }) {
+  const tr = useT();
   const movable = r.my.transitions.length > 0;
   return (
     <Link
@@ -236,19 +245,19 @@ function RequestCard({ org, r, onDragStart, onDragEnd, dragging }: { org: string
     >
       <span className="top">
         <span className="row" style={{ gap: 8 }}>
-          {r.my.attention && <span className="attn-dot" role="img" aria-label="Needs you" />}
+          {r.my.attention && <span className="attn-dot" role="img" aria-label={tr("Needs you")} />}
           <span className="req-num">#{r.number}</span>
         </span>
         <PriorityTag priority={r.priority} />
       </span>
-      <strong>{r.title}</strong>
+      <strong>{tr(r.title)}</strong>
       {r.excerpt && <p className="excerpt">{r.excerpt}</p>}
       <TeamRoute r={r} />
       <span className="foot">
         <DueDate iso={r.due_on} closed={!!r.closed_at} />
         {r.status !== "done" && r.closed_at && <StatusPill status={r.status} />}
         {r.comments > 0 && (
-          <span className="comments" aria-label={`${r.comments} comments`}>
+          <span className="comments" aria-label={tr("{comments} comments", { comments: r.comments })}>
             <IconComment size={12} />
             {r.comments}
           </span>
@@ -257,10 +266,10 @@ function RequestCard({ org, r, onDragStart, onDragEnd, dragging }: { org: string
           {r.assignee ? (
             <>
               <Avatar name={r.assignee.name} size="sm" />
-              <span className="sr-only">Assigned to {r.assignee.name}</span>
+              <span className="sr-only">{tr("Assigned to")}{" "}{r.assignee.name}</span>
             </>
           ) : (
-            <span className="unassigned">Unassigned</span>
+            <span className="unassigned">{tr("Unassigned")}</span>
           )}
         </span>
       </span>
@@ -274,6 +283,7 @@ function RequestCard({ org, r, onDragStart, onDragEnd, dragging }: { org: string
  * buttons instead.
  */
 export function RequestBoard({ org, items, onMoved }: { org: string; items: RequestItem[]; onMoved: (r: RequestItem) => void }) {
+  const tr = useT();
   const [drag, setDrag] = useState<RequestItem | null>(null);
   const [over, setOver] = useState<ReqStatus | null>(null);
   const [pending, setPending] = useState<{ r: RequestItem; to: ReqStatus } | null>(null);
@@ -305,7 +315,7 @@ export function RequestBoard({ org, items, onMoved }: { org: string; items: Requ
           {error}
         </div>
       )}
-      <div className="board" role="list" aria-label="Requests board">
+      <div className="board" role="list" aria-label={tr("Requests board")}>
         {BOARD_COLUMNS.map((col) => {
           const cards = items.filter((r) => col.statuses.includes(r.status));
           // "Closed" accepts done; declined/cancelled happen from the request page, where a reason is asked.
@@ -335,15 +345,15 @@ export function RequestBoard({ org, items, onMoved }: { org: string; items: Requ
             >
               <header>
                 <span>
-                  {col.label}
-                  <small>{col.hint}</small>
+                  {tr(col.label)}
+                  <small>{tr(col.hint)}</small>
                 </span>
                 <span className="count">{cards.length}</span>
               </header>
               {cards.map((r) => (
                 <RequestCard key={r.id} org={org} r={r} dragging={drag?.id === r.id} onDragStart={() => setDrag(r)} onDragEnd={() => { setDrag(null); setOver(null); }} />
               ))}
-              {cards.length === 0 && <p className="col-empty">Nothing here</p>}
+              {cards.length === 0 && <p className="col-empty">{tr("Nothing here")}</p>}
             </section>
           );
         })}
@@ -364,15 +374,16 @@ export function RequestBoard({ org, items, onMoved }: { org: string; items: Requ
 
 /** Short required note for moves that need one (waiting on the requester, declining). */
 export function NoteDialog({ status, onClose, onSubmit }: { status: ReqStatus; onClose: () => void; onSubmit: (note: string) => Promise<void> }) {
+  const tr = useT();
   const copy = NOTE_PROMPT[status]!;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   return (
     <FormDialog
-      title={copy.title}
-      description={status === "waiting" ? "They'll see your question in their Inbox. When they answer, the request comes back to your team." : "The requester will see your reason."}
+      title={tr(copy.title)}
+      description={status === "waiting" ? tr("They'll see your question in their Inbox. When they answer, the request comes back to your team.") : tr("The requester will see your reason.")}
       icon={IconComment}
-      submitLabel={status === "waiting" ? "Send question" : "Decline request"}
+      submitLabel={status === "waiting" ? tr("Send question") : tr("Decline request")}
       busy={busy}
       disabled={note.trim().length < 2}
       onClose={onClose}
@@ -386,8 +397,8 @@ export function NoteDialog({ status, onClose, onSubmit }: { status: ReqStatus; o
       }}
     >
       <div className="field">
-        <label htmlFor="req-note">{copy.label}</label>
-        <textarea id="req-note" data-autofocus rows={3} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} placeholder={copy.placeholder} />
+        <label htmlFor="req-note">{tr(copy.label)}</label>
+        <textarea id="req-note" data-autofocus rows={3} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr(copy.placeholder)} />
       </div>
     </FormDialog>
   );
@@ -408,6 +419,7 @@ export function NewRequestDialog({
   onClose: () => void;
   onCreated: (r: RequestItem) => void;
 }) {
+  const tr = useT();
   const open = teams.filter((t) => !t.archived_at);
   const mine = open.filter((t) => t.is_member);
   const [to, setTo] = useState(defaultTeamId ?? open.find((t) => !t.is_member)?.id ?? open[0]?.id ?? "");
@@ -442,10 +454,10 @@ export function NewRequestDialog({
 
   return (
     <FormDialog
-      title="Ask a team"
-      description="The team gets it in their Inbox. Only you, that team and your own team can see it."
+      title={tr("Ask a team")}
+      description={tr("The team gets it in their Inbox. Only you, that team and your own team can see it.")}
       icon={IconSend}
-      submitLabel="Send request"
+      submitLabel={tr("Send request")}
       busy={busy}
       disabled={!to}
       wide
@@ -459,52 +471,52 @@ export function NewRequestDialog({
       )}
       <div className="field-row">
         <div className="field">
-          <label htmlFor="new-req-to">To</label>
-          <Select id="new-req-to" ariaLabel="Team you are asking" value={to} onChange={setTo} options={open.map((t) => ({ value: t.id, label: t.name, hint: t.is_member ? "Your team" : undefined }))} placeholder="Pick a team" />
+          <label htmlFor="new-req-to">{tr("To")}</label>
+          <Select id="new-req-to" ariaLabel={tr("Team you are asking")} value={to} onChange={setTo} options={open.map((t) => ({ value: t.id, label: t.name, hint: t.is_member ? "Your team" : undefined }))} placeholder={tr("Pick a team")} />
         </div>
         {mine.length > 1 ? (
           <div className="field">
-            <label htmlFor="new-req-from">On behalf of</label>
-            <Select id="new-req-from" ariaLabel="Your team" value={from} onChange={setFrom} options={[...mine.map((t) => ({ value: t.id, label: t.name })), { value: "", label: "Just me" }]} />
+            <label htmlFor="new-req-from">{tr("On behalf of")}</label>
+            <Select id="new-req-from" ariaLabel={tr("Your team")} value={from} onChange={setFrom} options={[...mine.map((t) => ({ value: t.id, label: t.name })), { value: "", label: tr("Just me") }]} />
           </div>
         ) : (
           <div className="field">
-            <span className="field-label">From</span>
+            <span className="field-label">{tr("From")}</span>
             <span className="select-trigger is-placeholder" style={{ cursor: "default" }}>
-              {mine[0]?.name ?? "You (no team)"}
+              {mine[0]?.name ?? tr("You (no team)")}
             </span>
           </div>
         )}
       </div>
       <TextField
-        label="What do you need?"
+        label={tr("What do you need?")}
         value={title}
         maxLength={160}
         onChange={(e) => {
           setTitle(e.target.value);
           setTitleError(undefined);
         }}
-        placeholder="e.g. Bank certificate for the Acme contract"
+        placeholder={tr("e.g. Bank certificate for the Acme contract")}
         error={titleError}
         data-autofocus
       />
       <div className="field">
-        <label htmlFor="req-body">Details (optional)</label>
-        <textarea id="req-body" rows={4} maxLength={8000} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Context, deadlines, links… anything that helps them get it right the first time." />
+        <label htmlFor="req-body">{tr("Details (optional)")}</label>
+        <textarea id="req-body" rows={4} maxLength={8000} value={body} onChange={(e) => setBody(e.target.value)} placeholder={tr("Context, deadlines, links… anything that helps them get it right the first time.")} />
       </div>
       <div className="field">
-        <span className="field-label" id="new-req-prio">How urgent is it?</span>
+        <span className="field-label" id="new-req-prio">{tr("How urgent is it?")}</span>
         <Seg role="group" aria-labelledby="new-req-prio">
           {(["low", "normal", "high", "urgent"] as const).map((p) => (
             <button key={p} type="button" aria-pressed={priority === p} onClick={() => setPriority(p)}>
-              {PRIORITY_COPY[p]}
+              {tr(PRIORITY_COPY[p])}
             </button>
           ))}
         </Seg>
       </div>
       <div className="field">
-        <span className="field-label">Needed by (optional)</span>
-        <DatePicker value={due} onChange={setDue} label="Due" ariaLabel="Needed by" emptyText="no date" />
+        <span className="field-label">{tr("Needed by (optional)")}</span>
+        <DatePicker value={due} onChange={setDue} label={tr("Due")} ariaLabel={tr("Needed by")} emptyText={tr("no date")} />
       </div>
     </FormDialog>
   );

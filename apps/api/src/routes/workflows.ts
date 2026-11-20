@@ -22,7 +22,16 @@ import { emit, WorkflowRunner } from "../lib/workflow-runner.js";
 import { blockedRecipients, loadPolicy, normalizeEmails } from "../lib/external-actions.js";
 import { peopleAttentionCount } from "./teams.js";
 
-const CreateWorkflow = z.object({ template: z.string().max(64).optional(), name: z.string().trim().min(2).max(80).optional() }).strict();
+// name/description: the web sends the template's in the reader's language, so the workflow is saved in it.
+// labels: step labels by node id, same purpose. Only labels change; the template's steps and rules stay as they are.
+const CreateWorkflow = z
+  .object({
+    template: z.string().max(64).optional(),
+    name: z.string().trim().min(2).max(80).optional(),
+    description: z.string().trim().max(400).optional(),
+    labels: z.record(z.string().max(64), z.string().trim().min(1).max(120)).optional(),
+  })
+  .strict();
 const SaveDraft = z.object({ graph: Graph, name: z.string().trim().min(2).max(80).optional(), description: z.string().trim().max(400).optional() }).strict();
 const PublishBody = z.object({ bump: z.enum(["major", "minor", "patch"]).default("minor"), changelog: z.string().trim().min(3).max(1000) }).strict();
 const StatusBody = z.object({ status: z.enum(["published", "paused", "archived"]) }).strict();
@@ -141,7 +150,8 @@ export async function workflowRoutes(app: FastifyInstance, deps: Deps, runner: W
     const body = CreateWorkflow.parse(req.body ?? {});
     const tpl = body.template ? WORKFLOW_TEMPLATES[body.template] : undefined;
     if (body.template && !tpl) throw badRequest("unknown template");
-    const graph: Graph = tpl?.graph ?? Graph.parse({ nodes: [{ id: "start", type: "START" }, { id: "end", type: "END" }], edges: [["start", "end"]] });
+    const base: Graph = tpl?.graph ?? Graph.parse({ nodes: [{ id: "start", type: "START" }, { id: "end", type: "END" }], edges: [["start", "end"]] });
+    const graph: Graph = body.labels ? { ...base, nodes: base.nodes.map((n) => (body.labels![n.id] ? { ...n, label: body.labels![n.id] } : n)) } : base;
     const name = body.name ?? tpl?.name ?? "New workflow";
     return tx(pool, t, async (db) => {
       let slug = slugify(name);
@@ -151,7 +161,7 @@ export async function workflowRoutes(app: FastifyInstance, deps: Deps, runner: W
       await db.query(
         `INSERT INTO workflows (id, organization_id, slug, name, description, template_code, owner_id, draft_graph, draft_hash)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
-        [id, t.organizationId, slug, name, tpl?.description ?? "", body.template ?? null, t.userId, JSON.stringify(graph), graphHash(graph)],
+        [id, t.organizationId, slug, name, body.description ?? tpl?.description ?? "", body.template ?? null, t.userId, JSON.stringify(graph), graphHash(graph)],
       );
       await audit(db, t, "workflow.draft_created", `workflow:${id}`, "allow", { template: body.template ?? null });
       reply.code(201);

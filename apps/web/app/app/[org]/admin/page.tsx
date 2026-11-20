@@ -9,37 +9,43 @@ import { IconAlert, IconCopy, IconCopyCheck, IconFolder, IconMail, IconX } from 
 import { Checkbox, Seg, SoftText, Swap, Toast } from "@/components/motion";
 import { Skel, SkeletonStatus, SkeletonTable } from "@/components/skeletons";
 import { Select, TextField, useConfirm, useFormErrors, Avatar } from "@/components/ui";
-import { cap, humanize } from "@/lib/plain";
+import { cap, humanize, roleWord } from "@/lib/plain";
 import { PersonTeams } from "../team-tags";
 import { TeamsPanel } from "./TeamsPanel";
+import { useT, tNow } from "@/lib/use-t";
+import { useLocale } from "@/components/LocaleProvider";
 
-const ROLES = [
-  { value: "member", label: "Member", hint: "Asks questions and uploads documents" },
-  { value: "viewer", label: "Viewer", hint: "Can only read" },
-  { value: "admin", label: "Admin", hint: "Manages people, settings and integrations" },
-];
+import { dateLocale } from "@/lib/i18n";
+const ROLES = () => ([
+  { value: "member", label: tNow("Member"), hint: tNow("Asks questions and uploads documents") },
+  { value: "viewer", label: tNow("Viewer"), hint: tNow("Can only read") },
+  { value: "admin", label: tNow("Admin"), hint: tNow("Manages people, settings and integrations") },
+]);
 
 interface Member { id: string; email: string; display_name: string | null; role: string; status: string }
+/** Someone invited by email who hasn't signed in yet (GET /invitations). */
+interface Invitation { id: string; email: string; role: string; invited_by: string | null; created_at: string; expires_at: string; expired: boolean }
 interface Group { id: string; name: string; members: number }
 interface ApiKey { id: string; name: string; prefix: string; scopes: string[]; workspace_ids: string[]; created_at: string; expires_at: string | null; last_used_at: string | null; revoked_at: string | null }
 const SCOPES = ["query", "documents:read", "documents:write"] as const;
-const SCOPE_COPY: Record<string, string> = { query: "Ask questions", "documents:read": "Read documents", "documents:write": "Upload documents" };
+const SCOPE_COPY = (): Record<string, string> => ({ query: tNow("Ask questions"), "documents:read": tNow("Read documents"), "documents:write": tNow("Upload documents") });
 interface RoleMember { id: string; email: string; display_name: string | null; org_role: string; roles: string[] }
-const FUNCTIONAL_ROLES: { id: string; label: string; hint: string }[] = [
-  { id: "reviewer", label: "Reviewer", hint: "Reviews agent outputs in workflows" },
-  { id: "approver", label: "Approver", hint: "Gives the final OK on a specific document version" },
-  { id: "signatory", label: "Signatory", hint: "Can sign documents and approve sending them for signature" },
-  { id: "auditor", label: "Auditor", hint: "Can see every workflow and its full history" },
-];
+const FUNCTIONAL_ROLES = (): { id: string; label: string; hint: string }[] => ([
+  { id: "reviewer", label: tNow("Reviewer"), hint: tNow("Reviews agent outputs in workflows") },
+  { id: "approver", label: tNow("Approver"), hint: tNow("Gives the final OK on a specific document version") },
+  { id: "signatory", label: tNow("Signatory"), hint: tNow("Can sign documents and approve sending them for signature") },
+  { id: "auditor", label: tNow("Auditor"), hint: tNow("Can see every workflow and its full history") },
+]);
 interface AuditEvent { id: number; action: string; resource: string; decision: string; created_at: string; hash: string; actor_id: string | null }
 
 function CopyButton({ text, label = "Copy key" }: { text: string; label?: string }) {
+  const tr = useT();
   const [done, setDone] = useState(false);
   return (
     <button
       type="button"
       className="quiet icon small"
-      aria-label={done ? "Copied" : label}
+      aria-label={done ? tr("Copied") : label}
       onClick={async () => {
         await navigator.clipboard.writeText(text);
         setDone(true);
@@ -51,20 +57,20 @@ function CopyButton({ text, label = "Copy key" }: { text: string; label?: string
   );
 }
 
-const date = (s: string) => new Date(s).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
-const day = (s: string) => new Date(s).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
-const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const date = (s: string) => new Date(s).toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+const day = (s: string) => new Date(s).toLocaleDateString(dateLocale(), { day: "numeric", month: "short", year: "numeric" });
+const time = (s: string) => new Date(s).toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
 
 type Tab = "members" | "teams" | "roles" | "sharing" | "groups" | "keys" | "audit";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "members", label: "Members" },
-  { id: "teams", label: "Teams" },
-  { id: "roles", label: "Roles" },
-  { id: "sharing", label: "Sharing" },
-  { id: "groups", label: "Groups" },
-  { id: "keys", label: "Integrations" },
-  { id: "audit", label: "Activity log" },
-];
+const TABS = (): { id: Tab; label: string }[] => ([
+  { id: "members", label: tNow("Members") },
+  { id: "teams", label: tNow("Teams") },
+  { id: "roles", label: tNow("Roles") },
+  { id: "sharing", label: tNow("Sharing") },
+  { id: "groups", label: tNow("Groups") },
+  { id: "keys", label: tNow("Integrations") },
+  { id: "audit", label: tNow("Activity log") },
+]);
 
 type LoadStatus = "loading" | "ready" | "failed";
 
@@ -104,9 +110,11 @@ function Resource({ value }: { value: string }) {
 }
 
 export default function AdminPage() {
+  const tr = useT();
   const { org } = useParams<{ org: string }>();
   const { workspaceId, workspaces, teams } = useOrg();
   const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [email, setEmail] = useState("");
@@ -132,13 +140,14 @@ export default function AdminPage() {
       const { esign_provider: _p, ...body } = next as typeof next & { can_edit?: boolean };
       delete (body as { can_edit?: boolean }).can_edit;
       setExt(await api<NonNullable<typeof ext>>(`organizations/${org}/external-policy`, { method: "PUT", body }));
-    }, "External sharing policy saved");
+    }, tr("External sharing policy saved"));
   const [keyName, setKeyName] = useState("");
   const [keyScopes, setKeyScopes] = useState<string[]>(["query"]);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const clearNotice = useCallback(() => setNotice(null), []);
+  const locale = useLocale();
   const confirm = useConfirm();
   const memberForm = useFormErrors();
   const groupForm = useFormErrors();
@@ -149,7 +158,7 @@ export default function AdminPage() {
   useEffect(() => {
     const sync = () => {
       const h = window.location.hash.slice(1) as Tab;
-      if (TABS.some((t) => t.id === h)) setTabState(h);
+      if (TABS().some((t) => t.id === h)) setTabState(h);
     };
     sync();
     window.addEventListener("hashchange", sync);
@@ -162,13 +171,15 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      const [m, g, a, k, fr] = await Promise.all([
+      const [m, g, a, k, fr, inv] = await Promise.all([
         api<{ members: Member[] }>(`organizations/${org}/members`),
         api<{ groups: Group[] }>(`organizations/${org}/groups`),
         api<{ events: AuditEvent[] }>(`organizations/${org}/audit`),
         api<{ api_keys: ApiKey[] }>(`organizations/${org}/api-keys`),
         api<{ members: RoleMember[] }>(`organizations/${org}/functional-roles`),
+        api<{ invitations: Invitation[] }>(`organizations/${org}/invitations`),
       ]);
+      setInvitations(inv.invitations);
       setRoleMembers(fr.members);
       setKeys(k.api_keys);
       setMembers(m.members);
@@ -196,6 +207,26 @@ export default function AdminPage() {
     }
   };
 
+  // Adds a current member's new role, or invites anyone else by email (they join on their first sign-in).
+  const invite = async (to: string, asRole = role): Promise<boolean> => {
+    setError(null);
+    try {
+      const r = await api<{ status: "added" | "invited"; email_sent?: boolean }>(`organizations/${org}/members`, { method: "POST", body: { email: to, role: asRole, locale } });
+      setNotice(
+        r.status === "added"
+          ? tr("Member added")
+          : r.email_sent
+            ? tr("Invitation sent to {email}", { email: to })
+            : tr("{email} is invited. Ask them to sign in with that email to join.", { email: to }),
+      );
+      load();
+      return true;
+    } catch (e) {
+      setError(e as Error);
+      return false;
+    }
+  };
+
   const wsName = workspaces.find((w) => w.id === workspaceId)?.name ?? "workspace";
   const counts: Record<Tab, number> = { teams: (teams ?? []).filter((t) => !t.archived_at).length, sharing: ext?.allowed_domains.length ?? 0, roles: roleMembers.filter((m) => m.roles.length).length, members: members.length, groups: groups.length, keys: keys.filter((k) => !k.revoked_at).length, audit: events.length };
   const denied = events.filter((e) => e.decision !== "allow").length;
@@ -210,11 +241,11 @@ export default function AdminPage() {
   }
 
   function onTabKey(e: React.KeyboardEvent) {
-    const i = TABS.findIndex((t) => t.id === tab);
-    const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : null;
+    const i = TABS().findIndex((t) => t.id === tab);
+    const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? TABS().length - 1 : null;
     if (next === null) return;
     e.preventDefault();
-    const t = TABS[(next + TABS.length) % TABS.length];
+    const t = TABS()[(next + TABS().length) % TABS().length];
     setTab(t.id);
     document.getElementById(`tab-${t.id}`)?.focus();
   }
@@ -222,7 +253,7 @@ export default function AdminPage() {
   if (errorKind) {
     return (
       <div className="main">
-        <AppErrorState kind={errorKind} backHref={`/app/${org}/ask`} backLabel="Back to Ask" onRetry={retryLoad} />
+        <AppErrorState kind={errorKind} backHref={`/app/${org}/ask`} backLabel={tr("Back to Ask")} onRetry={retryLoad} />
       </div>
     );
   }
@@ -231,7 +262,7 @@ export default function AdminPage() {
     <div className="page">
       <header className="page-bar">
         <div className="crumbs">
-          <strong>Governance</strong>
+          <strong>{tr("Governance")}</strong>
           <span className="crumb-sep" aria-hidden="true">/</span>
           <span className="crumb-ws">
             <IconFolder size={15} />
@@ -243,13 +274,13 @@ export default function AdminPage() {
       <div className="main">
         <header className="page-head" style={{ marginBottom: 20 }}>
           <div>
-            <h1>Governance</h1>
-            <p className="sub">People, teams, roles, groups, sharing rules, integrations and the activity log.</p>
+            <h1>{tr("Governance")}</h1>
+            <p className="sub">{tr("People, teams, roles, groups, sharing rules, integrations and the activity log.")}</p>
           </div>
         </header>
 
-        <div className="tabs" role="tablist" aria-label="Governance sections" onKeyDown={onTabKey}>
-          {TABS.map((t) => (
+        <div className="tabs" role="tablist" aria-label={tr("Governance sections")} onKeyDown={onTabKey}>
+          {TABS().map((t) => (
             <button
               key={t.id}
               id={`tab-${t.id}`}
@@ -260,7 +291,7 @@ export default function AdminPage() {
               tabIndex={tab === t.id ? 0 : -1}
               onClick={() => setTab(t.id)}
             >
-              {t.label}
+              {tr(t.label)}
               {(t.id === "sharing" ? loadingSharing : dataStatus === "loading") ? (
                 <Skel w={16} h={13} r={999} />
               ) : (t.id === "sharing" ? !!ext : dataStatus === "ready") && <span className="count"><SoftText text={String(counts[t.id])} /></span>}
@@ -272,7 +303,7 @@ export default function AdminPage() {
           <div className="alert" style={{ marginTop: 20 }}>
             <IconAlert size={16} />
             <span style={{ flex: 1 }}>{error.message}</span>
-            <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label="Dismiss">
+            <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label={tr("Dismiss")}>
               <IconX size={14} />
             </button>
           </div>
@@ -282,7 +313,7 @@ export default function AdminPage() {
           <section className="tab-panel" id="panel-members" role="tabpanel" aria-labelledby="tab-members" key="members">
             <div className="section-head">
               <div>
-                <p>The person must have signed in at least once.</p>
+                <p>{tr("Invite people by email. They join the first time they sign in with that address.")}</p>
               </div>
             </div>
             <form
@@ -291,22 +322,73 @@ export default function AdminPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!memberForm.validate(e.currentTarget)) return;
-                run(() => api(`organizations/${org}/members`, { method: "POST", body: { email, role } }), "Member added").then(() => setEmail(""));
+                const to = email.trim();
+                invite(to).then((ok) => ok && setEmail(""));
               }}
             >
-              <TextField type="email" required icon={IconMail} placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Member email" {...memberForm.field("email")} />
-              <Select value={role} onChange={setRole} options={ROLES} ariaLabel="Role" />
-              <button type="submit" className="primary">Add member</button>
+              <TextField type="email" required icon={IconMail} placeholder={tr("name@company.com")} value={email} onChange={(e) => setEmail(e.target.value)} aria-label={tr("Member email")} {...memberForm.field("email")} />
+              <Select value={role} onChange={setRole} options={ROLES()} ariaLabel={tr("Role")} />
+              <button type="submit" className="primary">{tr("Invite")}</button>
             </form>
-            <GovernanceTable status={dataStatus} label="Loading members…" columns={["", "hide-sm", "", "hide-sm"]} leading="avatar">
+            {invitations.length > 0 && (
+              <div className="table-card">
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Member</th>
-                      <th className="hide-sm">Role</th>
-                      <th>Access to {wsName}</th>
-                      <th className="hide-sm">Groups</th>
+                      <th>{tr("Pending invitation")}</th>
+                      <th className="hide-sm">{tr("Role")}</th>
+                      <th>{tr("Status")}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invitations.map((i) => (
+                      <tr key={i.id}>
+                        <td>
+                          <div className="cell-title">
+                            <Avatar name={i.email} size="sm" />
+                            <div style={{ minWidth: 0 }}>
+                              <strong className="ellipsis">{i.email}</strong>
+                              {i.invited_by && <div className="muted ellipsis" style={{ fontSize: 13 }}>{tr("Invited by {name}", { name: i.invited_by })}</div>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="hide-sm">{tr(roleWord(i.role))}</td>
+                        <td>
+                          {i.expired ? (
+                            <span className="badge warn">{tr("Expired")}</span>
+                          ) : (
+                            <span className="badge">{tr("Waiting until {date}", { date: new Date(i.expires_at).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }) })}</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button type="button" className="ghost small" onClick={() => invite(i.email, i.role)}>{tr("Send again")}</button>
+                          <button
+                            type="button"
+                            className="danger small"
+                            onClick={async () => {
+                              const ok = await confirm({ title: tr("Cancel the invitation to {email}?", { email: i.email }), body: tr("They won't join when they sign in. You can invite them again later."), confirmLabel: tr("Cancel invitation"), tone: "danger" });
+                              if (ok) run(() => api(`organizations/${org}/invitations/${i.id}`, { method: "DELETE" }), tr("Invitation cancelled"));
+                            }}
+                          >{tr("Cancel")}</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              </div>
+            )}
+            <GovernanceTable status={dataStatus} label={tr("Loading members…")} columns={["", "hide-sm", "", "hide-sm"]} leading="avatar">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{tr("Member")}</th>
+                      <th className="hide-sm">{tr("Role")}</th>
+                      <th>{tr("Access to")}{" "}{wsName}</th>
+                      <th className="hide-sm">{tr("Groups")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -327,26 +409,22 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td className="hide-sm">
-                          <span className={`badge${m.role === "owner" || m.role === "admin" ? " accent" : ""}`}>{cap(m.role)}</span>
+                          <span className={`badge${m.role === "owner" || m.role === "admin" ? " accent" : ""}`}>{tr(roleWord(m.role))}</span>
                         </td>
                         <td>
-                          <div className="btn-group" role="group" aria-label={`Grant access to ${m.email}`}>
-                            <button type="button" onClick={() => run(() => api(`organizations/${org}/workspaces/${workspaceId}/members`, { method: "POST", body: { user_id: m.id, role: "reader" } }), "Read access granted")}>
-                              Can read
-                            </button>
-                            <button type="button" onClick={() => run(() => api(`organizations/${org}/workspaces/${workspaceId}/members`, { method: "POST", body: { user_id: m.id, role: "editor" } }), "Edit access granted")}>
-                              Can edit
-                            </button>
+                          <div className="btn-group" role="group" aria-label={tr("Grant access to {email}", { email: m.email })}>
+                            <button type="button" onClick={() => run(() => api(`organizations/${org}/workspaces/${workspaceId}/members`, { method: "POST", body: { user_id: m.id, role: "reader" } }), tr("Read access granted"))}>{tr("Can read")}</button>
+                            <button type="button" onClick={() => run(() => api(`organizations/${org}/workspaces/${workspaceId}/members`, { method: "POST", body: { user_id: m.id, role: "editor" } }), tr("Edit access granted"))}>{tr("Can edit")}</button>
                           </div>
                         </td>
                         <td className="hide-sm">
                           <Select
                             size="sm"
                             value=""
-                            placeholder={groups.length ? "Add to group…" : "No groups"}
-                            ariaLabel={`Add ${m.email} to a group`}
+                            placeholder={groups.length ? tr("Add to group…") : tr("No groups")}
+                            ariaLabel={tr("Add {email} to a group", { email: m.email })}
                             options={groups.map((g) => ({ value: g.id, label: g.name, hint: `${g.members} ${g.members === 1 ? "member" : "members"}` }))}
-                            onChange={(g) => run(() => api(`organizations/${org}/groups/${g}/members`, { method: "POST", body: { user_id: m.id } }), "Added to group")}
+                            onChange={(g) => run(() => api(`organizations/${org}/groups/${g}/members`, { method: "POST", body: { user_id: m.id } }), tr("Added to group"))}
                           />
                         </td>
                       </tr>
@@ -368,7 +446,7 @@ export default function AdminPage() {
           <section className="tab-panel" id="panel-groups" role="tabpanel" aria-labelledby="tab-groups" key="groups">
             <div className="section-head">
               <div>
-                <p>Put people in groups to give them access to documents together.</p>
+                <p>{tr("Put people in groups to give them access to documents together.")}</p>
               </div>
             </div>
             <form
@@ -377,28 +455,28 @@ export default function AdminPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!groupForm.validate(e.currentTarget)) return;
-                run(() => api(`organizations/${org}/groups`, { method: "POST", body: { name: groupName } }), "Group created");
+                run(() => api(`organizations/${org}/groups`, { method: "POST", body: { name: groupName } }), tr("Group created"));
                 setGroupName("");
               }}
             >
-              <TextField required placeholder="Group name, e.g. Finance" value={groupName} onChange={(e) => setGroupName(e.target.value)} aria-label="Group name" {...groupForm.field("group")} />
-              <button type="submit" className="primary">Create group</button>
+              <TextField required placeholder={tr("Group name, e.g. Finance")} value={groupName} onChange={(e) => setGroupName(e.target.value)} aria-label={tr("Group name")} {...groupForm.field("group")} />
+              <button type="submit" className="primary">{tr("Create group")}</button>
             </form>
-            <GovernanceTable status={dataStatus} label="Loading groups…" columns={["", "num", "hide-sm"]}>
+            <GovernanceTable status={dataStatus} label={tr("Loading groups…")} columns={["", "num", "hide-sm"]}>
               {groups.length === 0 ? (
                 <div className="empty">
                   <StateIllustration kind="groups" />
-                  <strong>No groups yet</strong>
-                  <span>Create one to share documents with several people at once.</span>
+                  <strong>{tr("No groups yet")}</strong>
+                  <span>{tr("Create one to share documents with several people at once.")}</span>
                 </div>
               ) : (
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
-                        <th>Group</th>
-                        <th className="num">Members</th>
-                        <th className="hide-sm">ID for integrations</th>
+                        <th>{tr("Group")}</th>
+                        <th className="num">{tr("Members")}</th>
+                        <th className="hide-sm">{tr("ID for integrations")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -414,7 +492,7 @@ export default function AdminPage() {
                           <td className="hide-sm">
                             <span className="principal">
                               <code>group:{g.id}</code>
-                              <CopyButton text={`group:${g.id}`} label="Copy group ID" />
+                              <CopyButton text={`group:${g.id}`} label={tr("Copy group ID")} />
                             </span>
                           </td>
                         </tr>
@@ -431,7 +509,7 @@ export default function AdminPage() {
           <section className="tab-panel" id="panel-keys" role="tabpanel" aria-labelledby="tab-keys" key="keys">
             <div className="section-head">
               <div>
-                <p>Keys let other software connect to {wsName}. Usually set up by your IT team. Keys expire after 90 days and are shown only once.</p>
+                <p>{tr("Keys let other software connect to")}{" "}{wsName}{tr(". Usually set up by your IT team. Keys expire after 90 days and are shown only once.")}</p>
               </div>
             </div>
             <form
@@ -449,55 +527,53 @@ export default function AdminPage() {
                   });
                   setNewToken(r.token);
                   setKeyName("");
-                }, "Key created");
+                }, tr("Key created"));
               }}
             >
               <div className="inline-form">
-                <TextField required placeholder="Integration name" value={keyName} onChange={(e) => setKeyName(e.target.value)} aria-label="Integration name" {...keyForm.field("keyName")} />
-                <button type="submit" className="primary" disabled={!keyScopes.length || !workspaceId}>
-                  Create key
-                </button>
+                <TextField required placeholder={tr("Integration name")} value={keyName} onChange={(e) => setKeyName(e.target.value)} aria-label={tr("Integration name")} {...keyForm.field("keyName")} />
+                <button type="submit" className="primary" disabled={!keyScopes.length || !workspaceId}>{tr("Create key")}</button>
               </div>
               <div className="scopes">
-                <span className="scopes-label">What it can do</span>
+                <span className="scopes-label">{tr("What it can do")}</span>
                 {SCOPES.map((sc) => (
                   <Checkbox
                     key={sc}
                     checked={keyScopes.includes(sc)}
                     onChange={(on) => setKeyScopes((cur) => (on ? [...cur, sc] : cur.filter((x) => x !== sc)))}
-                    label={SCOPE_COPY[sc] ?? sc}
+                    label={tr(SCOPE_COPY()[sc]) ?? sc}
                   />
                 ))}
               </div>
             </form>
             {newToken && (
               <div className="secret">
-                <strong>Copy the key now. You won't be able to see it again.</strong>
+                <strong>{tr("Copy the key now. You won't be able to see it again.")}</strong>
                 <div className="token">
                   <code>{newToken}</code>
                   <CopyButton text={newToken} />
                 </div>
               </div>
             )}
-            <GovernanceTable status={dataStatus} label="Loading API keys…" columns={["", "hide-sm", "hide-sm", "hide-md", "", ""]}>
+            <GovernanceTable status={dataStatus} label={tr("Loading API keys…")} columns={["", "hide-sm", "hide-sm", "hide-md", "", ""]}>
               {keys.length === 0 ? (
                 <div className="empty">
                   <StateIllustration kind="keys" />
-                  <strong>No keys yet</strong>
-                  <span>Create one when you connect an integration.</span>
+                  <strong>{tr("No keys yet")}</strong>
+                  <span>{tr("Create one when you connect an integration.")}</span>
                 </div>
               ) : (
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th className="hide-sm">Key</th>
-                        <th className="hide-sm">Can</th>
-                        <th className="hide-md">Last used</th>
-                        <th>Status</th>
+                        <th>{tr("Name")}</th>
+                        <th className="hide-sm">{tr("Key")}</th>
+                        <th className="hide-sm">{tr("Can")}</th>
+                        <th className="hide-md">{tr("Last used")}</th>
+                        <th>{tr("Status")}</th>
                         <th>
-                          <span className="sr-only">Actions</span>
+                          <span className="sr-only">{tr("Actions")}</span>
                         </th>
                       </tr>
                     </thead>
@@ -507,33 +583,27 @@ export default function AdminPage() {
                           <td>
                             <strong style={{ fontWeight: 500 }}>{k.name}</strong>
                           </td>
-                          <td className="mono muted hide-sm">rsk_{k.prefix}_…</td>
+                          <td className="mono muted hide-sm">{tr("rsk_")}{k.prefix}_…</td>
                           <td className="hide-sm">
                             <div className="row" style={{ gap: 4 }}>
                               {k.scopes.map((s) => (
                                 <span key={s} className="badge" style={{ fontSize: 11.5 }}>
-                                  {SCOPE_COPY[s] ?? s}
+                                  {tr(SCOPE_COPY()[s]) ?? s}
                                 </span>
                               ))}
                             </div>
                           </td>
-                          <td className="muted hide-md nowrap">{k.last_used_at ? date(k.last_used_at) : "Never"}</td>
+                          <td className="muted hide-md nowrap">{k.last_used_at ? date(k.last_used_at) : tr("Never")}</td>
                           <td>
                             {k.revoked_at ? (
                               <span className="badge err">
-                                <span className="dot" />
-                                Revoked
-                              </span>
+                                <span className="dot" />{tr("Revoked")}</span>
                             ) : k.expires_at && new Date(k.expires_at) < new Date() ? (
                               <span className="badge">
-                                <span className="dot" />
-                                Expired
-                              </span>
+                                <span className="dot" />{tr("Expired")}</span>
                             ) : (
                               <span className="badge ok">
-                                <span className="dot" />
-                                Active
-                              </span>
+                                <span className="dot" />{tr("Active")}</span>
                             )}
                           </td>
                           <td className="actions">
@@ -542,12 +612,10 @@ export default function AdminPage() {
                                 type="button"
                                 className="danger small"
                                 onClick={async () => {
-                                  const ok = await confirm({ title: `Revoke "${k.name}"?`, body: "Integrations using it will stop working immediately.", confirmLabel: "Revoke", tone: "danger" });
-                                  if (ok) run(() => api(`organizations/${org}/api-keys/${k.id}`, { method: "DELETE" }), "Key revoked");
+                                  const ok = await confirm({ title: `Revoke "${k.name}"?`, body: tr("Integrations using it will stop working immediately."), confirmLabel: tr("Revoke"), tone: "danger" });
+                                  if (ok) run(() => api(`organizations/${org}/api-keys/${k.id}`, { method: "DELETE" }), tr("Key revoked"));
                                 }}
-                              >
-                                Revoke
-                              </button>
+                              >{tr("Revoke")}</button>
                             )}
                           </td>
                         </tr>
@@ -562,7 +630,7 @@ export default function AdminPage() {
 
         {tab === "sharing" && loadingSharing && (
           <section className="tab-panel" id="panel-sharing" role="tabpanel" aria-labelledby="tab-sharing">
-            <SkeletonStatus label="Loading external sharing policy…" className="form-card stack">
+            <SkeletonStatus label={tr("Loading external sharing policy…")} className="form-card stack">
               <Skel w={160} h={14} />
               <Skel w="70%" h={38} r={10} />
               <div className="ob-fields">
@@ -577,19 +645,19 @@ export default function AdminPage() {
           <section className="tab-panel" id="panel-sharing" role="tabpanel" aria-labelledby="tab-sharing" key="sharing">
             <div className="section-head">
               <div>
-                <p>Choose who outside your organization can receive documents and for how long. With no domains listed, nothing can be shared outside.</p>
-                <p>Electronic signatures · {ext.esign_provider === "native" ? "Ragsis Sign" : ext.esign_provider === "local" ? "Development simulator" : "Disabled"}</p>
+                <p>{tr("Choose who outside your organization can receive documents and for how long. With no domains listed, nothing can be shared outside.")}</p>
+                <p>{tr("Electronic signatures ·")}{" "}{ext.esign_provider === "native" ? tr("Ragsis Sign") : ext.esign_provider === "local" ? tr("Development simulator") : tr("Disabled")}</p>
               </div>
             </div>
             <div className="form-card stack" style={{ gap: 16 }}>
               <div className="ob-group">
-                <span className="label">Companies you can share with (email domains)</span>
+                <span className="label">{tr("Companies you can share with (email domains)")}</span>
                 <div className="domain-chips">
-                  {ext.allowed_domains.length === 0 && <span className="muted" style={{ fontSize: 13 }}>None — nothing can be shared externally.</span>}
+                  {ext.allowed_domains.length === 0 && <span className="muted" style={{ fontSize: 13 }}>{tr("None — nothing can be shared externally.")}</span>}
                   {ext.allowed_domains.map((d) => (
                     <span key={d} className="badge">
                       {d}
-                      <button type="button" className="quiet icon small" aria-label={`Remove ${d}`} style={{ width: 18, height: 18 }} onClick={() => saveExt({ ...ext, allowed_domains: ext.allowed_domains.filter((x) => x !== d) })}>
+                      <button type="button" className="quiet icon small" aria-label={tr("Remove {d}", { d: d })} style={{ width: 18, height: 18 }} onClick={() => saveExt({ ...ext, allowed_domains: ext.allowed_domains.filter((x) => x !== d) })}>
                         <IconX size={12} />
                       </button>
                     </span>
@@ -604,17 +672,15 @@ export default function AdminPage() {
                     saveExt({ ...ext, allowed_domains: [...new Set([...ext.allowed_domains, d])] }).then(() => setNewDomain(""));
                   }}
                 >
-                  <TextField placeholder="partner.com" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} aria-label="Domain to allow" />
-                  <button type="submit" className="primary" disabled={!newDomain.trim()}>
-                    Allow domain
-                  </button>
+                  <TextField placeholder="partner.com" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} aria-label={tr("Domain to allow")} />
+                  <button type="submit" className="primary" disabled={!newDomain.trim()}>{tr("Allow domain")}</button>
                 </form>
               </div>
               <div className="ob-fields">
-                <TextField label="Shared links expire after (days)" type="number" min={1} max={30} value={ext.share_max_days} onChange={(e) => setExt({ ...ext, share_max_days: Number(e.target.value) })} onBlur={() => saveExt(ext)} />
-                <TextField label="An approval is valid for (hours)" type="number" min={1} max={168} value={ext.approval_max_age_hours} onChange={(e) => setExt({ ...ext, approval_max_age_hours: Number(e.target.value) })} onBlur={() => saveExt(ext)} />
+                <TextField label={tr("Shared links expire after (days)")} type="number" min={1} max={30} value={ext.share_max_days} onChange={(e) => setExt({ ...ext, share_max_days: Number(e.target.value) })} onBlur={() => saveExt(ext)} />
+                <TextField label={tr("An approval is valid for (hours)")} type="number" min={1} max={168} value={ext.approval_max_age_hours} onChange={(e) => setExt({ ...ext, approval_max_age_hours: Number(e.target.value) })} onBlur={() => saveExt(ext)} />
               </div>
-              <Checkbox checked={ext.require_mfa_for_signature} onChange={(on) => saveExt({ ...ext, require_mfa_for_signature: on })} label="Require two-step sign-in to approve sending documents for signature" />
+              <Checkbox checked={ext.require_mfa_for_signature} onChange={(on) => saveExt({ ...ext, require_mfa_for_signature: on })} label={tr("Require two-step sign-in to approve sending documents for signature")} />
             </div>
           </section>
         )}
@@ -623,17 +689,17 @@ export default function AdminPage() {
           <section className="tab-panel" id="panel-roles" role="tabpanel" aria-labelledby="tab-roles" key="roles">
             <div className="section-head">
               <div>
-                <p>Roles decide who reviews and approves steps in workflows. Whoever starts a workflow can't approve it themselves.</p>
-                <p>{FUNCTIONAL_ROLES.map((r) => `${r.label}: ${r.hint.toLowerCase()}`).join(" · ")}.</p>
+                <p>{tr("Roles decide who reviews and approves steps in workflows. Whoever starts a workflow can't approve it themselves.")}</p>
+                <p>{FUNCTIONAL_ROLES().map((r) => `${r.label}: ${r.hint.toLowerCase()}`).join(" · ")}.</p>
               </div>
             </div>
-            <GovernanceTable status={dataStatus} label="Loading roles…" columns={["", ""]} leading="avatar">
+            <GovernanceTable status={dataStatus} label={tr("Loading roles…")} columns={["", ""]} leading="avatar">
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Member</th>
-                      <th>Roles</th>
+                      <th>{tr("Member")}</th>
+                      <th>{tr("Roles")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -654,8 +720,8 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td>
-                          <div className="chips" role="group" aria-label={`Roles for ${m.email}`}>
-                            {FUNCTIONAL_ROLES.map((r) => {
+                          <div className="chips" role="group" aria-label={tr("Roles for {email}", { email: m.email })}>
+                            {FUNCTIONAL_ROLES().map((r) => {
                               const on = m.roles.includes(r.id);
                               return (
                                 <button
@@ -666,11 +732,11 @@ export default function AdminPage() {
                                   onClick={() =>
                                     run(
                                       () => api(`organizations/${org}/members/${m.id}/functional-roles`, { method: "PUT", body: { roles: on ? m.roles.filter((x) => x !== r.id) : [...m.roles, r.id] } }),
-                                      on ? `${r.label} removed` : `${r.label} granted`,
+                                      on ? tr("{label} removed", { label: r.label }) : tr("{label} granted", { label: r.label }),
                                     )
                                   }
                                 >
-                                  {r.label}
+                                  {tr(r.label)}
                                 </button>
                               );
                             })}
@@ -690,15 +756,15 @@ export default function AdminPage() {
             <div className="toolbar">
               <div className="section-head">
                 <div>
-                  <p>The last 200 actions in your organization. The log is tamper-proof.</p>
+                  <p>{tr("The last 200 actions in your organization. The log is tamper-proof.")}</p>
                 </div>
               </div>
-              <Seg role="group" aria-label="Filter by decision">
+              <Seg role="group" aria-label={tr("Filter by decision")}>
                 {(
                   [
-                    ["all", "All", events.length],
-                    ["allow", "Allowed", events.length - denied],
-                    ["deny", "Blocked", denied],
+                    ["all", tr("All"), events.length],
+                    ["allow", tr("Allowed"), events.length - denied],
+                    ["deny", tr("Blocked"), denied],
                   ] as const
                 ).map(([k, label, n]) => (
                   <button key={k} type="button" aria-pressed={decision === k} onClick={() => setDecision(k)}>
@@ -708,23 +774,23 @@ export default function AdminPage() {
                 ))}
               </Seg>
             </div>
-            <GovernanceTable status={dataStatus} label="Loading audit log…" columns={["", "", "hide-sm", "", "hide-md"]}>
+            <GovernanceTable status={dataStatus} label={tr("Loading audit log…")} columns={["", "", "hide-sm", "", "hide-md"]}>
               {shownEvents.length === 0 ? (
                 <div className="empty">
                   <StateIllustration kind="activity" />
-                  <strong>No events</strong>
-                  <span>{decision === "deny" ? "Nothing has been blocked." : "No activity recorded yet."}</span>
+                  <strong>{tr("No events")}</strong>
+                  <span>{decision === "deny" ? tr("Nothing has been blocked.") : tr("No activity recorded yet.")}</span>
                 </div>
               ) : (
                 <div className="table-wrap">
                   <table className="audit">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Action</th>
-                        <th className="hide-sm">On</th>
-                        <th>Result</th>
-                        <th className="hide-md">Fingerprint</th>
+                        <th>{tr("Date")}</th>
+                        <th>{tr("Action")}</th>
+                        <th className="hide-sm">{tr("On")}</th>
+                        <th>{tr("Result")}</th>
+                        <th className="hide-md">{tr("Fingerprint")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -745,7 +811,7 @@ export default function AdminPage() {
                           <td>
                             <span className={`badge ${ev.decision === "allow" ? "ok" : "err"}`}>
                               <span className="dot" />
-                              {ev.decision === "allow" ? "Allowed" : ev.decision === "deny" ? "Blocked" : cap(ev.decision)}
+                              {ev.decision === "allow" ? tr("Allowed") : ev.decision === "deny" ? tr("Blocked") : cap(ev.decision)}
                             </span>
                           </td>
                           <td className="mono faint hide-md">{ev.hash.slice(0, 10)}</td>

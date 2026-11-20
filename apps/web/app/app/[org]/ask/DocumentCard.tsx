@@ -6,6 +6,7 @@ import { FileTile } from "@/components/FileTile";
 import { IconChat, IconCheck, IconChevronDown, IconDownload, IconEye, IconFile, IconSpinner } from "@/components/icons";
 import { useDropdown } from "@/components/motion";
 import { CommandGroup, CommandItem, ComposerMenu, useComposerMenu } from "./ComposerMenu";
+import { useT } from "@/lib/use-t";
 
 /** What each format is called on screen (plain words, no extensions in the main copy). */
 export const FORMAT: Record<DocFormat, { name: string; short: string; hint: string }> = {
@@ -52,6 +53,7 @@ export async function downloadGenerated(org: string, id: string, format: DocForm
 }
 
 export function DocumentCard({ doc, orgId, onPreview }: { doc: GeneratedDocument; orgId: string; onPreview: (d: GeneratedDocument) => void }) {
+  const t = useT();
   const more = useDropdown();
   const [busy, setBusy] = useState<DocFormat | null>(null);
   const [done, setDone] = useState<DocFormat | null>(null);
@@ -85,40 +87,35 @@ export function DocumentCard({ doc, orgId, onPreview }: { doc: GeneratedDocument
       </div>
 
       {doc.outline.length > 0 && (
-        <ol className="gen-doc-outline" aria-label="Contents">
+        <ol className="gen-doc-outline" aria-label={t("Contents")}>
           {doc.outline.slice(0, 6).map((s, i) => (
             <li key={`${i}-${s}`}>
               <span className="num">{i + 1}</span>
               <span className="txt">{s}</span>
             </li>
           ))}
-          {doc.outline.length > 6 && <li className="more">+{doc.outline.length - 6} more</li>}
+          {doc.outline.length > 6 && <li className="more">+{doc.outline.length - 6}{" "}{t("more")}</li>}
         </ol>
       )}
 
       <div className="gen-doc-actions">
         <button type="button" className="primary small" onClick={() => get(doc.format)} disabled={!!busy} aria-busy={busy === doc.format}>
-          {busy === doc.format ? <IconSpinner size={14} /> : done === doc.format ? <IconCheck size={15} /> : <IconDownload size={15} />}
-          Download {FORMAT[doc.format].short}
+          {busy === doc.format ? <IconSpinner size={14} /> : done === doc.format ? <IconCheck size={15} /> : <IconDownload size={15} />}{t("Download")}{" "}{FORMAT[doc.format].short}
         </button>
         <button type="button" className="ghost small" onClick={() => onPreview(doc)}>
-          <IconEye size={15} />
-          Preview
-        </button>
+          <IconEye size={15} />{t("Preview")}</button>
         <div className="gen-doc-more" ref={more.ref}>
           <button type="button" className="quiet small" aria-haspopup="menu" aria-expanded={more.isOpen} onClick={more.toggle} disabled={!!busy && busy !== doc.format}>
-            {busy && busy !== doc.format ? <IconSpinner size={14} /> : null}
-            Other formats
-            <IconChevronDown size={14} />
+            {busy && busy !== doc.format ? <IconSpinner size={14} /> : null}{t("Other formats")}<IconChevronDown size={14} />
           </button>
           <div className={`menu ${more.cls}`} role="menu" data-origin="top-left" inert={!more.isOpen}>
-            <div className="menu-label">Download as</div>
+            <div className="menu-label">{t("Download as")}</div>
             {others.map((f) => (
               <button key={f} type="button" role="menuitem" className="menu-item gen-doc-fmt" onClick={() => get(f)}>
                 <FileTile ext={f} size={22} />
                 <span className="lbl">
-                  <span>{FORMAT[f].name}</span>
-                  <span className="hint">{FORMAT[f].hint}</span>
+                  <span>{t(FORMAT[f].name)}</span>
+                  <span className="hint">{t(FORMAT[f].hint)}</span>
                 </span>
                 {done === f && <IconCheck className="check" size={15} />}
               </button>
@@ -133,15 +130,14 @@ export function DocumentCard({ doc, orgId, onPreview }: { doc: GeneratedDocument
         </p>
       )}
       <p className="gen-doc-note">
-        <IconFile size={13} />
-        Written by AI using only your documents. Each fact cites its source, listed at the end of the file.
-      </p>
+        <IconFile size={13} />{t("Written by AI using only your documents. Each fact cites its source, listed at the end of the file.")}</p>
     </div>
   );
 }
 
 /** "Answer as…" chip in the composer: chat answer (default) or a file in one of the formats. */
 export function FormatPicker({ value, onChange, disabled }: { value: DocFormat | null; onChange: (v: DocFormat | null) => void; disabled?: boolean }) {
+  const t = useT();
   const state = useComposerMenu();
   const { menu, onTriggerKey } = state;
   const pick = (v: DocFormat | null) => {
@@ -150,19 +146,17 @@ export function FormatPicker({ value, onChange, disabled }: { value: DocFormat |
   };
   return (
     <div className="cmenu-host" ref={menu.ref}>
-      <span className={`date-chip fmt-chip${value ? " is-set" : ""}`} data-tip={value || menu.isOpen ? undefined : "Get the answer as a file: PDF, Word, PowerPoint or Excel"}>
+      <span className={`date-chip fmt-chip${value ? " is-set" : ""}`} data-tip={value || menu.isOpen ? undefined : t("Get the answer as a file: PDF, Word, PowerPoint or Excel")}>
         <button type="button" className="date-trigger" aria-haspopup="menu" aria-expanded={menu.isOpen} onClick={menu.toggle} onKeyDown={onTriggerKey} disabled={disabled}>
-          {value ? <FileTile ext={value} size={16} /> : <IconChat size={15} />}
-          Answer as
-          <span className="date-value">{value ? FORMAT[value].short : "chat"}</span>
+          {value ? <FileTile ext={value} size={16} /> : <IconChat size={15} />}{t("Answer as")}<span className="date-value">{value ? FORMAT[value].short : t("chat")}</span>
           <IconChevronDown size={13} />
         </button>
       </span>
-      <ComposerMenu state={state} label="Answer as" footer="You can also ask for a file in your own words: “make a PowerPoint about…”.">
+      <ComposerMenu state={state} label={t("Answer as")} footer={t("You can also ask for a file in your own words: “make a PowerPoint about…”.")}>
         <CommandGroup>
-          <CommandItem icon={<IconChat size={16} />} title="Chat answer" hint="Here, with sources" checked={value === null} onClick={() => pick(null)} />
+          <CommandItem icon={<IconChat size={16} />} title={t("Chat answer")} hint={t("Here, with sources")} checked={value === null} onClick={() => pick(null)} />
           {PICKABLE.map((f) => (
-            <CommandItem key={f} bare icon={<FileTile ext={f} size={26} />} title={FORMAT[f].name} hint={FORMAT[f].hint} checked={value === f} onClick={() => pick(f)} />
+            <CommandItem key={f} bare icon={<FileTile ext={f} size={26} />} title={t(FORMAT[f].name)} hint={t(FORMAT[f].hint)} checked={value === f} onClick={() => pick(f)} />
           ))}
         </CommandGroup>
       </ComposerMenu>

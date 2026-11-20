@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { IconSpinner } from "./icons";
+import { useT } from "@/lib/use-t";
 
 interface Segment {
   chunk_id: string;
@@ -46,6 +47,7 @@ function parseLines(segments: Segment[]): Line[] {
 
 /** Recording player with its transcript. Clicking a line plays from there; the line being spoken is highlighted. */
 export default function AudioView({ src, orgId, documentId, versionId, title, startAt }: { src: string; orgId: string; documentId: string; versionId: string; title: string; startAt?: number }) {
+  const t = useT();
   const audio = useRef<HTMLAudioElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const [segments, setSegments] = useState<Segment[] | null>(null);
@@ -95,21 +97,21 @@ export default function AudioView({ src, orgId, documentId, versionId, title, st
     <div className="audio-view">
       <div className="audio-player">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption -- the transcript below is the text alternative */}
-        <audio ref={audio} src={src} controls preload="metadata" aria-label={`Recording: ${title}`} onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
+        <audio ref={audio} src={src} controls preload="metadata" aria-label={t("Recording: {title}", { title: title })} onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
       </div>
       {failed ? (
-        <p className="audio-empty">The transcript couldn't be loaded. You can still listen to the recording.</p>
+        <p className="audio-empty">{t("The transcript couldn't be loaded. You can still listen to the recording.")}</p>
       ) : segments === null ? (
         <p className="audio-empty" aria-busy="true">
           <IconSpinner size={18} />
         </p>
       ) : lines.length === 0 ? (
-        <p className="audio-empty">This recording has no transcript.</p>
+        <p className="audio-empty">{t("This recording has no transcript.")}</p>
       ) : (
-        <ol ref={list} className="transcript" aria-label="Transcript">
+        <ol ref={list} className="transcript" aria-label={t("Transcript")}>
           {lines.map((l, i) => (
             <li key={`${l.at}-${i}`}>
-              <button type="button" className="transcript-line" aria-current={i === active} onClick={() => play(l.at)} aria-label={`Play from ${clock(l.at)}`}>
+              <button type="button" className="transcript-line" aria-current={i === active} onClick={() => play(l.at)} aria-label={t("Play from {v1}", { v1: clock(l.at) })}>
                 <span className="mono t">{clock(l.at)}</span>
                 <span>
                   {l.speaker && <strong>{l.speaker} </strong>}
@@ -120,7 +122,7 @@ export default function AudioView({ src, orgId, documentId, versionId, title, st
           ))}
         </ol>
       )}
-      <p className="audio-foot">Transcript written by AI. Speaker numbers tell voices apart; they are not names.</p>
+      <p className="audio-foot">{t("Transcript written by AI. Speaker numbers tell voices apart; they are not names.")}</p>
     </div>
   );
 }

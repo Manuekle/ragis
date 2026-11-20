@@ -13,7 +13,9 @@ import { Checkbox, Seg, SoftText, Toast } from "@/components/motion";
 import { Disclosure, grainVars, Select, TextField, useConfirm } from "@/components/ui";
 import { duration } from "@/lib/plain";
 import { AgentGlyph, AUTONOMY, RiskBadge, StatusBadge, versionLabel } from "../shared";
+import { useT, tNow } from "@/lib/use-t";
 
+import { dateLocale } from "@/lib/i18n";
 /* ───────────── types (mirror apps/api/src/lib/policy.ts) ───────────── */
 interface Config {
   name: string;
@@ -106,83 +108,83 @@ interface Run {
 }
 
 /* Plain-language choices. The editor stores the same values the API expects; people pick words, not numbers. */
-const PROFILES: [string, string, string][] = [
-  ["reasoning", "Thorough", "Takes a moment to think. Best for most agents."],
-  ["fast", "Quick", "Fast, short answers for simple questions."],
-  ["vision", "Reads images", "Understands scans, charts and photos."],
-  ["local", "Private", "Keeps your data inside your own environment."],
-];
-const STYLES: { value: number; label: string; hint: string }[] = [
-  { value: 0.1, label: "Precise", hint: "Sticks closely to the documents. Best for legal, finance and compliance." },
-  { value: 0.4, label: "Balanced", hint: "Clear, natural wording that stays grounded in the documents." },
-  { value: 0.8, label: "Creative", hint: "More varied wording, for drafting and brainstorming." },
-];
-const LENGTHS: { value: number; label: string; hint: string }[] = [
-  { value: 4000, label: "Short", hint: "Brief, to-the-point answers." },
-  { value: 8000, label: "Standard", hint: "Enough room for most answers." },
-  { value: 16000, label: "Detailed", hint: "Long reports and in-depth reviews." },
-];
+const PROFILES = (): [string, string, string][] => ([
+  ["reasoning", tNow("Thorough"), tNow("Takes a moment to think. Best for most agents.")],
+  ["fast", tNow("Quick"), tNow("Fast, short answers for simple questions.")],
+  ["vision", tNow("Reads images"), tNow("Understands scans, charts and photos.")],
+  ["local", tNow("Private"), tNow("Keeps your data inside your own environment.")],
+]);
+const STYLES = (): { value: number; label: string; hint: string }[] => ([
+  { value: 0.1, label: tNow("Precise"), hint: tNow("Sticks closely to the documents. Best for legal, finance and compliance.") },
+  { value: 0.4, label: tNow("Balanced"), hint: tNow("Clear, natural wording that stays grounded in the documents.") },
+  { value: 0.8, label: tNow("Creative"), hint: tNow("More varied wording, for drafting and brainstorming.") },
+]);
+const LENGTHS = (): { value: number; label: string; hint: string }[] => ([
+  { value: 4000, label: tNow("Short"), hint: tNow("Brief, to-the-point answers.") },
+  { value: 8000, label: tNow("Standard"), hint: tNow("Enough room for most answers.") },
+  { value: 16000, label: tNow("Detailed"), hint: tNow("Long reports and in-depth reviews.") },
+]);
 /** Closest named option to a stored number, so older drafts with custom values still show a choice. */
 const nearest = <T extends { value: number }>(opts: T[], v: number) => opts.reduce((a, b) => (Math.abs(b.value - v) < Math.abs(a.value - v) ? b : a));
 
-const CATEGORIES: [string, string][] = [
-  ["search", "Search & answer"],
-  ["audit", "Audit"],
-  ["review", "Review"],
-  ["compare", "Compare versions"],
-  ["extract", "Pull out data"],
-  ["compliance", "Compliance"],
-  ["coordination", "Coordination"],
-  ["monitoring", "Monitoring"],
-  ["custom", "Other"],
-];
-const TONES: [string, string][] = [
-  ["neutral", "Neutral"],
-  ["formal", "Formal"],
-  ["concise", "Brief"],
-  ["didactic", "Explanatory"],
-];
-const OUTPUT_COPY: Record<string, string> = { "answer_with_citations.v1": "Answer with sources", "audit_findings.v1": "List of findings", "review_comments.v1": "Review comments", "version_diff.v1": "Changes between versions", "extracted_fields.v1": "Extracted data", "compliance_deviations.v1": "Compliance gaps" };
-const LIMITS: [keyof Config["limits"], string, number, string][] = [
-  ["usd_per_run", "Cost limit ($)", 0, "Stops if one task would cost more."],
-  ["timeout_seconds", "Time limit (seconds)", 5, "Stops a task that takes too long."],
-  ["max_steps", "Steps per task", 1, "How many actions it may take for one request."],
-  ["max_retries", "Retries", 0, "Tries again this many times if something fails."],
-  ["concurrency", "Tasks at the same time", 1, "How many requests it handles at once."],
-];
-const KIND_COPY: Record<string, string> = { read: "Reads", write: "Makes changes", external: "Leaves your organization" };
-const DECISION_COPY: Record<string, string> = { allow: "allowed", mock: "simulated", deny: "blocked", require_approval: "needs approval" };
-const STEP_COPY: Record<string, string> = { validate: "Checked settings", scope: "Checked folders", output: "Result", tool: "Action" };
-const CHECK_COPY: Record<string, string> = { no_policy_denials: "No blocked actions", answer_has_citations: "Answer includes sources", expected_content: "Answer includes the expected text", expected_citations: "Sources included", max_steps: "Finished within the step limit", timeout: "Finished in time" };
+const CATEGORIES = (): [string, string][] => ([
+  ["search", tNow("Search & answer")],
+  ["audit", tNow("Audit")],
+  ["review", tNow("Review")],
+  ["compare", tNow("Compare versions")],
+  ["extract", tNow("Pull out data")],
+  ["compliance", tNow("Compliance")],
+  ["coordination", tNow("Coordination")],
+  ["monitoring", tNow("Monitoring")],
+  ["custom", tNow("Other")],
+]);
+const TONES = (): [string, string][] => ([
+  ["neutral", tNow("Neutral")],
+  ["formal", tNow("Formal")],
+  ["concise", tNow("Brief")],
+  ["didactic", tNow("Explanatory")],
+]);
+const OUTPUT_COPY = (): Record<string, string> => ({ "answer_with_citations.v1": tNow("Answer with sources"), "audit_findings.v1": tNow("List of findings"), "review_comments.v1": tNow("Review comments"), "version_diff.v1": tNow("Changes between versions"), "extracted_fields.v1": tNow("Extracted data"), "compliance_deviations.v1": tNow("Compliance gaps") });
+const LIMITS = (): [keyof Config["limits"], string, number, string][] => ([
+  ["usd_per_run", tNow("Cost limit ($)"), 0, tNow("Stops if one task would cost more.")],
+  ["timeout_seconds", tNow("Time limit (seconds)"), 5, tNow("Stops a task that takes too long.")],
+  ["max_steps", tNow("Steps per task"), 1, tNow("How many actions it may take for one request.")],
+  ["max_retries", tNow("Retries"), 0, tNow("Tries again this many times if something fails.")],
+  ["concurrency", tNow("Tasks at the same time"), 1, tNow("How many requests it handles at once.")],
+]);
+const KIND_COPY = (): Record<string, string> => ({ read: tNow("Reads"), write: tNow("Makes changes"), external: tNow("Leaves your organization") });
+const DECISION_COPY = (): Record<string, string> => ({ allow: "allowed", mock: "simulated", deny: "blocked", require_approval: tNow("needs approval") });
+const STEP_COPY = (): Record<string, string> => ({ validate: tNow("Checked settings"), scope: tNow("Checked folders"), output: tNow("Result"), tool: tNow("Action") });
+const CHECK_COPY = (): Record<string, string> => ({ no_policy_denials: tNow("No blocked actions"), answer_has_citations: tNow("Answer includes sources"), expected_content: tNow("Answer includes the expected text"), expected_citations: tNow("Sources included"), max_steps: tNow("Finished within the step limit"), timeout: tNow("Finished in time") });
 /** Where each validation issue lives in the editor, so messages point at a section instead of a field path. */
 function sectionFor(path: string) {
-  if (path.startsWith("instructions") || path === "purpose" || path === "name") return "Instructions";
-  if (path.startsWith("knowledge")) return "Documents";
-  if (path.startsWith("tools")) return "Actions";
-  if (path.startsWith("autonomy")) return "Independence";
-  if (path.startsWith("model") || path.startsWith("limits")) return "Advanced settings";
-  if (path.startsWith("tests")) return "Test questions";
+  if (path.startsWith("instructions") || path === "purpose" || path === "name") return tNow("Instructions");
+  if (path.startsWith("knowledge")) return tNow("Documents");
+  if (path.startsWith("tools")) return tNow("Actions");
+  if (path.startsWith("autonomy")) return tNow("Independence");
+  if (path.startsWith("model") || path.startsWith("limits")) return tNow("Advanced settings");
+  if (path.startsWith("tests")) return tNow("Test questions");
   return "";
 }
-const DIFF_COPY: Record<string, string> = {
-  name: "Name",
-  purpose: "Purpose",
+const DIFF_COPY = (): Record<string, string> => ({
+  name: tNow("Name"),
+  purpose: tNow("Purpose"),
   icon: "Icon",
-  category: "Category",
-  autonomy: "Independence",
-  triggers: "How it starts",
-  tests: "Test questions",
-  "knowledge.require_citations": "Sources required",
-  "model.profile": "AI engine",
-  "model.temperature": "Response style",
-  "model.token_budget": "Answer length",
-};
-const diffLabel = (path: string) => DIFF_COPY[path] ?? (path.startsWith("instructions") ? "Instructions" : path.startsWith("limits") ? "Limits" : path.startsWith("knowledge") ? "Documents" : path);
-const BUMPS: ["patch" | "minor" | "major", string][] = [
-  ["patch", "Small fix"],
-  ["minor", "Improvement"],
-  ["major", "Big change"],
-];
+  category: tNow("Category"),
+  autonomy: tNow("Independence"),
+  triggers: tNow("How it starts"),
+  tests: tNow("Test questions"),
+  "knowledge.require_citations": tNow("Sources required"),
+  "model.profile": tNow("AI engine"),
+  "model.temperature": tNow("Response style"),
+  "model.token_budget": tNow("Answer length"),
+});
+const diffLabel = (path: string) => DIFF_COPY()[path] ?? (path.startsWith("instructions") ? "Instructions" : path.startsWith("limits") ? "Limits" : path.startsWith("knowledge") ? "Documents" : path);
+const BUMPS = (): ["patch" | "minor" | "major", string][] => ([
+  ["patch", tNow("Small fix")],
+  ["minor", tNow("Improvement")],
+  ["major", tNow("Big change")],
+]);
 
 /* ───────────── editor layout: section anchors, sticky section nav, section card ───────────── */
 type SectionId = "about" | "instructions" | "documents" | "actions" | "independence" | "tests" | "advanced";
@@ -228,8 +230,9 @@ function EdSection({ id, title, hint, action, children }: { id: SectionId; title
 }
 
 function SectionNav({ active, flags, onJump }: { active: SectionId; flags: Partial<Record<SectionId, "err" | "warn">>; onJump: (id: SectionId) => void }) {
+  const tr = useT();
   return (
-    <nav className="ed-nav" aria-label="Agent setup sections">
+    <nav className="ed-nav" aria-label={tr("Agent setup sections")}>
       {SECTIONS.map(([id, label, Icon]) => (
         <a
           key={id}
@@ -242,7 +245,7 @@ function SectionNav({ active, flags, onJump }: { active: SectionId; flags: Parti
         >
           <Icon size={14} />
           {label}
-          {flags[id] && <span className="flag" data-level={flags[id]} aria-label={flags[id] === "err" ? "Needs a fix" : "Has a warning"} />}
+          {flags[id] && <span className="flag" data-level={flags[id]} aria-label={flags[id] === "err" ? tr("Needs a fix") : tr("Has a warning")} />}
         </a>
       ))}
     </nav>
@@ -250,6 +253,7 @@ function SectionNav({ active, flags, onJump }: { active: SectionId; flags: Parti
 }
 
 export default function AgentEditor() {
+  const tr = useT();
   const { org, id } = useParams<{ org: string; id: string }>();
   const { workspaces } = useOrg();
   const confirm = useConfirm();
@@ -377,7 +381,7 @@ export default function AgentEditor() {
   }, [dirty]);
 
   if (!detail || !cfg) {
-    if (!error) return <SkeletonEditor label="Loading agent…" />;
+    if (!error) return <SkeletonEditor label={tr("Loading agent…")} />;
     return (
       <div className="page">
         <div className="main">
@@ -436,7 +440,7 @@ export default function AgentEditor() {
     try {
       const r = await api<{ version: string }>(`organizations/${org}/agents/${id}/publish`, { method: "POST", body: { bump, changelog } });
       confetti({ origin: from });
-      setNotice(`Version ${r.version} published`);
+      setNotice(tr("Version {version} published", { version: r.version }));
       setChangelog("");
       await load();
     } catch (e) {
@@ -445,10 +449,10 @@ export default function AgentEditor() {
   }
 
   async function setStatus(status: "published" | "paused" | "archived") {
-    if (status === "archived" && !(await confirm({ title: "Archive this agent?", body: "It stops running and becomes read-only. Versions and test history are kept.", confirmLabel: "Archive", tone: "danger" }))) return;
+    if (status === "archived" && !(await confirm({ title: tr("Archive this agent?"), body: tr("It stops running and becomes read-only. Versions and test history are kept."), confirmLabel: tr("Archive"), tone: "danger" }))) return;
     try {
       await api(`organizations/${org}/agents/${id}/status`, { method: "POST", body: { status } });
-      setNotice(status === "paused" ? "Agent paused" : status === "archived" ? "Agent archived" : "Agent resumed");
+      setNotice(status === "paused" ? tr("Agent paused") : status === "archived" ? tr("Agent archived") : tr("Agent resumed"));
       await load(false);
     } catch (e) {
       setError((e as Error).message);
@@ -457,7 +461,7 @@ export default function AgentEditor() {
 
   // Never-published agent: "discard" archives it (hidden from the list) and returns to the studio.
   async function discardAgent() {
-    if (!(await confirm({ title: "Discard this agent?", body: "It was never published. It disappears from your list and can't be edited again.", confirmLabel: "Discard", tone: "danger" }))) return;
+    if (!(await confirm({ title: tr("Discard this agent?"), body: tr("It was never published. It disappears from your list and can't be edited again."), confirmLabel: tr("Discard"), tone: "danger" }))) return;
     try {
       await api(`organizations/${org}/agents/${id}/status`, { method: "POST", body: { status: "archived" } });
       router.push(`/app/${org}/agents`);
@@ -467,16 +471,16 @@ export default function AgentEditor() {
   }
 
   async function discardChanges() {
-    if (!(await confirm({ title: "Discard unsaved changes?", body: "The draft goes back to the last saved version.", confirmLabel: "Discard changes", tone: "danger" }))) return;
+    if (!(await confirm({ title: tr("Discard unsaved changes?"), body: tr("The draft goes back to the last saved version."), confirmLabel: tr("Discard changes"), tone: "danger" }))) return;
     setError(null);
     await load();
   }
 
   async function rollback(versionId: string, version: string) {
-    if (!(await confirm({ title: `Go back to v${version}?`, body: "It becomes the live version. Your draft stays as it is. We check it against today's rules first." }))) return;
+    if (!(await confirm({ title: `Go back to v${version}?`, body: tr("It becomes the live version. Your draft stays as it is. We check it against today's rules first.") }))) return;
     try {
       await api(`organizations/${org}/agents/${id}/rollback`, { method: "POST", body: { version_id: versionId } });
-      setNotice(`Live version: v${version}`);
+      setNotice(tr("Live version: v{version}", { version: version }));
       await load(false);
     } catch (e) {
       setError((e as Error).message);
@@ -512,42 +516,32 @@ export default function AgentEditor() {
   return (
     <div className="page">
       <header className="page-bar">
-        <PageBreadcrumbs section="Agent Studio" href={`/app/${org}/agents`} context={detail.name} icon={IconAgent} />
+        <PageBreadcrumbs section={tr("Agent Studio")} href={`/app/${org}/agents`} context={detail.name} icon={IconAgent} />
         <div className="row page-bar-actions">
           {detail.can_edit && detail.status === "published" && (
             <button type="button" className="quiet small" onClick={() => setStatus("paused")}>
-              <IconPause size={14} />
-              Pause
-            </button>
+              <IconPause size={14} />{tr("Pause")}</button>
           )}
           {detail.can_edit && detail.status === "paused" && (
             <button type="button" className="quiet small" onClick={() => setStatus("published")}>
-              <IconPlay size={14} />
-              Resume
-            </button>
+              <IconPlay size={14} />{tr("Resume")}</button>
           )}
           {detail.can_edit && detail.status !== "archived" && !neverPublished && (
             <button type="button" className="quiet small" onClick={() => setStatus("archived")}>
-              <IconArchive size={14} />
-              Archive
-            </button>
+              <IconArchive size={14} />{tr("Archive")}</button>
           )}
           {!ro && dirty && !saving && (
             <button type="button" className="quiet small" onClick={discardChanges}>
-              <IconX size={14} />
-              Discard changes
-            </button>
+              <IconX size={14} />{tr("Discard changes")}</button>
           )}
           {detail.can_edit && detail.status !== "archived" && neverPublished && !dirty && (
             <button type="button" className="quiet small danger" onClick={discardAgent}>
-              <IconTrash size={14} />
-              Discard
-            </button>
+              <IconTrash size={14} />{tr("Discard")}</button>
           )}
           {!ro && (
             <button type="button" className="primary small" disabled={!dirty || saving} onClick={save}>
               {saving ? <IconSpinner size={14} /> : dirty ? null : <IconCheck size={14} />}
-              <SoftText text={saving ? "Saving…" : dirty ? "Save draft" : "Saved"} />
+              <SoftText text={saving ? tr("Saving…") : dirty ? tr("Save draft") : tr("Saved")} />
             </button>
           )}
         </div>
@@ -561,24 +555,20 @@ export default function AgentEditor() {
               <AgentGlyph icon={cfg.icon} size={24} />
             </span>
             <div>
-              <h1>{cfg.name}</h1>
+              <h1>{tr(cfg.name)}</h1>
               <div className="row" style={{ gap: 6, marginTop: 6 }}>
                 <StatusBadge status={detail.status} />
                 <span className="badge">{versionLabel(detail.active_version?.version)}</span>
                 <RiskBadge risk={v.risk} />
-                {detail.unpublished_changes && detail.active_version && <span className="badge">Changes not published</span>}
+                {detail.unpublished_changes && detail.active_version && <span className="badge">{tr("Changes not published")}</span>}
               </div>
             </div>
           </div>
         </header>
 
-        <div className="tabs" role="tablist" aria-label="Agent sections">
-          <button type="button" role="tab" aria-selected={tab === "builder"} onClick={() => setTab("builder")}>
-            Setup
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "versions"} onClick={() => setTab("versions")}>
-            History
-            <span className="count">{detail.versions.length}</span>
+        <div className="tabs" role="tablist" aria-label={tr("Agent sections")}>
+          <button type="button" role="tab" aria-selected={tab === "builder"} onClick={() => setTab("builder")}>{tr("Setup")}</button>
+          <button type="button" role="tab" aria-selected={tab === "versions"} onClick={() => setTab("versions")}>{tr("History")}<span className="count">{detail.versions.length}</span>
           </button>
         </div>
 
@@ -586,7 +576,7 @@ export default function AgentEditor() {
           <div className="alert" style={{ marginTop: 16 }}>
             <IconAlert size={16} />
             <span style={{ flex: 1 }}>{error}</span>
-            <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label="Dismiss">
+            <button type="button" className="quiet icon small" onClick={() => setError(null)} aria-label={tr("Dismiss")}>
               <IconX size={14} />
             </button>
           </div>
@@ -595,7 +585,7 @@ export default function AgentEditor() {
         {ro && (
           <div className="notice info" style={{ marginTop: 16 }}>
             <IconLock size={16} />
-            {detail.status === "archived" ? "Archived agents are read-only." : "Only the owner or an admin can edit this agent."}
+            {detail.status === "archived" ? tr("Archived agents are read-only.") : tr("Only the owner or an admin can edit this agent.")}
           </div>
         )}
 
@@ -603,34 +593,34 @@ export default function AgentEditor() {
           <div className="ed tab-panel" style={{ marginTop: 20 }}>
             <fieldset disabled={ro} className="ed-form">
               <SectionNav active={section} flags={flags} onJump={jumpTo} />
-              <EdSection id="about" title="About this agent" hint="Give it a name and say what it's for. Templates are a starting point; you can change everything.">
+              <EdSection id="about" title={tr("About this agent")} hint={tr("Give it a name and say what it's for. Templates are a starting point; you can change everything.")}>
                 <div className="ob-fields">
-                  <TextField label="Name" value={cfg.name} maxLength={80} onChange={(e) => update((c) => ({ ...c, name: e.target.value }))} />
+                  <TextField label={tr("Name")} value={cfg.name} maxLength={80} onChange={(e) => update((c) => ({ ...c, name: e.target.value }))} />
                   <div className="field">
-                    <label>Type</label>
-                    <Select value={cfg.category} onChange={(x) => update((c) => ({ ...c, category: x }))} ariaLabel="Type" options={CATEGORIES.map(([value, label]) => ({ value, label }))} />
+                    <label>{tr("Type")}</label>
+                    <Select value={cfg.category} onChange={(x) => update((c) => ({ ...c, category: x }))} ariaLabel={tr("Type")} options={CATEGORIES().map(([value, label]) => ({ value, label }))} />
                   </div>
                 </div>
                 <div className="field">
-                  <label htmlFor="purpose">What is it for?</label>
-                  <textarea id="purpose" rows={2} maxLength={400} placeholder="e.g. Reviews supplier contracts and flags risky clauses" value={cfg.purpose} onChange={(e) => update((c) => ({ ...c, purpose: e.target.value }))} />
+                  <label htmlFor="purpose">{tr("What is it for?")}</label>
+                  <textarea id="purpose" rows={2} maxLength={400} placeholder={tr("e.g. Reviews supplier contracts and flags risky clauses")} value={cfg.purpose} onChange={(e) => update((c) => ({ ...c, purpose: e.target.value }))} />
                 </div>
               </EdSection>
 
-              <EdSection id="instructions" title="Instructions" hint="Explain the job like you would to a new colleague. Your organization's rules always come first.">
+              <EdSection id="instructions" title={tr("Instructions")} hint={tr("Explain the job like you would to a new colleague. Your organization's rules always come first.")}>
                 <div className="field" data-invalid={errorsAt("instructions").length ? "" : undefined}>
-                  <label htmlFor="objective">What should it do?</label>
-                  <textarea id="objective" rows={4} maxLength={4000} placeholder="e.g. Read the contract, compare each clause with our policy and list the differences" value={cfg.instructions.objective} onChange={(e) => update((c) => ({ ...c, instructions: { ...c.instructions, objective: e.target.value } }))} />
+                  <label htmlFor="objective">{tr("What should it do?")}</label>
+                  <textarea id="objective" rows={4} maxLength={4000} placeholder={tr("e.g. Read the contract, compare each clause with our policy and list the differences")} value={cfg.instructions.objective} onChange={(e) => update((c) => ({ ...c, instructions: { ...c.instructions, objective: e.target.value } }))} />
                 </div>
                 <div className="field">
-                  <label htmlFor="boundaries">What must it never do?</label>
-                  <textarea id="boundaries" rows={2} maxLength={2000} placeholder="e.g. Never give legal advice or approve a contract" value={cfg.instructions.boundaries} onChange={(e) => update((c) => ({ ...c, instructions: { ...c.instructions, boundaries: e.target.value } }))} />
+                  <label htmlFor="boundaries">{tr("What must it never do?")}</label>
+                  <textarea id="boundaries" rows={2} maxLength={2000} placeholder={tr("e.g. Never give legal advice or approve a contract")} value={cfg.instructions.boundaries} onChange={(e) => update((c) => ({ ...c, instructions: { ...c.instructions, boundaries: e.target.value } }))} />
                 </div>
                 <div className="ob-fields">
                   <div className="field">
-                    <label>Tone</label>
-                    <Seg role="group" aria-label="Tone">
-                      {TONES.map(([t, l]) => (
+                    <label>{tr("Tone")}</label>
+                    <Seg role="group" aria-label={tr("Tone")}>
+                      {TONES().map(([t, l]) => (
                         <button key={t} type="button" aria-pressed={cfg.instructions.tone === t} onClick={() => update((c) => ({ ...c, instructions: { ...c.instructions, tone: t } }))}>
                           {l}
                         </button>
@@ -638,46 +628,43 @@ export default function AgentEditor() {
                     </Seg>
                   </div>
                   <div className="field">
-                    <label>Answer format</label>
+                    <label>{tr("Answer format")}</label>
                     <Select
                       value={cfg.instructions.output_schema}
                       onChange={(x) => update((c) => ({ ...c, instructions: { ...c.instructions, output_schema: x } }))}
-                      ariaLabel="Answer format"
-                      options={(catalog?.output_schemas ?? [cfg.instructions.output_schema]).map((x) => ({ value: x, label: OUTPUT_COPY[x] ?? x }))}
+                      ariaLabel={tr("Answer format")}
+                      options={(catalog?.output_schemas ?? [cfg.instructions.output_schema]).map((x) => ({ value: x, label: OUTPUT_COPY()[x] ?? x }))}
                     />
                   </div>
                 </div>
                 <div className="ob-group">
-                  <span className="label">
-                    Always check <small>optional</small>
+                  <span className="label">{tr("Always check")}{" "}<small>{tr("optional")}</small>
                   </span>
                   <div className="list-editor">
                     {cfg.instructions.checklist.map((item, i) => (
                       <div className="item" key={i}>
-                        <input value={item} maxLength={300} placeholder="e.g. Termination clause" aria-label={`Check ${i + 1}`} onChange={(e) => update((c) => ({ ...c, instructions: { ...c.instructions, checklist: c.instructions.checklist.map((x, j) => (j === i ? e.target.value : x)) } }))} />
-                        <button type="button" className="danger icon small" aria-label="Remove item" onClick={() => update((c) => ({ ...c, instructions: { ...c.instructions, checklist: c.instructions.checklist.filter((_, j) => j !== i) } }))}>
+                        <input value={item} maxLength={300} placeholder={tr("e.g. Termination clause")} aria-label={tr("Check {v1}", { v1: i + 1 })} onChange={(e) => update((c) => ({ ...c, instructions: { ...c.instructions, checklist: c.instructions.checklist.map((x, j) => (j === i ? e.target.value : x)) } }))} />
+                        <button type="button" className="danger icon small" aria-label={tr("Remove item")} onClick={() => update((c) => ({ ...c, instructions: { ...c.instructions, checklist: c.instructions.checklist.filter((_, j) => j !== i) } }))}>
                           <IconTrash size={14} />
                         </button>
                       </div>
                     ))}
                     <div>
                       <button type="button" className="quiet small" onClick={() => update((c) => ({ ...c, instructions: { ...c.instructions, checklist: [...c.instructions.checklist, ""] } }))}>
-                        <IconPlus size={14} />
-                        Add a check
-                      </button>
+                        <IconPlus size={14} />{tr("Add a check")}</button>
                     </div>
                   </div>
                 </div>
               </EdSection>
 
-              <EdSection id="documents" title="Documents" hint="Folders the agent can read. People only ever get answers from documents they can already open.">
+              <EdSection id="documents" title={tr("Documents")} hint={tr("Folders the agent can read. People only ever get answers from documents they can already open.")}>
                 <div className="check-list">
                   {readable.map((w) => (
                     <div className="check-item" key={w.id}>
-                      <Checkbox checked={cfg.knowledge.space_ids.includes(w.id)} onChange={(on) => !ro && update((c) => ({ ...c, knowledge: { ...c.knowledge, space_ids: on ? [...c.knowledge.space_ids, w.id] : c.knowledge.space_ids.filter((x) => x !== w.id) } }))} label={<span className="sr-only">{w.name}</span>} />
+                      <Checkbox checked={cfg.knowledge.space_ids.includes(w.id)} onChange={(on) => !ro && update((c) => ({ ...c, knowledge: { ...c.knowledge, space_ids: on ? [...c.knowledge.space_ids, w.id] : c.knowledge.space_ids.filter((x) => x !== w.id) } }))} label={<span className="sr-only">{tr(w.name)}</span>} />
                       <span className="meta">
-                        <strong>{w.name}</strong>
-                        <small>{w.my_role === "editor" ? "You can edit" : w.my_role === "reader" ? "You can read" : `You are ${w.my_role}`}</small>
+                        <strong>{tr(w.name)}</strong>
+                        <small>{w.my_role === "editor" ? tr("You can edit") : w.my_role === "reader" ? tr("You can read") : tr("You are {my_role}", { my_role: w.my_role })}</small>
                       </span>
                     </div>
                   ))}
@@ -687,21 +674,19 @@ export default function AgentEditor() {
                       <div className="check-item" key={sid}>
                         <IconLock size={18} />
                         <span className="meta">
-                          <strong>{workspaces.find((w) => w.id === sid)?.name ?? "Folder you can't open"}</strong>
-                          <small>You don't have access — remove it or ask an admin for access.</small>
+                          <strong>{tr(workspaces.find((w) => w.id === sid)?.name) ?? tr("Folder you can't open")}</strong>
+                          <small>{tr("You don't have access — remove it or ask an admin for access.")}</small>
                         </span>
                         {!ro && (
-                          <button type="button" className="quiet small" onClick={() => update((c) => ({ ...c, knowledge: { ...c.knowledge, space_ids: c.knowledge.space_ids.filter((x) => x !== sid) } }))}>
-                            Remove
-                          </button>
+                          <button type="button" className="quiet small" onClick={() => update((c) => ({ ...c, knowledge: { ...c.knowledge, space_ids: c.knowledge.space_ids.filter((x) => x !== sid) } }))}>{tr("Remove")}</button>
                         )}
                       </div>
                     ))}
                 </div>
-                <Checkbox checked={cfg.knowledge.require_citations} onChange={(on) => !ro && update((c) => ({ ...c, knowledge: { ...c.knowledge, require_citations: on } }))} label="Always show the source of each answer (recommended)" />
+                <Checkbox checked={cfg.knowledge.require_citations} onChange={(on) => !ro && update((c) => ({ ...c, knowledge: { ...c.knowledge, require_citations: on } }))} label={tr("Always show the source of each answer (recommended)")} />
               </EdSection>
 
-              <EdSection id="actions" title="Actions" hint="Turn on only what the agent needs. While you test, actions are simulated and nothing real changes.">
+              <EdSection id="actions" title={tr("Actions")} hint={tr("Turn on only what the agent needs. While you test, actions are simulated and nothing real changes.")}>
                 <div className="tool-groups">
                   {toolKinds.map((k) => {
                     const items = usableTools.filter((t) => t.kind === k);
@@ -709,9 +694,9 @@ export default function AgentEditor() {
                     return (
                       <div className="tool-group" key={k}>
                         <div className="tool-group-head">
-                          <span>{KIND_COPY[k] ?? k}</span>
+                          <span>{tr(KIND_COPY()[k]) ?? k}</span>
                           <span className="tool-group-count">
-                            {on} of {items.length}
+                            {on}{" "}{tr("of")}{" "}{items.length}
                           </span>
                         </div>
                         <div className="tool-list">
@@ -729,10 +714,10 @@ export default function AgentEditor() {
                                   if (!(e.target as HTMLElement).closest("button, a, input")) set(!checked);
                                 }}
                               >
-                                <Checkbox checked={checked} onChange={set} label={<span className="sr-only">{t.available ? t.label : `Remove ${t.label}`}</span>} />
+                                <Checkbox checked={checked} onChange={set} label={<span className="sr-only">{t.available ? tr(t.label) : tr("Remove {label}", { label: t.label })}</span>} />
                                 <span className="meta">
                                   <strong>
-                                    {t.label}
+                                    {tr(t.label)}
                                     <RiskBadge risk={t.risk} />
                                   </strong>
                                   <small>{t.description}</small>
@@ -753,9 +738,7 @@ export default function AgentEditor() {
                   {lockedTools.length > 0 && (
                     <div className="tool-group" data-locked="">
                       <button type="button" className="quiet small tool-group-toggle" aria-expanded={showLocked} onClick={() => setShowLocked((x) => !x)}>
-                        <IconLock size={13} />
-                        Not available
-                        <span className="tool-group-count">{lockedTools.length}</span>
+                        <IconLock size={13} />{tr("Not available")}<span className="tool-group-count">{lockedTools.length}</span>
                         <IconChevronDown size={14} className="chev" />
                       </button>
                       {showLocked && (
@@ -765,9 +748,9 @@ export default function AgentEditor() {
                               <IconLock size={16} />
                               <span className="meta">
                                 <strong>
-                                  {t.label}
+                                  {tr(t.label)}
                                   <RiskBadge risk={t.risk} />
-                                  {t.kind !== "read" && <span className="badge">{KIND_COPY[t.kind] ?? t.kind}</span>}
+                                  {t.kind !== "read" && <span className="badge">{tr(KIND_COPY()[t.kind]) ?? t.kind}</span>}
                                 </strong>
                                 <small>{t.description}</small>
                                 <span className="lock">
@@ -784,9 +767,9 @@ export default function AgentEditor() {
                 </div>
               </EdSection>
 
-              <EdSection id="independence" title="Independence" hint="How much the agent may do on its own. Signing and sending things outside always need a person.">
+              <EdSection id="independence" title={tr("Independence")} hint={tr("How much the agent may do on its own. Signing and sending things outside always need a person.")}>
                 <div className="choices cols-2">
-                  {AUTONOMY.map(([a, l, h]) => (
+                  {AUTONOMY().map(([a, l, h]) => (
                     <button key={a} type="button" className="choice" aria-pressed={cfg.autonomy === a} onClick={() => update((c) => ({ ...c, autonomy: a }))}>
                       {l}
                       <small>{h}</small>
@@ -797,51 +780,47 @@ export default function AgentEditor() {
 
               <EdSection
                 id="tests"
-                title="Test questions"
-                hint="Save questions you expect it to handle, then run them all at once with “Run all tests”."
+                title={tr("Test questions")}
+                hint={tr("Save questions you expect it to handle, then run them all at once with “Run all tests”.")}
                 action={
                   !ro && (
                     <button type="button" className="quiet small" disabled={cfg.tests.length >= 10} onClick={() => update((c) => ({ ...c, tests: [...c.tests, { name: `Question ${c.tests.length + 1}`, input: "", expect_citations: true }] }))}>
-                      <IconPlus size={14} />
-                      Add question
-                    </button>
+                      <IconPlus size={14} />{tr("Add question")}</button>
                   )
                 }
               >
                 {cfg.tests.length === 0 && (
-                  <p className="muted" style={{ fontSize: 13.5 }}>
-                    No saved questions yet. You can also try one-off questions in “Try it”.
-                  </p>
+                  <p className="muted" style={{ fontSize: 13.5 }}>{tr("No saved questions yet. You can also try one-off questions in “Try it”.")}</p>
                 )}
                 {cfg.tests.map((tc, i) => (
                   <div className="case" key={i}>
                     <div className="row spread">
-                      <input value={tc.name} aria-label="Test name" maxLength={120} style={{ maxWidth: 260 }} onChange={(e) => update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) }))} />
-                      <button type="button" className="danger icon small" aria-label="Remove question" onClick={() => update((c) => ({ ...c, tests: c.tests.filter((_, j) => j !== i) }))}>
+                      <input value={tc.name} aria-label={tr("Test name")} maxLength={120} style={{ maxWidth: 260 }} onChange={(e) => update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) }))} />
+                      <button type="button" className="danger icon small" aria-label={tr("Remove question")} onClick={() => update((c) => ({ ...c, tests: c.tests.filter((_, j) => j !== i) }))}>
                         <IconTrash size={14} />
                       </button>
                     </div>
-                    <textarea rows={2} placeholder="Question or task" value={tc.input} maxLength={2000} aria-label="Test question" onChange={(e) => update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, input: e.target.value } : x)) }))} />
+                    <textarea rows={2} placeholder={tr("Question or task")} value={tc.input} maxLength={2000} aria-label={tr("Test question")} onChange={(e) => update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, input: e.target.value } : x)) }))} />
                     <div className="row">
                       <input
-                        placeholder="Answer should contain (optional)"
+                        placeholder={tr("Answer should contain (optional)")}
                         value={tc.expect_contains ?? ""}
                         maxLength={200}
-                        aria-label="Expected content"
+                        aria-label={tr("Expected content")}
                         style={{ flex: 1, minWidth: 200 }}
                         onChange={(e) => update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, expect_contains: e.target.value || undefined } : x)) }))}
                       />
-                      <Checkbox checked={tc.expect_citations} onChange={(on) => !ro && update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, expect_citations: on } : x)) }))} label="Should show sources" />
+                      <Checkbox checked={tc.expect_citations} onChange={(on) => !ro && update((c) => ({ ...c, tests: c.tests.map((x, j) => (j === i ? { ...x, expect_citations: on } : x)) }))} label={tr("Should show sources")} />
                     </div>
                   </div>
                 ))}
               </EdSection>
 
-              <Disclosure id="ed-advanced" icon={<IconLayers size={16} />} open={advancedOpen} onOpenChange={setAdvancedOpen} title="Advanced settings" hint="Recommended values are already set. Change them only if you need to.">
+              <Disclosure id="ed-advanced" icon={<IconLayers size={16} />} open={advancedOpen} onOpenChange={setAdvancedOpen} title={tr("Advanced settings")} hint={tr("Recommended values are already set. Change them only if you need to.")}>
                 <div className="field">
-                  <label>AI engine</label>
-                  <div className="choices" role="group" aria-label="AI engine">
-                    {PROFILES.map(([p, l, h]) => (
+                  <label>{tr("AI engine")}</label>
+                  <div className="choices" role="group" aria-label={tr("AI engine")}>
+                    {PROFILES().map(([p, l, h]) => (
                       <button key={p} type="button" className="choice" aria-pressed={cfg.model.profile === p} onClick={() => update((c) => ({ ...c, model: { ...c.model, profile: p } }))}>
                         {l}
                         <small>{h}</small>
@@ -851,37 +830,37 @@ export default function AgentEditor() {
                 </div>
                 <div className="ob-fields">
                   <div className="field">
-                    <label>Response style</label>
-                    <Seg role="group" aria-label="Response style">
-                      {STYLES.map((o) => (
-                        <button key={o.label} type="button" aria-pressed={nearest(STYLES, cfg.model.temperature).value === o.value} onClick={() => update((c) => ({ ...c, model: { ...c.model, temperature: o.value } }))}>
-                          {o.label}
+                    <label>{tr("Response style")}</label>
+                    <Seg role="group" aria-label={tr("Response style")}>
+                      {STYLES().map((o) => (
+                        <button key={o.label} type="button" aria-pressed={nearest(STYLES(), cfg.model.temperature).value === o.value} onClick={() => update((c) => ({ ...c, model: { ...c.model, temperature: o.value } }))}>
+                          {tr(o.label)}
                         </button>
                       ))}
                     </Seg>
-                    <span className="setting-hint">{nearest(STYLES, cfg.model.temperature).hint}</span>
+                    <span className="setting-hint">{tr(nearest(STYLES(), cfg.model.temperature).hint)}</span>
                   </div>
                   <div className="field">
-                    <label>Answer length</label>
-                    <Seg role="group" aria-label="Answer length">
-                      {LENGTHS.map((o) => (
-                        <button key={o.label} type="button" aria-pressed={nearest(LENGTHS, cfg.model.token_budget).value === o.value} onClick={() => update((c) => ({ ...c, model: { ...c.model, token_budget: o.value } }))}>
-                          {o.label}
+                    <label>{tr("Answer length")}</label>
+                    <Seg role="group" aria-label={tr("Answer length")}>
+                      {LENGTHS().map((o) => (
+                        <button key={o.label} type="button" aria-pressed={nearest(LENGTHS(), cfg.model.token_budget).value === o.value} onClick={() => update((c) => ({ ...c, model: { ...c.model, token_budget: o.value } }))}>
+                          {tr(o.label)}
                         </button>
                       ))}
                     </Seg>
-                    <span className="setting-hint">{nearest(LENGTHS, cfg.model.token_budget).hint}</span>
+                    <span className="setting-hint">{tr(nearest(LENGTHS(), cfg.model.token_budget).hint)}</span>
                   </div>
                 </div>
                 <div className="field">
-                  <label>Safety limits</label>
+                  <label>{tr("Safety limits")}</label>
                   <div className="limits">
-                    {LIMITS.map(([k, label, min, hint]) => (
+                    {LIMITS().map(([k, label, min, hint]) => (
                       <div key={k} className="stack" style={{ gap: 4 }}>
                         <TextField label={label} type="number" min={min} max={catalog?.tenant_limits[k]} step={k === "usd_per_run" ? 0.05 : 1} value={cfg.limits[k]} onChange={(e) => update((c) => ({ ...c, limits: { ...c.limits, [k]: Number(e.target.value) } }))} />
                         <span className="setting-hint">
                           {hint}
-                          {catalog ? ` Your plan allows up to ${catalog.tenant_limits[k]}.` : ""}
+                          {catalog ? tr(" Your plan allows up to {v1}.", { v1: catalog.tenant_limits[k] }) : ""}
                         </span>
                       </div>
                     ))}
@@ -893,20 +872,16 @@ export default function AgentEditor() {
             <aside className="ed-side">
               <section className="card ed-section">
                 <header>
-                  <h2>Checklist</h2>
+                  <h2>{tr("Checklist")}</h2>
                   {v.ok ? (
                     <span className="badge ok">
-                      <IconCheck size={12} />
-                      All good
-                    </span>
+                      <IconCheck size={12} />{tr("All good")}</span>
                   ) : (
-                    <span className="badge err">{v.errors.length === 1 ? "1 thing to fix" : `${v.errors.length} things to fix`}</span>
+                    <span className="badge err">{v.errors.length === 1 ? tr("1 thing to fix") : tr("{length} things to fix", { length: v.errors.length })}</span>
                   )}
                 </header>
                 {dirty && (
-                  <p className="muted" style={{ fontSize: 12.5 }}>
-                    Save your changes to check them again.
-                  </p>
+                  <p className="muted" style={{ fontSize: 12.5 }}>{tr("Save your changes to check them again.")}</p>
                 )}
                 <div className="issues">
                   {v.errors.map((e, i) => (
@@ -928,47 +903,42 @@ export default function AgentEditor() {
                     </div>
                   ))}
                   {v.ok && !v.warnings.length && (
-                    <p className="muted" style={{ fontSize: 13 }}>
-                      Everything looks right. The agent never follows instructions written inside documents.
-                    </p>
+                    <p className="muted" style={{ fontSize: 13 }}>{tr("Everything looks right. The agent never follows instructions written inside documents.")}</p>
                   )}
                 </div>
               </section>
 
               <section className="card ed-section">
                 <header>
-                  <h2>Try it</h2>
-                  <span className="badge accent">Test mode</span>
+                  <h2>{tr("Try it")}</h2>
+                  <span className="badge accent">{tr("Test mode")}</span>
                 </header>
-                <textarea rows={3} placeholder="Ask something the agent should handle…" value={input} maxLength={2000} onChange={(e) => setInput(e.target.value)} aria-label="Test question" disabled={ro} />
+                <textarea rows={3} placeholder={tr("Ask something the agent should handle…")} value={input} maxLength={2000} onChange={(e) => setInput(e.target.value)} aria-label={tr("Test question")} disabled={ro} />
                 <div className="row">
                   <button type="button" className="primary small" disabled={ro || running || input.trim().length < 2} onClick={() => test(false)}>
                     {running ? <IconSpinner size={14} /> : <IconPlay size={14} />}
-                    {dirty ? "Save & try" : "Try"}
+                    {dirty ? tr("Save & try") : tr("Try")}
                   </button>
-                  <button type="button" className="ghost small" disabled={ro || running || cfg.tests.length === 0} onClick={() => test(true)}>
-                    Run all tests
-                  </button>
+                  <button type="button" className="ghost small" disabled={ro || running || cfg.tests.length === 0} onClick={() => test(true)}>{tr("Run all tests")}</button>
                 </div>
                 {run && (
                   <div className="stack" style={{ gap: 14 }}>
                     <div className="row">
-                      <span className={`badge ${run.status === "passed" ? "ok" : "err"}`}>{run.status === "passed" ? "Passed" : run.status === "failed" ? "Didn't pass" : run.status}</span>
+                      <span className={`badge ${run.status === "passed" ? "ok" : "err"}`}>{run.status === "passed" ? tr("Passed") : run.status === "failed" ? tr("Didn't pass") : run.status}</span>
                       <span className="muted" style={{ fontSize: 12.5 }}>
-                        {duration(run.latency_ms)} · nothing real was changed
-                      </span>
+                        {duration(run.latency_ms)}{" "}{tr("· nothing real was changed")}</span>
                     </div>
                     {run.cases.map((c, ci) => (
                       <div key={ci} className="stack" style={{ gap: 10 }}>
-                        {run.cases.length > 1 && <strong style={{ fontSize: 13.5 }}>{c.name}</strong>}
+                        {run.cases.length > 1 && <strong style={{ fontSize: 13.5 }}>{tr(c.name)}</strong>}
                         <ol className="trace">
                           {c.steps.map((s) => (
                             <li key={s.n} data-decision={s.decision}>
                               <span className="dot">{s.n}</span>
                               <span className="body">
                                 <strong>
-                                  {s.tool ? (catalog?.tools.find((t) => t.id === s.tool)?.label ?? s.tool) : (STEP_COPY[s.type] ?? s.type)}
-                                  {s.decision && <span className="badge">{DECISION_COPY[s.decision] ?? s.decision}</span>}
+                                  {s.tool ? (tr(catalog?.tools.find((t) => t.id === s.tool)?.label) ?? s.tool) : (tr(STEP_COPY()[s.type]) ?? s.type)}
+                                  {s.decision && <span className="badge">{tr(DECISION_COPY()[s.decision]) ?? s.decision}</span>}
                                 </strong>
                                 <small>{s.reason}</small>
                               </span>
@@ -976,7 +946,7 @@ export default function AgentEditor() {
                           ))}
                         </ol>
                         {c.answer && <div className="run-answer">{c.answer}</div>}
-                        {c.abstained && c.steps.some((s) => s.tool === "search_documents" && s.decision === "allow") && <div className="run-answer muted">No answer — the agent couldn't find enough evidence in its folders.</div>}
+                        {c.abstained && c.steps.some((s) => s.tool === "search_documents" && s.decision === "allow") && <div className="run-answer muted">{tr("No answer — the agent couldn't find enough evidence in its folders.")}</div>}
                         {c.citations.length > 0 && (
                           <ul className="run-cites">
                             {c.citations.map((ct) => (
@@ -995,7 +965,7 @@ export default function AgentEditor() {
                             <div key={k.name} className={`issue ${k.ok ? "" : "err"}`} style={k.ok ? { color: "var(--ok)" } : undefined}>
                               {k.ok ? <IconCheck size={14} /> : <IconX size={14} />}
                               <span>
-                                {CHECK_COPY[k.name] ?? k.name.replace(/_/g, " ")}
+                                {tr(CHECK_COPY()[k.name]) ?? k.name.replace(/_/g, " ")}
                                 {k.detail && <code>{k.detail}</code>}
                               </span>
                             </div>
@@ -1009,49 +979,42 @@ export default function AgentEditor() {
 
               <section className="card ed-section">
                 <header>
-                  <h2>Publish</h2>
-                  {testedCurrent && <span className={`badge ${testedCurrent === "passed" ? "ok" : "err"}`}>{testedCurrent === "passed" ? "Test passed" : "Test didn't pass"}</span>}
+                  <h2>{tr("Publish")}</h2>
+                  {testedCurrent && <span className={`badge ${testedCurrent === "passed" ? "ok" : "err"}`}>{testedCurrent === "passed" ? tr("Test passed") : tr("Test didn't pass")}</span>}
                 </header>
                 <div className="diff">
-                  <span>{detail.active_version ? `Changes since ${versionLabel(detail.active_version.version)}:` : "First version — everything is new."}</span>
+                  <span>{detail.active_version ? tr("Changes since {v1}:", { v1: versionLabel(detail.active_version.version) }) : tr("First version — everything is new.")}</span>
                   {d.tools_added.map((x) => (
-                    <span className="add" key={`ta${x}`}>
-                      + Action: {catalog?.tools.find((t) => t.id === x)?.label ?? x}
+                    <span className="add" key={`ta${x}`}>{tr("+ Action:")}{" "}{tr(catalog?.tools.find((t) => t.id === x)?.label) ?? x}
                     </span>
                   ))}
                   {d.tools_removed.map((x) => (
-                    <span className="rm" key={`tr${x}`}>
-                      − Action: {catalog?.tools.find((t) => t.id === x)?.label ?? x}
+                    <span className="rm" key={`tr${x}`}>{tr("− Action:")}{" "}{tr(catalog?.tools.find((t) => t.id === x)?.label) ?? x}
                     </span>
                   ))}
                   {d.spaces_added.map((x) => (
-                    <span className="add" key={`sa${x}`}>
-                      + Folder: {workspaces.find((w) => w.id === x)?.name ?? "a folder you can't open"}
+                    <span className="add" key={`sa${x}`}>{tr("+ Folder:")}{" "}{tr(workspaces.find((w) => w.id === x)?.name) ?? tr("a folder you can't open")}
                     </span>
                   ))}
                   {d.spaces_removed.map((x) => (
-                    <span className="rm" key={`sr${x}`}>
-                      − Folder: {workspaces.find((w) => w.id === x)?.name ?? "a folder you can't open"}
+                    <span className="rm" key={`sr${x}`}>{tr("− Folder:")}{" "}{tr(workspaces.find((w) => w.id === x)?.name) ?? tr("a folder you can't open")}
                     </span>
                   ))}
                   {[...new Set(d.changed.map((c) => diffLabel(c.path)))].map((label) => (
-                    <span key={label}>~ {label} changed</span>
+                    <span key={label}>~ {label}{" "}{tr("changed")}</span>
                   ))}
                   {d.risk.from && d.risk.from !== d.risk.to && (
-                    <span className={d.permissions_expanded ? "rm" : "add"}>
-                      Risk: {d.risk.from} → {d.risk.to}
+                    <span className={d.permissions_expanded ? "rm" : "add"}>{tr("Risk:")}{" "}{d.risk.from} → {d.risk.to}
                     </span>
                   )}
                   {d.permissions_expanded && detail.active_version && (
                     <span className="notice" style={{ marginTop: 6 }}>
-                      <IconShield size={14} />
-                      This version can do more than the live one.
-                    </span>
+                      <IconShield size={14} />{tr("This version can do more than the live one.")}</span>
                   )}
                 </div>
                 {!detail.publish.allowed ? (
                   <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--muted)" }}>
-                    <li>Before publishing:</li>
+                    <li>{tr("Before publishing:")}</li>
                     {(dirty ? ["save your changes", ...detail.publish.reasons] : detail.publish.reasons).map((r) => (
                       <li key={r}>· {r}</li>
                     ))}
@@ -1060,9 +1023,9 @@ export default function AgentEditor() {
                   <div className="dialog-form">
                     {detail.active_version && (
                       <div className="field">
-                        <label>Type of change</label>
-                        <Seg role="group" aria-label="Type of change">
-                          {BUMPS.map(([b, l]) => (
+                        <label>{tr("Type of change")}</label>
+                        <Seg role="group" aria-label={tr("Type of change")}>
+                          {BUMPS().map(([b, l]) => (
                             <button key={b} type="button" aria-pressed={bump === b} onClick={() => setBump(b)}>
                               {l}
                             </button>
@@ -1071,12 +1034,11 @@ export default function AgentEditor() {
                       </div>
                     )}
                     <div className="field">
-                      <label htmlFor="changelog">What changed?</label>
-                      <textarea id="changelog" rows={2} maxLength={1000} placeholder="e.g. Now also checks payment terms" value={changelog} onChange={(e) => setChangelog(e.target.value)} />
+                      <label htmlFor="changelog">{tr("What changed?")}</label>
+                      <textarea id="changelog" rows={2} maxLength={1000} placeholder={tr("e.g. Now also checks payment terms")} value={changelog} onChange={(e) => setChangelog(e.target.value)} />
                     </div>
                     <button type="button" className="primary" disabled={dirty || changelog.trim().length < 3} onClick={(e) => publish(e.currentTarget)}>
-                      <IconRocket size={16} />
-                      Publish {detail.active_version ? versionLabel(detail.publish.next_version[bump]) : "v1.0.0"}
+                      <IconRocket size={16} />{tr("Publish")}{" "}{detail.active_version ? versionLabel(detail.publish.next_version[bump]) : "v1.0.0"}
                     </button>
                   </div>
                 )}
@@ -1090,8 +1052,8 @@ export default function AgentEditor() {
             {detail.versions.length === 0 ? (
               <div className="empty">
                 <StateIllustration kind="agents" />
-                <strong>Not published yet</strong>
-                <span>Run a successful test in Setup, then publish the first version.</span>
+                <strong>{tr("Not published yet")}</strong>
+                <span>{tr("Run a successful test in Setup, then publish the first version.")}</span>
               </div>
             ) : (
               <ul className="versions">
@@ -1099,20 +1061,17 @@ export default function AgentEditor() {
                   <li key={ver.id}>
                     <span className="badge mono">v{ver.version}</span>
                     <span className="meta">
-                      <strong style={{ fontWeight: 500 }}>{ver.changelog || "No description"}</strong>
+                      <strong style={{ fontWeight: 500 }}>{ver.changelog || tr("No description")}</strong>
                       <small>
-                        {new Date(ver.published_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · {ver.published_by ?? "—"} · {ver.risk_level} risk
-                      </small>
+                        {new Date(ver.published_at).toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" })} · {ver.published_by ?? "—"} · {ver.risk_level}{" "}{tr("risk")}</small>
                     </span>
                     {detail.active_version?.id === ver.id ? (
-                      <span className="badge ok">Live</span>
+                      <span className="badge ok">{tr("Live")}</span>
                     ) : (
                       detail.can_edit &&
                       detail.status !== "archived" && (
                         <button type="button" className="quiet small" onClick={() => rollback(ver.id, ver.version)}>
-                          <IconRollback size={14} />
-                          Go back to this version
-                        </button>
+                          <IconRollback size={14} />{tr("Go back to this version")}</button>
                       )
                     )}
                   </li>

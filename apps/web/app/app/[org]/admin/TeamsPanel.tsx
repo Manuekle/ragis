@@ -8,6 +8,7 @@ import { Avatar, Select, TextField } from "@/components/ui";
 import { IconEdit, IconPlus, IconTeam } from "@/components/icons";
 import { StateIllustration } from "@/components/AppState";
 import { useOrg, type TeamDir, type TeamSuggestion } from "../layout";
+import { useT } from "@/lib/use-t";
 
 /**
  * Governance → Teams (ADR-035). The company's managers (admins) create the departments and put each person in theirs.
@@ -41,6 +42,7 @@ export function TeamsPanel({
   onNotice: (message: string) => void;
   onError: (error: Error) => void;
 }) {
+  const tr = useT();
   const { teams, teamSuggestions } = useOrg();
   const [dialog, setDialog] = useState<{ team?: TeamDir } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -88,18 +90,16 @@ export function TeamsPanel({
     <>
       <div className="section-head">
         <div>
-          <p>Each team gets its own private space: its documents and answers stay inside the team. Put each person in their team. Leads pick up what other teams ask in their Inbox.</p>
+          <p>{tr("Each team gets its own private space: its documents and answers stay inside the team. Put each person in their team. Leads pick up what other teams ask in their Inbox.")}</p>
         </div>
         <button type="button" className="primary" onClick={() => setDialog({})}>
-          <IconPlus size={16} />
-          New team
-        </button>
+          <IconPlus size={16} />{tr("New team")}</button>
       </div>
 
       {(active.length > 0 || teamSuggestions.length > 0 || archived.length > 0) && (
-        <div className="team-strip" aria-label="Teams">
+        <div className="team-strip" aria-label={tr("Teams")}>
           {active.map((t) => (
-            <button key={t.id} type="button" className="team-pill" data-team-color={t.color} onClick={() => setDialog({ team: t })} aria-label={`Edit ${t.name}`}>
+            <button key={t.id} type="button" className="team-pill" data-team-color={t.color} onClick={() => setDialog({ team: t })} aria-label={tr("Edit {name}", { name: t.name })}>
               <span className="team-dot" aria-hidden="true" />
               <span className="name">{t.name}</span>
               <span className="count">{t.member_count}</span>
@@ -114,7 +114,7 @@ export function TeamsPanel({
               data-team-color={s.color}
               disabled={busy === `new:${s.name}`}
               aria-busy={busy === `new:${s.name}`}
-              title={s.existing_workspace ? `Uses the existing ${s.name} space and its ${s.existing_workspace.members} people` : s.description}
+              title={s.existing_workspace ? tr("Uses the existing {name} space and its {members} people", { name: s.name, members: s.existing_workspace.members }) : s.description}
               onClick={() => void createSuggested(s)}
             >
               <IconPlus size={13} />
@@ -122,10 +122,10 @@ export function TeamsPanel({
             </button>
           ))}
           {archived.map((t) => (
-            <button key={t.id} type="button" className="team-pill archived" data-team-color={t.color} onClick={() => setDialog({ team: t })} aria-label={`Edit ${t.name} (archived)`}>
+            <button key={t.id} type="button" className="team-pill archived" data-team-color={t.color} onClick={() => setDialog({ team: t })} aria-label={tr("Edit {name} (archived)", { name: t.name })}>
               <span className="team-dot" aria-hidden="true" />
               <span className="name">{t.name}</span>
-              <span className="muted">archived</span>
+              <span className="muted">{tr("archived")}</span>
             </button>
           ))}
         </div>
@@ -134,17 +134,17 @@ export function TeamsPanel({
       {teams !== null && active.length === 0 ? (
         <div className="card empty">
           <StateIllustration kind="teams" />
-          <strong>No teams yet</strong>
-          <span>Start with the departments your company has. One click on a suggestion above creates it; then put people in it here.</span>
+          <strong>{tr("No teams yet")}</strong>
+          <span>{tr("Start with the departments your company has. One click on a suggestion above creates it; then put people in it here.")}</span>
         </div>
       ) : (
         <div className="table-wrap" aria-busy={loading || teams === null}>
           <table>
             <thead>
               <tr>
-                <th>Member</th>
-                <th>Team</th>
-                <th className="hide-sm">Lead of</th>
+                <th>{tr("Member")}</th>
+                <th>{tr("Team")}</th>
+                <th className="hide-sm">{tr("Lead of")}</th>
               </tr>
             </thead>
             <tbody>
@@ -165,7 +165,7 @@ export function TeamsPanel({
                       </div>
                     </td>
                     <td>
-                      <div className="chips" role="group" aria-label={`Teams for ${p.email}`}>
+                      <div className="chips" role="group" aria-label={tr("Teams for {email}", { email: p.email })}>
                         {active.map((t) => {
                           const on = mine.includes(t);
                           return (
@@ -192,10 +192,10 @@ export function TeamsPanel({
                       ) : (
                         <Select
                           size="sm"
-                          ariaLabel={`Team ${p.email} leads`}
+                          ariaLabel={tr("Team {email} leads", { email: p.email })}
                           value={leads?.id ?? ""}
                           onChange={(v) => void setLead(p, mine, v)}
-                          options={[{ value: "", label: "Not a lead" }, ...mine.map((t) => ({ value: t.id, label: t.name }))]}
+                          options={[{ value: "", label: tr("Not a lead") }, ...mine.map((t) => ({ value: t.id, label: t.name }))]}
                         />
                       )}
                     </td>
@@ -226,8 +226,9 @@ export function TeamsPanel({
 const label = (p: Person) => p.display_name ?? p.email.split("@")[0];
 
 function ColorPicks({ value, onChange }: { value: TeamColor; onChange: (c: TeamColor) => void }) {
+  const tr = useT();
   return (
-    <div className="color-picks" role="radiogroup" aria-label="Team color">
+    <div className="color-picks" role="radiogroup" aria-label={tr("Team color")}>
       {TEAM_COLORS.map((c) => (
         <button key={c} type="button" role="radio" aria-checked={value === c} aria-pressed={value === c} aria-label={c} data-team-color={c} onClick={() => onChange(c)} />
       ))}
@@ -247,6 +248,7 @@ function TeamDialog({
   onClose: () => void;
   onSaved: (name: string, created: boolean) => void;
 }) {
+  const tr = useT();
   const [name, setName] = useState(team?.name ?? "");
   const [description, setDescription] = useState(team?.description ?? "");
   const [color, setColor] = useState<TeamColor>((team?.color as TeamColor) ?? "blue");
@@ -280,10 +282,10 @@ function TeamDialog({
 
   return (
     <FormDialog
-      title={team ? `Edit ${team.name}` : "New team"}
-      description={team ? "Renaming the team also renames its space." : "The team gets its own private space for documents. Put people in it from the table."}
+      title={team ? tr("Edit {name}", { name: team.name }) : tr("New team")}
+      description={team ? tr("Renaming the team also renames its space.") : tr("The team gets its own private space for documents. Put people in it from the table.")}
       icon={IconTeam}
-      submitLabel={team ? "Save" : "Create team"}
+      submitLabel={team ? tr("Save") : tr("Create team")}
       busy={busy}
       wide
       onClose={onClose}
@@ -295,10 +297,10 @@ function TeamDialog({
         </div>
       )}
       <TextField
-        label="Name"
+        label={tr("Name")}
         value={name}
         maxLength={80}
-        placeholder="e.g. Legal, Treasury, People"
+        placeholder={tr("e.g. Legal, Treasury, People")}
         onChange={(e) => {
           setName(e.target.value);
           setNameError(undefined);
@@ -307,16 +309,16 @@ function TeamDialog({
         data-autofocus
       />
       <div className="field">
-        <label htmlFor="team-desc">What does this team handle? (optional)</label>
-        <textarea id="team-desc" rows={2} maxLength={280} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Helps others know when to ask this team." style={{ minHeight: 64 }} />
+        <label htmlFor="team-desc">{tr("What does this team handle? (optional)")}</label>
+        <textarea id="team-desc" rows={2} maxLength={280} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={tr("Helps others know when to ask this team.")} style={{ minHeight: 64 }} />
       </div>
       <div className="field">
-        <span className="field-label">Color</span>
+        <span className="field-label">{tr("Color")}</span>
         <ColorPicks value={color} onChange={setColor} />
       </div>
       {team && (
         <div className="field">
-          <Checkbox checked={archived} onChange={setArchived} label="Archived: the team stops receiving new requests" />
+          <Checkbox checked={archived} onChange={setArchived} label={tr("Archived: the team stops receiving new requests")} />
         </div>
       )}
     </FormDialog>

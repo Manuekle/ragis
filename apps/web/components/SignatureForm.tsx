@@ -8,6 +8,7 @@ import { SignaturePreview, SignatureUpload, type SavedSignature } from "@/compon
 import { TextField } from "@/components/ui";
 import { api } from "@/lib/api";
 import styles from "./signature-image.module.css";
+import { useT } from "@/lib/use-t";
 
 type Appearance = { type: "image"; image: string } | { type: "saved"; id: string };
 
@@ -20,6 +21,7 @@ export function SignatureForm({ consentText, onRespond, personalSignaturesHref }
   onRespond: (body: SignatureDecision) => Promise<void>;
   personalSignaturesHref?: string;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [consent, setConsent] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -71,7 +73,7 @@ export function SignatureForm({ consentText, onRespond, personalSignaturesHref }
       setSaved((current) => [item, ...current.filter((signature) => signature.id !== item.id)]);
       setSelected(item);
       setUploaded("");
-      setNotice("Signature saved to your account.");
+      setNotice(t("Signature saved to your account."));
     } catch (err) {
       setLibraryError((err as Error).message);
     } finally {
@@ -85,11 +87,11 @@ export function SignatureForm({ consentText, onRespond, personalSignaturesHref }
 
   return declining ? (
     <form className="stack" onSubmit={(event) => { event.preventDefault(); void submit({ decision: "decline", reason: reason.trim() || undefined }); }}>
-      <p className="muted">If you decline, the request closes for all signers.</p>
-      <TextField label="Reason (optional)" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+      <p className="muted">{t("If you decline, the request closes for all signers.")}</p>
+      <TextField label={t("Reason (optional)")} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
       <div className="row">
-        <button type="submit" className="danger" disabled={busy}>Confirm decline</button>
-        <button type="button" className="ghost" disabled={busy} onClick={() => setDeclining(false)}>Back to signing</button>
+        <button type="submit" className="danger" disabled={busy}>{t("Confirm decline")}</button>
+        <button type="button" className="ghost" disabled={busy} onClick={() => setDeclining(false)}>{t("Back to signing")}</button>
       </div>
     </form>
   ) : (
@@ -97,16 +99,16 @@ export function SignatureForm({ consentText, onRespond, personalSignaturesHref }
       event.preventDefault();
       if (!locked && consent && name.trim().length >= 2) void submit({ decision: "sign", typed_name: name.trim(), consent: true, appearance });
     }}>
-      <TextField label="Type your full name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} required />
+      <TextField label={t("Type your full name")} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} required />
       <SignaturePreview image={image} name={name.trim()} />
       <SignatureUpload onImage={(next) => { setUploaded(next); setSelected(null); setNotice(""); }} onReading={setReading} disabled={locked} replacing={!!image} />
       {image && <div className="row">
-        <button type="button" className="quiet small" disabled={locked} onClick={() => { setUploaded(""); setSelected(null); setNotice(""); }}>Use typed signature</button>
-        {uploaded && personalSignaturesHref && <button type="button" className="quiet small" disabled={locked || saved.length >= 6} onClick={saveImage}>Save to my signatures</button>}
+        <button type="button" className="quiet small" disabled={locked} onClick={() => { setUploaded(""); setSelected(null); setNotice(""); }}>{t("Use typed signature")}</button>
+        {uploaded && personalSignaturesHref && <button type="button" className="quiet small" disabled={locked || saved.length >= 6} onClick={saveImage}>{t("Save to my signatures")}</button>}
       </div>}
       {saved.length > 0 && (
         <fieldset className={styles.picker} disabled={locked}>
-          <legend>Saved signatures</legend>
+          <legend>{t("Saved signatures")}</legend>
           <div className={styles.choices}>
             {saved.map((item) => (
               <button key={item.id} type="button" className="ghost" aria-pressed={selected?.id === item.id} onClick={() => { setSelected(item); setUploaded(""); setNotice(""); }}>
@@ -122,10 +124,9 @@ export function SignatureForm({ consentText, onRespond, personalSignaturesHref }
       <Checkbox checked={consent} onChange={setConsent} label={consentText} />
       <div className="row">
         <button type="submit" className="primary" disabled={locked || !consent || name.trim().length < 2}>
-          {busy ? <IconSpinner size={16} /> : <IconSignature size={16} />} Sign documents
-        </button>
-        <button type="button" className="ghost" disabled={locked} onClick={() => setDeclining(true)}>Decline</button>
-        {personalSignaturesHref && <Link href={personalSignaturesHref} target="_blank" rel="noreferrer" className="btn quiet small">Manage signatures</Link>}
+          {busy ? <IconSpinner size={16} /> : <IconSignature size={16} />}{" "}{t("Sign documents")}</button>
+        <button type="button" className="ghost" disabled={locked} onClick={() => setDeclining(true)}>{t("Decline")}</button>
+        {personalSignaturesHref && <Link href={personalSignaturesHref} target="_blank" rel="noreferrer" className="btn quiet small">{t("Manage signatures")}</Link>}
       </div>
     </form>
   );

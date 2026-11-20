@@ -3,6 +3,7 @@
 import { FileTile } from "@/components/FileTile";
 import { IconTrash, IconX } from "@/components/icons";
 import { formatBytes } from "@/lib/api";
+import { useT, tNow } from "@/lib/use-t";
 
 /**
  * The brand folder (same paths and colours as FolderGlyph) with two sheets tucked between the
@@ -66,20 +67,20 @@ const KIND: Record<string, Kind> = {
 const kindOf = (ext: string): Kind => KIND[ext] ?? "doc";
 
 /** What "reading" means for each kind of file: the worker runs a different extractor for each. */
-const READ: Record<Kind, { now: string; short: string }> = {
-  pdf: { now: "Reading the pages", short: "Read pages" },
-  doc: { now: "Reading the text", short: "Read text" },
-  slides: { now: "Reading the slides", short: "Read slides" },
-  sheet: { now: "Reading the tables", short: "Read tables" },
-  image: { now: "Looking for text in the image", short: "Read image" },
-  audio: { now: "Turning speech into text", short: "Transcribe" },
-};
+const READ = (): Record<Kind, { now: string; short: string }> => ({
+  pdf: { now: tNow("Reading the pages"), short: tNow("Read pages") },
+  doc: { now: tNow("Reading the text"), short: tNow("Read text") },
+  slides: { now: tNow("Reading the slides"), short: tNow("Read slides") },
+  sheet: { now: tNow("Reading the tables"), short: tNow("Read tables") },
+  image: { now: tNow("Looking for text in the image"), short: tNow("Read image") },
+  audio: { now: tNow("Turning speech into text"), short: tNow("Transcribe") },
+});
 
 function stages(kind: Kind) {
   return [
     { now: "Uploading", short: "Upload" },
     { now: "Checking the file is safe", short: "Safety check" },
-    READ[kind],
+    READ()[kind],
     { now: kind === "audio" ? "Indexing the transcript" : "Indexing for search", short: "Index" },
   ];
 }
@@ -120,6 +121,7 @@ function StateMark({ phase }: { phase: UploadPhase }) {
 }
 
 export function UploadTracker({ items, onDismiss, onRemove }: { items: UploadItem[]; onDismiss: (key: string) => void; onRemove: (it: UploadItem) => void }) {
+  const t = useT();
   const shown = items.filter((i) => !i.leaving);
   if (!items.length) return null;
   const ready = shown.filter((i) => i.phase === "ready").length;
@@ -127,23 +129,22 @@ export function UploadTracker({ items, onDismiss, onRemove }: { items: UploadIte
   const active = shown.length - ready - failed;
   const plural = (n: number) => `${n} file${n === 1 ? "" : "s"}`;
   const title = active
-    ? `Adding ${plural(active)}`
+    ? t("Adding {v1}", { v1: plural(active) })
     : failed && !ready
-      ? `Couldn't add ${plural(failed)}`
+      ? t("Couldn't add {v1}", { v1: plural(failed) })
       : failed
-        ? `${ready} indexed · ${failed} couldn't be added`
-        : `${ready === 1 ? "File" : `All ${ready} files`} indexed`;
+        ? t("{ready} indexed · {failed} couldn't be added", { ready: ready, failed: failed })
+        : t("{v1} indexed", { v1: ready === 1 ? "File" : `All ${ready} files` });
   const tone = active ? "active" : failed ? "failed" : "ready";
   return (
-    <section className={`utrack is-${tone}`} aria-label="Uploads">
+    <section className={`utrack is-${tone}`} aria-label={t("Uploads")}>
       <header className="utrack-head">
         <span className="utrack-title" key={title}>
           {title}
         </span>
         {active > 0 && (
           <span className="utrack-count">
-            {ready} of {shown.length - failed} indexed
-          </span>
+            {ready}{" "}{t("of")}{" "}{shown.length - failed}{" "}{t("indexed")}</span>
         )}
       </header>
       <ul className="utrack-list" aria-live="polite">
@@ -156,16 +157,17 @@ export function UploadTracker({ items, onDismiss, onRemove }: { items: UploadIte
 }
 
 function UploadRow({ it, onDismiss, onRemove }: { it: UploadItem; onDismiss: (key: string) => void; onRemove: (it: UploadItem) => void }) {
+  const t = useT();
   const kind = kindOf(it.ext);
   const steps = stages(kind);
   const current = steps[Math.min(it.stage, steps.length - 1)];
   const label =
     it.phase === "ready"
-      ? "Indexed · ready for questions"
+      ? t("Indexed · ready for questions")
       : it.phase === "failed"
-        ? it.error ?? "Couldn't add this file"
+        ? it.error ?? t("Couldn't add this file")
         : it.phase === "uploading" && it.progress === 0
-          ? "Waiting to upload"
+          ? t("Waiting to upload")
           : current.now;
   const right = it.phase === "uploading" && it.progress > 0 ? `${Math.round(it.progress * 100)}%` : it.phase === "indexing" ? `${it.stage + 1}/${steps.length}` : null;
   return (
@@ -210,12 +212,12 @@ function UploadRow({ it, onDismiss, onRemove }: { it: UploadItem; onDismiss: (ke
       <StateMark phase={it.phase} />
       <span className="urow-actions">
         {it.phase === "failed" && it.docId && (
-          <button type="button" className="quiet icon small" onClick={() => onRemove(it)} aria-label={`Delete ${it.name}`} title="Delete file">
+          <button type="button" className="quiet icon small" onClick={() => onRemove(it)} aria-label={t("Delete {name}", { name: it.name })} title={t("Delete file")}>
             <IconTrash size={14} />
           </button>
         )}
         {(it.phase === "failed" || it.phase === "indexing") && (
-          <button type="button" className="quiet icon small" onClick={() => onDismiss(it.key)} aria-label={`Hide ${it.name}`} title="Hide">
+          <button type="button" className="quiet icon small" onClick={() => onDismiss(it.key)} aria-label={t("Hide {name}", { name: it.name })} title={t("Hide")}>
             <IconX size={14} />
           </button>
         )}

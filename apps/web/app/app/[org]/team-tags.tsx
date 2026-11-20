@@ -1,6 +1,7 @@
 "use client";
 
 import { useOrg } from "./layout";
+import { useT } from "@/lib/use-t";
 
 /** A team as screens show it: name and color (ADR-035). */
 export interface TeamRef {
@@ -23,13 +24,14 @@ export function TeamChip({ team, size, title }: { team: TeamRef; size?: "sm"; ti
  * (or none) the label would say the same thing for everybody.
  */
 export function PersonTeams({ userId, max = 2 }: { userId: string | null | undefined; max?: number }) {
+  const tr = useT();
   const { teamsOf } = useOrg();
   const list = teamsOf(userId);
   if (!list.length) return null;
   return (
     <span className="person-teams">
       {list.slice(0, max).map((t) => (
-        <TeamChip key={t.id} team={t} size="sm" title={t.lead ? `Leads ${t.name}` : t.name} />
+        <TeamChip key={t.id} team={t} size="sm" title={t.lead ? tr("Leads {name}", { name: t.name }) : t.name} />
       ))}
       {list.length > max && (
         <span className="more" title={list.slice(max).map((t) => t.name).join(", ")}>

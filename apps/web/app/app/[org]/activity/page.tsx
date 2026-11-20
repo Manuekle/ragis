@@ -11,6 +11,7 @@ import { SkeletonActivityRows, SkeletonStatus } from "@/components/skeletons";
 import { useOrg } from "../layout";
 import { ERROR_COPY, StateBadge, ago } from "../workflows/shared";
 import { Seg } from "@/components/motion";
+import { useT, tNow } from "@/lib/use-t";
 
 interface RunSummary {
   id: string;
@@ -24,16 +25,17 @@ interface RunSummary {
   usage: { agent_calls: number; retrieval_calls: number };
 }
 
-const FILTERS: [string, string][] = [
-  ["", "All"],
-  ["WAITING_HUMAN", "Waiting"],
-  ["RUNNING", "Running"],
-  ["COMPLETED", "Completed"],
-  ["FAILED", "Failed"],
-  ["CANCELLED", "Cancelled"],
-];
+const FILTERS = (): [string, string][] => ([
+  ["", tNow("All")],
+  ["WAITING_HUMAN", tNow("Waiting")],
+  ["RUNNING", tNow("Running")],
+  ["COMPLETED", tNow("Completed")],
+  ["FAILED", tNow("Failed")],
+  ["CANCELLED", tNow("Cancelled")],
+]);
 
 export default function ActivityPage() {
+  const t = useT();
   const { org } = useParams<{ org: string }>();
   const { org: orgInfo } = useOrg();
   const [state, setState] = useState("");
@@ -62,18 +64,18 @@ export default function ActivityPage() {
   return (
     <div className="page">
       <header className="page-bar">
-        <PageBreadcrumbs section="Activity" context={orgInfo?.name} icon={IconBuilding} />
+        <PageBreadcrumbs section={t("Activity")} context={orgInfo?.name} icon={IconBuilding} />
       </header>
       <div className="main">
         <header className="page-head" style={{ marginBottom: 20 }}>
           <div>
-            <h1>Activity</h1>
-            <p className="sub">Every workflow that ran, with each step, who decided what, and the sources used.</p>
+            <h1>{t("Activity")}</h1>
+            <p className="sub">{t("Every workflow that ran, with each step, who decided what, and the sources used.")}</p>
           </div>
         </header>
 
-        <Seg role="group" aria-label="Filter by state" style={{ marginBottom: 16 }}>
-          {FILTERS.map(([v, l]) => (
+        <Seg role="group" aria-label={t("Filter by state")} style={{ marginBottom: 16 }}>
+          {FILTERS().map(([v, l]) => (
             <button key={v} type="button" aria-pressed={state === v} onClick={() => filterByState(v)}>
               {l}
             </button>
@@ -89,14 +91,14 @@ export default function ActivityPage() {
 
         {(!error || runs !== null) && (
           runs === null ? (
-            <SkeletonStatus label="Loading activity…">
+            <SkeletonStatus label={t("Loading activity…")}>
               <SkeletonActivityRows />
             </SkeletonStatus>
           ) : runs.length === 0 ? (
             <div className="card empty">
               <StateIllustration kind="activity" />
-              <strong>Nothing here yet</strong>
-              <span>{state ? "No run is in this state right now." : "Run a published workflow and it will show up here."}</span>
+              <strong>{t("Nothing here yet")}</strong>
+              <span>{state ? t("No run is in this state right now.") : t("Run a published workflow and it will show up here.")}</span>
             </div>
           ) : (
             <section className="card act-list" aria-busy={pending || undefined} data-loading={pending ? "" : undefined}>
@@ -112,17 +114,17 @@ export default function ActivityPage() {
                       <span className="sep"> · </span>
                       {ago(r.created_at)}
                       <span className="sep"> · </span>
-                      {r.usage.agent_calls} agent {r.usage.agent_calls === 1 ? "step" : "steps"}
+                      {r.usage.agent_calls === 1 ? t("1 agent step") : t("{n} agent steps", { n: r.usage.agent_calls })}
                       {r.error_code && (
                         <>
                           <span className="sep"> · </span>
-                          <span className="err">{ERROR_COPY[r.error_code] ?? r.error_code}</span>
+                          <span className="err">{t(ERROR_COPY[r.error_code]) ?? r.error_code}</span>
                         </>
                       )}
                     </span>
                   </span>
                   <span className="cell wait-cell">
-                    {r.pending_approvals > 0 && <span className="badge warn">{r.pending_approvals === 1 ? "1 approval waiting" : `${r.pending_approvals} approvals waiting`}</span>}
+                    {r.pending_approvals > 0 && <span className="badge warn">{r.pending_approvals === 1 ? t("1 approval waiting") : t("{pending_approvals} approvals waiting", { pending_approvals: r.pending_approvals })}</span>}
                   </span>
                   <span className="cell state-cell">
                     <StateBadge state={r.state} />

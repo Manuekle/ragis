@@ -710,7 +710,8 @@ paths:
               properties:
                 template: { type: string }
                 slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,60}$' }
-                name: { type: string }
+                name: { type: string, minLength: 2, maxLength: 80 }
+                purpose: { type: string, minLength: 10, maxLength: 400, description: "Overrides the template's purpose (the web sends it in the reader's language)" }
                 space_ids: { type: array, items: { type: string, format: uuid } }
       responses: { "201": { description: Created + policy validation } }
   /v1/organizations/{org}/agents/{id}:
@@ -753,7 +754,20 @@ paths:
   /v1/organizations/{org}/workflows:
     parameters: [{ $ref: '#/components/parameters/org' }]
     get: { summary: Visible workflows (published + own drafts; admin sees all), responses: { "200": { description: OK } } }
-    post: { summary: Creates a draft workflow from a template or empty (member+), responses: { "201": { description: Created + graph validation } } }
+    post:
+      summary: Creates a draft workflow from a template or empty (member+)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                template: { type: string }
+                name: { type: string, minLength: 2, maxLength: 80 }
+                description: { type: string, maxLength: 400 }
+                labels: { type: object, additionalProperties: { type: string, minLength: 1, maxLength: 120 }, description: "Step labels by node id (the web sends the template's in the reader's language); steps and rules are not changed" }
+      responses: { "201": { description: Created + graph validation } }
   /v1/organizations/{org}/workflows/{id}:
     parameters: [{ $ref: '#/components/parameters/org' }, { $ref: '#/components/parameters/id' }]
     get: { summary: "Draft graph, validation (DAG, hops, gates, published agents), versions and publishing conditions", responses: { "200": { description: OK } } }

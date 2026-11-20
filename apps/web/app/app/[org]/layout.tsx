@@ -9,16 +9,21 @@ import { IconActivity, IconAgent, IconSignature, IconAlert, IconInbox, IconWorkf
 import { SoftText, useDropdown } from "@/components/motion";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { ConfirmProvider, Avatar } from "@/components/ui";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import "./studio.css";
 import "./workflows.css";
 import "./teams.css";
+import { useT } from "@/lib/use-t";
+import { roleWord } from "@/lib/plain";
 
 interface OrgInfo {
   id: string;
   name: string;
   role: string;
   plan: { id: string; rerank_enabled: boolean };
+  /** Sector chosen in Setup ("legal", "consulting"…); null until then. Tailors suggestions and templates. */
+  sector: string | null;
 }
 
 /** A company team as the directory returns it (GET /teams, visible to the whole organization, ADR-035). */
@@ -74,6 +79,7 @@ const OrgContext = createContext<Ctx>({
 export const useOrg = () => useContext(OrgContext);
 
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
+  const tr = useT();
   const { org: orgId } = useParams<{ org: string }>();
   const path = usePathname();
   const [org, setOrg] = useState<OrgInfo | null>(null);
@@ -179,20 +185,20 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const isAdmin = org?.role === "owner" || org?.role === "admin";
   const isAsk = path?.endsWith("/ask") ?? false;
   const main = [
-    { href: `/app/${orgId}/ask`, label: "Ask", Icon: IconChat },
-    { href: `/app/${orgId}/library`, label: "Library", Icon: IconFiles },
-    { href: `/app/${orgId}/connections`, label: "Connected apps", Icon: IconPlug },
-    { href: `/app/${orgId}/agents`, label: "Agent Studio", Icon: IconAgent },
-    { href: `/app/${orgId}/workflows`, label: "Workflows", Icon: IconWorkflow },
-    { href: `/app/${orgId}/inbox`, label: "Inbox", Icon: IconInbox, count: inboxCount },
-    { href: `/app/${orgId}/activity`, label: "Activity", Icon: IconActivity },
-    { href: `/app/${orgId}/signatures`, label: "Signatures", Icon: IconSignature },
+    { href: `/app/${orgId}/ask`, label: tr("Ask"), Icon: IconChat },
+    { href: `/app/${orgId}/library`, label: tr("Library"), Icon: IconFiles },
+    { href: `/app/${orgId}/connections`, label: tr("Connected apps"), Icon: IconPlug },
+    { href: `/app/${orgId}/agents`, label: tr("Agent Studio"), Icon: IconAgent },
+    { href: `/app/${orgId}/workflows`, label: tr("Workflows"), Icon: IconWorkflow },
+    { href: `/app/${orgId}/inbox`, label: tr("Inbox"), Icon: IconInbox, count: inboxCount },
+    { href: `/app/${orgId}/activity`, label: tr("Activity"), Icon: IconActivity },
+    { href: `/app/${orgId}/signatures`, label: tr("Signatures"), Icon: IconSignature },
   ];
   const admin = isAdmin
     ? [
-        { href: `/app/${orgId}/onboarding`, label: "Setup", Icon: IconRocket },
-        { href: `/app/${orgId}/usage`, label: "Usage & costs", Icon: IconChart },
-        { href: `/app/${orgId}/admin`, label: "Governance", Icon: IconShield },
+        { href: `/app/${orgId}/onboarding`, label: tr("Setup"), Icon: IconRocket },
+        { href: `/app/${orgId}/usage`, label: tr("Usage & costs"), Icon: IconChart },
+        { href: `/app/${orgId}/admin`, label: tr("Governance"), Icon: IconShield },
       ]
     : [];
   const wsName = workspaces.find((w) => w.id === workspaceId)?.name;
@@ -238,7 +244,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
           <div className="side-org">
             {loading ? <Skel w={28} h={28} r={999} /> : <Avatar name={org?.name ?? "·"} size="sm" />}
             {loading ? (
-              <SkeletonStatus label="Loading organization…" className="side-org-meta">
+              <SkeletonStatus label={tr("Loading organization…")} className="side-org-meta">
                 <div className="stack" style={{ gap: 4 }}>
                   <Skel w={98} h={12} />
                   <Skel w={64} h={10} />
@@ -246,10 +252,10 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
               </SkeletonStatus>
             ) : (
               <span className="side-org-meta">
-                <strong>{org?.name ?? "Organization"}</strong>
+                <strong>{org?.name ?? tr("Organization")}</strong>
                 {org && (
                   <small>
-                    {org.role} · {showTeamTags && myTeams.length ? myTeams.map((t) => t.name).join(", ") : `${org.plan?.id ?? "—"} plan`}
+                    {tr(roleWord(org.role))} · {showTeamTags && myTeams.length ? myTeams.map((t) => t.name).join(", ") : tr("{plan} plan", { plan: org.plan?.id ?? "—" })}
                   </small>
                 )}
               </span>
@@ -258,7 +264,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 className="side-org-btn"
-                aria-label="Organization options"
+                aria-label={tr("Organization options")}
                 aria-haspopup="menu"
                 aria-expanded={orgMenu.isOpen}
                 onClick={orgMenu.toggle}
@@ -266,26 +272,22 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
                 <IconChevronsUpDown size={15} />
               </button>
               <div className={`menu ${orgMenu.cls}`} role="menu" data-origin="top-right" inert={!orgMenu.isOpen}>
-                <div className="menu-label">{org?.name ?? "Organization"}</div>
+                <div className="menu-label">{org?.name ?? tr("Organization")}</div>
                 <a className="menu-item" href="/app" role="menuitem">
-                  <IconSwitch size={15} />
-                  Switch organization
-                </a>
+                  <IconSwitch size={15} />{tr("Switch organization")}</a>
                 <div className="menu-sep" />
                 <a className="menu-item danger" href="/api/auth/logout" role="menuitem">
-                  <IconLogout size={15} />
-                  Sign out
-                </a>
+                  <IconLogout size={15} />{tr("Sign out")}</a>
               </div>
             </div>
           </div>
 
           <div className="switcher" ref={wsMenu.ref}>
-            <span className="side-label">Workspace</span>
+            <span className="side-label">{tr("Workspace")}</span>
             <button
               type="button"
               className="switcher-btn"
-              aria-label="Switch workspace"
+              aria-label={tr("Switch workspace")}
               aria-haspopup="menu"
               aria-expanded={wsMenu.isOpen}
               onClick={wsMenu.toggle}
@@ -294,15 +296,15 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
               <span className="meta">
                 {loading ? (
                   <>
-                    <span className="sr-only">Loading workspaces…</span>
+                    <span className="sr-only">{tr("Loading workspaces…")}</span>
                     <Skel w={84} h={12} />
                   </>
-                ) : <strong>{wsName ?? "No workspace"}</strong>}
+                ) : <strong>{wsName ?? tr("No workspace")}</strong>}
               </span>
               <IconChevronsUpDown size={15} />
             </button>
             <div className={`menu ${wsMenu.cls}`} role="menu" data-origin="top-left" inert={!wsMenu.isOpen}>
-              <div className="menu-label">Workspaces</div>
+              <div className="menu-label">{tr("Workspaces")}</div>
               {workspaces.map((w) => (
                 <button
                   key={w.id}
@@ -323,21 +325,21 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="nav" ref={navRef} aria-label="Main navigation">
+          <div className="nav" ref={navRef} aria-label={tr("Main navigation")}>
             <span className="nav-pill" ref={pillRef} aria-hidden="true" />
-            <div className="nav-label">Workspace</div>
+            <div className="nav-label">{tr("Workspace")}</div>
             {main.map(({ href, label, Icon, count }) => (
               <Link key={href} href={href} className={path?.startsWith(href) ? "active" : ""} aria-current={path?.startsWith(href) ? "page" : undefined}>
                 <Icon size={18} variant={path?.startsWith(href) ? "duotone" : "stroke"} />
                 {label}
                 {!!count && (
-                  <span className="nav-count" aria-label={`${count} pending`}>
+                  <span className="nav-count" aria-label={tr("{count} pending", { count })}>
                     <SoftText text={String(count)} />
                   </span>
                 )}
               </Link>
             ))}
-            {admin.length > 0 && <div className="nav-label">Administration</div>}
+            {admin.length > 0 && <div className="nav-label">{tr("Administration")}</div>}
             {admin.map(({ href, label, Icon }) => (
               <Link key={href} href={href} className={path?.startsWith(href) ? "active" : ""} aria-current={path?.startsWith(href) ? "page" : undefined}>
                 <Icon size={18} variant={path?.startsWith(href) ? "duotone" : "stroke"} />
@@ -349,13 +351,15 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
           <div className="side-foot">
             {isAdmin && org?.plan && org.plan.id !== "private" && (
               <Link href={`/app/${orgId}/usage`} className="btn-upgrade side-upgrade">
-                <IconSparkles size={15} variant="duotone" />
-                Upgrade plan
-              </Link>
+                <IconSparkles size={15} variant="duotone" />{tr("Upgrade plan")}</Link>
             )}
             <div className="theme-row">
-              <span className="side-label">Theme</span>
+              <span className="side-label">{tr("Theme")}</span>
               <ThemeToggle />
+            </div>
+            <div className="theme-row">
+              <span className="side-label">{tr("Language")}</span>
+              <LanguageSwitch />
             </div>
           </div>
         </aside>
@@ -363,15 +367,15 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
           {showSetup && (
             <div className="setup-banner" role="status">
               <IconRocket size={16} variant="duotone" />
-              <strong>{setup!.status === "NEEDS_REVIEW" ? "Your profile changed" : "Finish setting up"}</strong>
-              <span>{setup!.status === "NEEDS_REVIEW" ? "Review the new space and agent suggestions." : `${setupDone} of 9 steps done`}</span>
+              <strong>{setup!.status === "NEEDS_REVIEW" ? tr("Your profile changed") : tr("Finish setting up")}</strong>
+              <span>{setup!.status === "NEEDS_REVIEW" ? tr("Review the new space and agent suggestions.") : tr("{setupDone} of 9 steps done", { setupDone: setupDone })}</span>
               {setup!.status !== "NEEDS_REVIEW" && (
                 <span className="meter-inline" aria-hidden="true">
                   <span style={{ width: `${(setupDone / 9) * 100}%` }} />
                 </span>
               )}
               <Link href={`/app/${orgId}/onboarding`}>
-                {setup!.status === "NEEDS_REVIEW" ? "Review" : "Continue"}
+                {setup!.status === "NEEDS_REVIEW" ? tr("Review") : tr("Continue")}
                 <IconArrowRight size={14} />
               </Link>
             </div>
