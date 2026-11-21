@@ -28,7 +28,7 @@ function Stage({ children, note = true }: { children: React.ReactNode; note?: bo
     </div>
   );
 }
-const PDFViewer = dynamic(() => import("./extend/pdf-viewer").then((m) => m.PDFViewer), { ssr: false, loading: Loading });
+const PDFViewer = dynamic(() => import("./extend/pdf-at-page").then((m) => m.PDFViewerAtPage), { ssr: false, loading: Loading });
 const DocxViewerPreview = dynamic(() => import("./extend/docx-viewer").then((m) => m.DocxViewerPreview), { ssr: false, loading: Loading });
 const XlsxViewerPreview = dynamic(() => import("./extend/xlsx-viewer").then((m) => m.XlsxViewerPreview), { ssr: false, loading: Loading });
 const PptxViewerPreview = dynamic(() => import("./extend/pptx-viewer").then((m) => m.PptxViewerPreview), { ssr: false, loading: Loading });
@@ -73,6 +73,8 @@ export interface ViewerDoc {
   filename: string;
   /** Recordings: second to open at (the moment a source cites). */
   startAt?: number;
+  /** PDFs: page to open at (the page a citation or a deadline comes from). */
+  page?: number;
   /** A file that isn't in the library (a generated document, ADR-034): same-origin inline URL and its own download. */
   source?: { inlineUrl: string; download: () => Promise<void> };
 }
@@ -270,7 +272,7 @@ export function DocViewer({ doc, orgId, onClose }: { doc: ViewerDoc | null; orgI
             </Stage>
           ) : (
             <TooltipProvider>
-              {kind === "pdf" && <PDFViewer key={url} {...cp} />}
+              {kind === "pdf" && <PDFViewer key={url} {...cp} page={current.page} />}
               {kind === "docx" && <DocxViewerPreview key={url} {...cp} isDark={dark} onIsDarkChange={setDark} />}
               {kind === "xlsx" && <XlsxViewerPreview key={url} {...cp} isDark={dark} onIsDarkChange={setDark} />}
               {kind === "pptx" && <PptxViewerPreview key={url} {...cp} />}

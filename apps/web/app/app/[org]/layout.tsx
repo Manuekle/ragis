@@ -5,7 +5,7 @@ import { usePathname, useParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type Workspace } from "@/lib/api";
 import { AppErrorState, requestErrorKind } from "@/components/AppState";
-import { IconActivity, IconAgent, IconBriefcase, IconSignature, IconAlert, IconInbox, IconWorkflow, IconArrowRight, IconChart, IconChat, IconRocket, IconChevronsUpDown, IconFiles, IconFolder, IconLogout, IconPlug, IconShield, IconSparkles, IconSwitch } from "@/components/icons";
+import { IconActivity, IconAgent, IconBriefcase, IconHourglass, IconSignature, IconAlert, IconInbox, IconWorkflow, IconArrowRight, IconChart, IconChat, IconRocket, IconChevronsUpDown, IconFiles, IconFolder, IconLogout, IconPlug, IconShield, IconSparkles, IconSwitch } from "@/components/icons";
 import { SoftText, useDropdown } from "@/components/motion";
 import { Skel, SkeletonStatus } from "@/components/skeletons";
 import { ConfirmProvider, Avatar } from "@/components/ui";
@@ -204,6 +204,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     { href: `/app/${orgId}/ask`, label: tr("Ask"), Icon: IconChat },
     { href: `/app/${orgId}/library`, label: tr("Library"), Icon: IconFiles },
     { href: `/app/${orgId}/matters`, label: tr("Matters"), Icon: IconBriefcase },
+    { href: `/app/${orgId}/terminos`, label: tr("Deadlines"), Icon: IconHourglass },
     { href: `/app/${orgId}/connections`, label: tr("Connected apps"), Icon: IconPlug },
     { href: `/app/${orgId}/agents`, label: tr("Agent Studio"), Icon: IconAgent },
     { href: `/app/${orgId}/workflows`, label: tr("Workflows"), Icon: IconWorkflow },
