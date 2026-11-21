@@ -228,6 +228,12 @@ describe("visibility and changes", () => {
     const changed = await call(s.socia, "PATCH", `${s.base}/deadlines/${late.id}`, { trigger_date: today, amount: 40 });
     expect(changed.json().due_on > today).toBe(true);
     expect(changed.json().state).not.toBe("overdue");
+    // Switching to a fixed date needs the date itself; reusing the notification date would make it overdue.
+    const noDate = await call(s.socia, "PATCH", `${s.base}/deadlines/${late.id}`, { unit: "fixed", amount: null });
+    expect(noDate.statusCode).toBe(400);
+    const due = addDays(today, 10);
+    const fixed = await call(s.socia, "PATCH", `${s.base}/deadlines/${late.id}`, { unit: "fixed", amount: null, trigger_date: due });
+    expect(fixed.json()).toMatchObject({ unit: "fixed", trigger_date: due });
   });
 });
 
@@ -247,6 +253,7 @@ describe("firm calendar", () => {
     const added = await call(s.socia, "POST", `${s.base}/court-closures`, vacancy);
     expect(added.statusCode).toBe(201);
     expect(added.json().recomputed).toBe(1);
+    expect((await call(s.socia, "POST", `${s.base}/court-closures`, vacancy)).statusCode).toBe(409);
     const after = (await call(s.asociado, "GET", `${s.base}/deadlines/${d.id}`)).json();
     expect(after.due_on).toBe("2027-01-14");
     expect(after.events.at(-1)).toMatchObject({ kind: "recomputed", data: { from: "2026-12-23", to: "2027-01-14" } });

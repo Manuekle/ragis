@@ -51,6 +51,28 @@ def test_fixed_date_and_legal_basis_keep_original_spelling():
     assert c.legal_basis == "art. 118 del Código General del Proceso"
 
 
+@pytest.mark.parametrize("sentence,day,title", [
+    ("TERCERO. Señalar el 3 de febrero de 2027 a las 9:00 a. m. para la audiencia de conciliación, decisión de "
+     "excepciones previas, saneamiento y fijación del litigio.", date(2027, 2, 3), "Audiencia de conciliación"),
+    ("Mediante auto del 19 de noviembre de 2026 se fija audiencia inicial para el 15 de marzo de 2027.",
+     date(2027, 3, 15), "Audiencia inicial"),
+    ("Convocar a las partes a audiencia de instrucción y juzgamiento el 20/04/2027.", date(2027, 4, 20),
+     "Audiencia de instrucción y juzgamiento"),
+])
+def test_hearing_set_by_the_court_is_a_fixed_date(sentence, day, title):
+    [c] = candidates_in_sentence(sentence, 1, 0)
+    assert (c.unit, c.amount, c.trigger_hint, c.trigger_date, c.title) == ("fixed", None, "hearing", day, title)
+    assert c.quote == sentence
+
+
+@pytest.mark.parametrize("sentence", [
+    "En la audiencia celebrada el 3 de febrero de 2026 las partes no conciliaron.",
+    "La audiencia se suspendió por solicitud de la demandada.",
+])
+def test_past_or_undated_hearings_are_not_proposed(sentence):
+    assert candidates_in_sentence(sentence, 1, 0) == []
+
+
 def test_start_date_prefers_the_date_of_the_auto():
     s = ("29 de septiembre de 2025, dentro del término de tres días concedido en el auto inadmisorio del "
          "22 de septiembre de 2025.")

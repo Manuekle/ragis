@@ -339,6 +339,11 @@ export async function deadlineRoutes(app: FastifyInstance, deps: Deps): Promise<
     return tx(pool, t, async (db) => {
       const d = await loadDeadline(db, id);
       if (!canEdit(t, d)) throw forbidden("only the responsible person or an editor of the workspace can change this deadline");
+      // A fixed deadline's trigger_date is its due date. Switching to "fixed" without a date would reuse the
+      // notification date as the due date and silently make a pending term overdue.
+      if (body.unit === "fixed" && d.unit !== "fixed" && body.trigger_date === undefined) {
+        throw badRequest("a fixed deadline needs its date: send trigger_date");
+      }
       const cal = await loadCalendar(db, t.organizationId);
       const next = {
         title: body.title ?? d.title,
@@ -536,6 +541,9 @@ export async function deadlineRoutes(app: FastifyInstance, deps: Deps): Promise<
     if (body.ends_on < body.starts_on) throw badRequest("the closure ends before it starts");
     if (daysBetween(body.starts_on, body.ends_on) > 366) throw badRequest("a closure cannot last more than a year");
     const out = await tx(pool, t, async (db) => {
+      // The same period twice (a double click, or adding the suggestion again) would list it twice and mean nothing.
+      const same = await db.query("SELECT id FROM court_closures WHERE starts_on = $1 AND ends_on = $2", [body.starts_on, body.ends_on]);
+      if (same.rowCount) throw conflict("that closure is already in the calendar");
       const id = randomUUID();
       await db.query("INSERT INTO court_closures (id, organization_id, starts_on, ends_on, label, created_by) VALUES ($1,$2,$3,$4,$5,$6)", [
         id, t.organizationId, body.starts_on, body.ends_on, body.label, t.userId,
