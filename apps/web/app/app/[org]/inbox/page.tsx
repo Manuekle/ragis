@@ -7,13 +7,15 @@ import { api } from "@/lib/api";
 import { InboxSkeleton, Skel, SkeletonStatus } from "@/components/skeletons";
 import { useOrg } from "../layout";
 import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
-import { IconAgent, IconAlert, IconArrowRight, IconBoard, IconBuilding, IconHourglass, IconList, IconLock, IconPlus, IconTeam } from "@/components/icons";
+import { IconAgent, IconAlert, IconArrowRight, IconBoard, IconBuilding, IconFile, IconHourglass, IconList, IconLock, IconPlus, IconTeam } from "@/components/icons";
 import { StateIllustration } from "@/components/AppState";
 import { Seg, SoftText } from "@/components/motion";
 import { ERROR_COPY, NodeIcon, ROLE_COPY, StateBadge, ago, when } from "../workflows/shared";
 import { NewRequestDialog, RequestBoard, RequestList, type RequestItem } from "../requests/shared";
 import { RequestPanel } from "../requests/RequestPanel";
 import { useT, tNow } from "@/lib/use-t";
+import { StandingBadge, longDate, type Candidate, type Deadline, type DeadlineList } from "../terminos/shared";
+import "../terminos/terminos.css";
 
 interface Item {
   id: string;
@@ -33,9 +35,10 @@ interface Inbox {
   roles: string[];
   approvals: Item[];
   my_runs: { id: string; state: string; error_code: string | null; updated_at: string; workflow_name: string }[];
-  counts: { agents: number; people: number; total: number };
+  counts: { agents: number; people: number; deadlines?: number; candidates?: number; total: number };
 }
-type Tab = "people" | "agents";
+type Tab = "people" | "agents" | "deadlines";
+const TABS: Tab[] = ["people", "agents", "deadlines"];
 type View = "for_me" | "team" | "sent";
 type Layout = "list" | "board";
 
@@ -62,7 +65,14 @@ function InboxScreen() {
   const [data, setData] = useState<Inbox | null>(null);
   const [error, setError] = useState<string | null>(null);
   const tabParam = search.get("tab");
-  const tab: Tab = tabParam === "agents" || tabParam === "people" ? tabParam : data && data.counts.people === 0 && data.counts.agents > 0 ? "agents" : "people";
+  const dueCount = (data?.counts.deadlines ?? 0) + (data?.counts.candidates ?? 0);
+  const tab: Tab = TABS.includes(tabParam as Tab)
+    ? (tabParam as Tab)
+    : data && data.counts.people === 0 && data.counts.agents > 0
+      ? "agents"
+      : data && data.counts.people === 0 && dueCount > 0
+        ? "deadlines"
+        : "people";
 
   const load = useCallback(() => {
     api<Inbox>(`organizations/${org}/inbox`)
@@ -79,7 +89,8 @@ function InboxScreen() {
   const onTabKey = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
-      const next: Tab = tab === "people" ? "agents" : "people";
+      const i = TABS.indexOf(tab);
+      const next: Tab = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
       setTab(next);
       document.getElementById(`tab-${next}`)?.focus();
     }
@@ -94,7 +105,7 @@ function InboxScreen() {
         <header className="page-head" style={{ marginBottom: 16 }}>
           <div>
             <h1>{tr("Inbox")}</h1>
-            <p className="sub">{tr("What colleagues ask you, and what agents need you to check. Two lists, so neither buries the other.")}</p>
+            <p className="sub">{tr("What colleagues ask you, what agents need you to check, and your deadlines coming due. Separate lists, so none buries the others.")}</p>
           </div>
         </header>
 
@@ -113,6 +124,13 @@ function InboxScreen() {
               </span>
             )}
           </button>
+          <button type="button" role="tab" id="tab-deadlines" aria-selected={tab === "deadlines"} aria-controls="panel-deadlines" tabIndex={tab === "deadlines" ? 0 : -1} onClick={() => setTab("deadlines")}>
+            <IconHourglass size={16} variant={tab === "deadlines" ? "duotone" : "stroke"} />{tr("Deadlines")}{dueCount > 0 && (
+              <span className="count" aria-label={tr("{count} need you", { count: dueCount })}>
+                <SoftText text={String(dueCount)} />
+              </span>
+            )}
+          </button>
         </div>
 
         {error && (
@@ -125,9 +143,13 @@ function InboxScreen() {
           <section className="tab-panel" id="panel-people" role="tabpanel" aria-labelledby="tab-people" key="people">
             <PeopleInbox org={org} isAdmin={orgInfo?.role === "owner" || orgInfo?.role === "admin"} />
           </section>
-        ) : (
+        ) : tab === "agents" ? (
           <section className="tab-panel" id="panel-agents" role="tabpanel" aria-labelledby="tab-agents" key="agents">
             {!data ? error ? null : <InboxSkeleton /> : <AgentInbox org={org} data={data} isAdmin={orgInfo?.role === "owner" || orgInfo?.role === "admin"} />}
+          </section>
+        ) : (
+          <section className="tab-panel" id="panel-deadlines" role="tabpanel" aria-labelledby="tab-deadlines" key="deadlines">
+            <DeadlineInbox org={org} />
           </section>
         )}
       </div>
@@ -382,6 +404,127 @@ function AgentInbox({ org, data, isAdmin }: { org: string; data: Inbox; isAdmin:
           </div>
         )}
       </aside>
+    </div>
+  );
+}
+
+/* ───────────── Deadlines (ADR-038): mine due within two working days or overdue, and proposals to confirm ───────────── */
+
+function DeadlineInbox({ org }: { org: string }) {
+  const tr = useT();
+  const [due, setDue] = useState<Deadline[] | null>(null);
+  const [proposed, setProposed] = useState<Candidate[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    // Same rule as the Inbox count (deadlineAttention in the API): yours, pending, overdue or due within two working days.
+    api<DeadlineList>(`organizations/${org}/deadlines?view=open&mine=1`)
+      .then((r) => setDue(r.deadlines.filter((d) => d.state === "overdue" || d.state === "today" || (d.days_left !== null && d.days_left <= 2))))
+      .catch((e: Error) => setError(e.message));
+    api<{ candidates: Candidate[] }>(`organizations/${org}/deadline-candidates`)
+      .then((r) => setProposed(r.candidates.filter((c) => c.can_confirm)))
+      .catch((e: Error) => setError(e.message));
+  }, [org]);
+  useEffect(() => {
+    load();
+    window.addEventListener("ragsis:inbox", load);
+    return () => window.removeEventListener("ragsis:inbox", load);
+  }, [load]);
+
+  if (error)
+    return (
+      <div className="alert" role="alert">
+        <IconAlert size={16} />
+        {error}
+      </div>
+    );
+  if (!due || !proposed) return <InboxSkeleton />;
+  if (!due.length && !proposed.length) {
+    return (
+      <div className="card empty">
+        <StateIllustration kind="inbox" />
+        <strong>{tr("Nothing waiting for you")}</strong>
+        <span>{tr("Your deadlines due within two working days, overdue ones and terms Ragis proposes from court documents show up here.")}</span>
+        <Link href={`/app/${org}/terminos`} className="btn-link">
+          {tr("Open Deadlines")}
+          <IconArrowRight size={14} />
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <div className="stack" style={{ gap: 16 }}>
+      {due.length > 0 && (
+        <section className="card dl-candidates" aria-labelledby="inbox-due">
+          <header>
+            <h2 id="inbox-due">
+              {tr("Your deadlines coming due")}
+              <span className="count">{due.length}</span>
+            </h2>
+            <p className="muted">{tr("Overdue or due within two working days.")}</p>
+          </header>
+          <ul>
+            {due.map((d) => (
+              <li key={d.id} className="dl-cand">
+                <div className="dl-cand-term">
+                  <Link href={`/app/${org}/terminos?d=${d.id}`}>
+                    <strong>{d.title}</strong>
+                  </Link>
+                  <StandingBadge state={d.state} daysLeft={d.days_left} />
+                </div>
+                <div className="dl-cand-meta">
+                  <span>{tr("Due {date}", { date: longDate(d.due_on) })}</span>
+                  <span>· {d.workspace_name}</span>
+                  {d.document_title && (
+                    <span className="dl-doc">
+                      · <IconFile size={12} />
+                      {d.document_title}
+                      {d.page ? ` · ${tr("p. {page}", { page: d.page })}` : ""}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {proposed.length > 0 && (
+        <section className="card dl-candidates" aria-labelledby="inbox-proposed">
+          <header>
+            <h2 id="inbox-proposed">
+              {tr("Waiting for confirmation")}
+              <span className="count">{proposed.length}</span>
+            </h2>
+            <p className="muted">{tr("Terms Ragis found in court documents. None counts as a deadline until someone confirms it with the date it runs from.")}</p>
+          </header>
+          <ul>
+            {proposed.map((c) => (
+              <li key={c.id} className="dl-cand">
+                <blockquote>«{c.quote}»</blockquote>
+                <div className="dl-cand-meta">
+                  <span className="dl-doc">
+                    <IconFile size={12} />
+                    {c.document_title}
+                    {c.page ? ` · ${tr("page {page}", { page: c.page })}` : ""}
+                  </span>
+                  <span>· {c.workspace_name}</span>
+                </div>
+                <div className="dl-cand-actions">
+                  <Link href={`/app/${org}/terminos?c=${c.id}`} className="btn-link">
+                    {tr("Review and confirm")}
+                    <IconArrowRight size={14} />
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <Link href={`/app/${org}/terminos`} className="btn-link ghost" style={{ alignSelf: "flex-start" }}>
+        {tr("Open Deadlines")}
+        <IconArrowRight size={14} />
+      </Link>
     </div>
   );
 }
