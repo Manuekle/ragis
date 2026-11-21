@@ -8,6 +8,7 @@ What it recognises, in Spanish legal prose:
   - "término de diez (10) días", "plazo de seis meses", "dentro de los cinco días hábiles siguientes a la notificación",
     "traslado por el término de tres días": a duration with a unit.
   - "a más tardar el 5 de diciembre de 2026", "hasta el día 30 de noviembre de 2026": a fixed date.
+  - "Señalar el 3 de febrero de 2027 a las 9:00 a. m. para la audiencia de conciliación": a hearing date (fixed).
 
 Days without a qualifier are business days ("hábiles"): art. 62 of Ley 4 de 1913 and art. 118 of the Código General del
 Proceso leave out holidays and court vacancy in terms of days unless the text says otherwise. The web shows that
@@ -258,6 +259,31 @@ def looks_judicial(texts: list[str]) -> bool:
 
 _DATE_ANCHOR = re.compile(r"(?:auto|providencia|sentencia|notificad[oa]|notificacion|ejecutoriad[oa])\b[^.;]{0,25}$")
 
+# A hearing the court sets ahead: "Señalar el 3 de febrero de 2027 … para la audiencia de conciliación", "se fija
+# audiencia inicial para el …", "convocar a audiencia el …". A verb that sets it is required, so a hearing that already
+# took place ("en la audiencia celebrada el …") is not proposed.
+_HEARING_VERB = re.compile(r"\b(?:re)?(?:senal|fij|program|convoc|cit)(?:ar|a|ase|ese|an|o|ara)\b")
+_HEARING_KINDS = (
+    ("instruccion y juzgamiento", "Audiencia de instrucción y juzgamiento"),
+    ("conciliacion", "Audiencia de conciliación"),
+    ("inicial", "Audiencia inicial"),
+    ("pruebas", "Audiencia de pruebas"),
+    ("alegaciones", "Audiencia de alegaciones"),
+    ("juzgamiento", "Audiencia de juzgamiento"),
+)
+
+
+def _hearing(folded: str, dates: list[tuple[re.Match, date]]) -> tuple[date, str] | None:
+    """The date of a hearing set in this sentence and a title for it, if the sentence sets one."""
+    if "audiencia" not in folded or not dates or not _HEARING_VERB.search(folded):
+        return None
+    # The date of the order that sets it ("mediante auto del 19 de noviembre…") is not the hearing date.
+    ahead = [d for dm, d in dates if not _DATE_ANCHOR.search(folded[max(0, dm.start() - 60):dm.start()])]
+    if not ahead:
+        return None
+    title = next((t for cue, t in _HEARING_KINDS if f"audiencia de {cue}" in folded or f"audiencia {cue}" in folded), "Audiencia")
+    return ahead[0], title
+
 
 def _stated_date(folded: str, dates: list[tuple[re.Match, date]], unit: re.Match) -> date | None:
     """A date in the same sentence offered as the start date: the one named right after "auto", "providencia" or
@@ -271,11 +297,16 @@ def _stated_date(folded: str, dates: list[tuple[re.Match, date]], unit: re.Match
 
 def candidates_in_sentence(sentence: str, page: int | None, block: int) -> list[Candidate]:
     folded, index = _fold_map(sentence)
-    if not _DEADLINE_CUES.search(folded):
+    dates = [(m, d) for m in _DATE_RE.finditer(folded) if (d := _parse_date(m))]
+    hearing = _hearing(folded, dates)
+    if not hearing and not _DEADLINE_CUES.search(folded):
         return []
     trigger, basis, quote = _trigger(folded), _basis(sentence, folded, index), _quote(sentence)
     out: list[Candidate] = []
-    dates = [(m, d) for m in _DATE_RE.finditer(folded) if (d := _parse_date(m))]
+    if hearing:
+        out.append(Candidate(page, quote, None, "fixed", False, "hearing", hearing[0], basis, hearing[1], block))
+        if not _DEADLINE_CUES.search(folded):
+            return out
     fixed = _FIXED_RE.search(folded)
     if fixed:
         for m, d in dates:
@@ -303,7 +334,7 @@ def find_candidates(blocks: list[tuple[str, int | None]], *, require_judicial: b
     out: list[Candidate] = []
     for i, (text, page) in enumerate(blocks):
         folded = fold(text or "")
-        if not _UNIT_RE.search(folded) and "tardar" not in folded and "hasta" not in folded:
+        if not _UNIT_RE.search(folded) and "tardar" not in folded and "hasta" not in folded and "audiencia" not in folded:
             continue
         for sentence in split_sentences(text):
             for c in candidates_in_sentence(sentence, page, i):
